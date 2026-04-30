@@ -66,3 +66,148 @@ The full-path form (`node node_modules/next/dist/bin/next dev`) breaks
 silently if Next ever moves its CLI entrypoint and is non-standard for
 pnpm projects. The idiomatic form is the convention every contributor
 expects.
+
+## Slice 2 — Plan Migration
+
+### Env-var getter consolidation triggered by the fourth Supabase client
+
+Per the deferred Slice 1 decision, the env-var getters were extracted
+into `src/lib/supabase/env.ts` once `supabase/seed/lib/supabase-admin.ts`
+became the fourth Supabase client. `client.ts`, `server.ts`,
+`middleware.ts`, and `supabase-admin.ts` all now import
+`getSupabaseUrl`, `getSupabaseAnonKey`, and `getSupabaseServiceRoleKey`
+from one place.
+
+**Reasoning**
+Three copies were tolerable; four crossed the threshold. The shared
+helper is a foundational primitive (no React, no Supabase client
+construction logic) so it does not violate the "supabase/seed/ stays
+free of application logic" boundary — only build-time-safe code is
+crossing.
+
+### Env-var reads use literal `process.env.<NAME>` access, never dynamic bracket access
+
+`src/lib/supabase/env.ts` reads each env var via the literal expression
+`process.env.NEXT_PUBLIC_SUPABASE_URL` (etc.) and passes the resolved
+value into a shared `requireEnv(name, value)` validator. Dynamic forms
+like `process.env[name]` are never used.
+
+**Reasoning**
+Next.js's webpack DefinePlugin only inlines `NEXT_PUBLIC_*` env vars
+into the client bundle when they appear as literal property accesses
+on `process.env`. The earlier `process.env[name]` dynamic-access shape
+(initial Slice 2 form of `env.ts`) compiled fine, type-checked fine,
+and worked server-side — but in the browser bundle the var read
+returned `undefined`, throwing "Missing NEXT_PUBLIC_SUPABASE_URL" at
+module load. Static replacement requires the literal token in source.
+
+This is a Next.js / webpack convention worth knowing: any future
+helper that reads a `NEXT_PUBLIC_*` var for client-side code must use
+literal access. Server-only env vars (`SUPABASE_SERVICE_ROLE_KEY`)
+don't need static replacement, but using the same literal-access
+pattern keeps the rule simple.
+
+### shadcn Card primitive deviation caught in review
+
+Codex initially skipped `pnpm dlx shadcn add card` and hand-rolled
+card styling in `DayCard.tsx` and `SessionDetailPanel.tsx`. The
+quality review installed Card and refactored both components to use
+`Card` + `CardHeader` + `CardContent`.
+
+**Reasoning**
+The slice prompt explicitly required the Card primitive. Hand-rolled
+styling drifts from the design system over time and forces every
+future card component to re-derive the same Tailwind incantation.
+Using shadcn's primitive keeps the Plan tab consistent with the
+Button primitive already established in Slice 1.
+
+### Synthetic recovery placeholder removed from `/plan/[day]`
+
+Codex inserted a fake "Recovery — No recovery scheduled today" panel
+into days that have no recovery session in the seeded plan. The
+review removed it.
+
+**Reasoning**
+The Plan tab is a read-only view of the seeded data. Inventing UI
+that contradicts the database (a "Recovery" session that doesn't
+exist) is feature creep beyond the spec and would mislead the user
+about their actual schedule. If a day has no recovery session, the
+day card simply doesn't render one.
+
+### Migration immutability rule
+
+Migrations are append-only after first remote application. New
+policies, new tables, new columns, or any schema change requires a
+new sequentially-numbered migration file. Never edit a migration
+that has been pushed to the remote, and never use
+`supabase db push --include-all` to force-reapply a modified
+migration.
+
+**Options considered**
+
+1. Strict immutability — every change goes in a new migration
+   (chosen).
+2. Allow edits to applied migrations when "small" — relies on
+   discipline, breaks down silently.
+3. Reset and re-push the whole migration sequence — destructive,
+   only viable in solo-dev pre-prod.
+
+**Reasoning**
+Option 1 is the convention every Postgres-shop migration tool
+enforces. Codex's first attempt to extend Slice 1's `007` in Slice 2
+silently failed: the Supabase CLI does not re-apply tracked
+migrations even with `--include-all`, so the file diverged from the
+remote without anyone noticing until the test pass caught zero
+policies on the new tables. The 008 file is the correct pattern;
+007 was reverted to its Slice 1 form and the extended policies live
+in `008_extended_rls.sql`.
+
+The CLAUDE.md "Schema discipline" section now codifies this rule
+so the next slice's quality review enforces it on Codex
+automatically.
+
+### `plan_templates` is append-only history; every content change creates a new version
+
+The seed script writes a new `plan_templates` row whenever the
+parsed `TrainingPlanSpec` snapshot differs from the latest version.
+A no-op revert (rename → re-rename back) produces three rows: v1
+(initial), v2 (after rename), v3 (after revert) — v3's
+`snapshot_json` is byte-identical to v1's, but it is still a new
+row.
+
+**Options considered**
+
+1. Append a new version on every content change (chosen).
+2. Update the latest row in place when the snapshot changes.
+3. Compare against any prior snapshot before inserting — skip if
+   any version already matches.
+
+**Reasoning**
+Option 1 matches the "Train with Marcus" template intent from
+Phase 4: the template is forward-compatibility history, not a live
+mutable row. Anyone subscribing to a specific version gets stable
+content even if Marcus iterates on the wiki. Option 2 collapses
+history. Option 3 sounds clever but encourages drift between the
+seeded snapshot and what subscribers actually loaded; "the rename
+was reverted" is a real edit, even if the bytes match an older
+version.
+
+### Block upsert key is `(session_id, display_order)`, not `(session_id, block_name)`
+
+The seed script's block sync looks up an existing block by
+`(session_id, display_order)` and updates `block_name` in place
+when the wiki rename. This makes a block rename a single
+`UPDATE blocks SET block_name = ...` rather than a delete +
+re-insert.
+
+**Reasoning**
+`block_exercises` joins reference `block_id`. If a rename did
+delete + re-insert, the new row would get a fresh `block_id` and
+the join rows would either orphan (FK with `ON DELETE CASCADE`
+removes them — losing the bank wiring) or have to be re-created
+(extra writes, more idempotency risk). Keying on
+`display_order` keeps `block_id` stable across name changes, so
+the bank survives the rename for free. Tested against Section 6
+Test 17: rename Mid Chest → Mid Chest Anchor and back produced
+exactly one `Updated` blocks row per direction, no
+`block_exercises` churn, no orphans.

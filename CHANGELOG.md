@@ -62,3 +62,147 @@
 - None during the quality review pass. Codex's initial output passed all
   checks; the only changes were the package.json script-style revert and
   the types.ts regeneration noted above.
+
+## Slice 2 — Plan Migration (2026-04-30)
+
+### What was built
+
+- SQL migrations for the full plan / exercise / nutrition data model:
+  - `002_plan_structure.sql` — `training_plans`, `daily_schedules`,
+    `sessions`, `blocks`, `exercises`, `block_exercises`, plus the
+    enums (`day_of_week_enum`, `session_type_enum`, `timing_enum`,
+    `block_type_enum`, `cardio_format_enum`,
+    `cardio_target_zone_enum`), the cardio-fields CHECK constraint
+    on `sessions`, and the GIN index on `exercises.muscle_groups`.
+  - `005_nutrition.sql` — `nutrition_targets` (single row per user
+    with min/max ranges for cal/protein/carbs/fat) and
+    `meal_entries` (per-meal log shell for later slices).
+  - `006_plan_templates.sql` — `plan_templates` (versioned snapshot
+    history, `is_public` defaulting to false) and `pr_history`
+    (append-only, with `pr_type_enum` covering `weight` and
+    `in_range_rep`).
+  - `008_extended_rls.sql` — RLS enabled on all 10 new tables;
+    SELECT/INSERT/UPDATE/DELETE for tables with direct `user_id` or
+    `owner_user_id`, FK-chain policies for `daily_schedules` /
+    `sessions` / `blocks` / `block_exercises`, SELECT+INSERT only
+    for `pr_history` (append-only enforced at the DB layer).
+- Env-var consolidation: `src/lib/supabase/env.ts` is now the single
+  source for `getSupabaseUrl`, `getSupabaseAnonKey`,
+  `getSupabaseServiceRoleKey`. `client.ts`, `server.ts`,
+  `middleware.ts`, and `supabase/seed/lib/supabase-admin.ts` all
+  import from it.
+- Seed-from-wiki ingestion pipeline at `supabase/seed/`:
+  - `seed-from-wiki.ts` — orchestrates a full plan upsert from six
+    markdown files. Idempotent: every step keys on stable identity
+    (`(user_id, name)` for exercises, `(plan_id, day_of_week)` for
+    schedules, `(session_id, display_order)` for sessions and
+    blocks). No-op re-run reports zero changes.
+  - `lib/parser.ts` — generic markdown utilities (table extraction,
+    H2/H3 sectioning, key-value parsing, exercise-name
+    normalization). Zero domain knowledge.
+  - `lib/methodology-rules.ts` — domain-specific parsing that turns
+    wiki structure into typed `TrainingPlanSpec`. Encodes the
+    `inferMuscleGroupsForExercise` rules including the Friday Pull
+    sub-bank → granular tag mapping (lats / upper_back /
+    teres_major / rear_delts).
+  - `lib/supabase-admin.ts` — service-role client used only by the
+    seed script. Bypasses RLS at seed time.
+  - `lib/types.ts` — intermediate parsed types
+    (`TrainingPlanSpec`, `ParsedDaySpec`, `ParsedBlock`, etc.).
+- `src/lib/methodology/muscle-groups.ts` — pure helper exposing the
+  high-level taxonomy (chest / shoulders / back / arms / legs /
+  core / calves) and a `getPrimaryMuscleGroupLabel` formatter.
+- `src/lib/utils/wiki-paths.ts` — shared constants for the six
+  wiki file paths.
+- `pnpm seed` script runs `tsx --env-file=.env.local` to load the
+  service-role key.
+- Plan tab UI:
+  - Screen 2A (`/plan`) — server component renders 7
+    `<DayCard />`s in week order, each showing the day's session
+    summaries (lift/cardio/recovery), gym, AM/PM/Anytime timing,
+    and a focus-muscle-group caption derived from the seeded
+    exercise tags.
+  - Screen 2B (`/plan/[day]`) — server component renders all
+    sessions for the requested day. Lifting sessions show a
+    `<BlockList />` with each block expandable to reveal the bank
+    via `<ExerciseBankList />`. Cardio sessions show the structured
+    distance/zone meta line; recovery sessions show their
+    description.
+  - All Plan-tab cards use the shadcn `Card` primitive
+    (`src/components/ui/card.tsx`).
+- Seeded data after `pnpm seed`:
+  - 1 `training_plans` row (`Marcus base plan v1`, `is_active=true`)
+  - 7 `daily_schedules` (Sunday `is_rest_day=true`)
+  - 12 `sessions` (Mon 2, Tue 1, Wed 1, Thu 1, Fri 2, Sat 2, Sun 0,
+    plus the recovery sessions on Thu/Sat/Sun)
+  - 24 `blocks` across the lifting sessions (Mon Upper 8, Mon
+    Lower-equivalent etc., Sat Lower ATG 10 with blocks 1-8 marked
+    `block_type='mobility'`, Thu Push 7 including Lateral Raise
+    twice)
+  - 50+ deduplicated `exercises` (47 dedup events on a typical
+    seed run, indicating shared exercises across multiple blocks)
+  - All `block_exercises` join rows wiring exercise banks to blocks
+  - 1 `nutrition_targets` row (cal 2400-2800, protein 150-175,
+    carbs 200-280, fat 60-90)
+  - 1 `plan_templates` row (`version=1`, `is_public=false`,
+    `snapshot_json` carrying the full parsed plan)
+  - 3 `pr_history` rows (Bench 235×1, OHP 185×3, Deadlift 435×1,
+    all `pr_type='weight'`, `set_log_id=NULL`)
+- `.gitignore` updated: `supabase/seed/wiki/*.md` is gitignored
+  (external content); `.gitkeep` preserves the folder structure.
+
+### Deviations from the slice spec
+
+- **shadcn Card primitive deviation caught in review.** Codex
+  initially skipped `pnpm dlx shadcn add card` and hand-rolled card
+  styling in `DayCard.tsx` and `SessionDetailPanel.tsx`. The quality
+  review installed Card and refactored both components.
+- **Synthetic recovery placeholder removed in review.** Codex
+  inserted a fake "Recovery — No recovery scheduled today" panel
+  on `/plan/[day]` for days with no recovery session. Removed
+  during the review; the Plan tab now renders only what the
+  database has.
+- **`SEED_TARGET_USER_ID` env var added.** Optional; the seed
+  script falls back to looking up the single profile row when
+  unset. Documented in `.env.example`.
+
+### Bugs caught and fixed
+
+- **Migration 007 force-apply silently failed.** Codex initially
+  extended `007_rls_policies.sql` with policies for the new Slice 2
+  tables and ran `supabase db push --include-all`. The CLI reported
+  success but the remote DB never received the new policies — the
+  Supabase CLI does not re-apply tracked migrations even with
+  `--include-all`. Caught when verifying the dashboard showed RLS
+  disabled / zero policies on the new tables. Fix: reverted 007 to
+  its Slice 1 form and moved the extended policies into a new
+  `008_extended_rls.sql` (applied cleanly). Established the
+  migration immutability rule in `CLAUDE.md` and `DECISIONS.md`
+  going forward.
+- **`process.env[name]` dynamic access broke the client bundle.**
+  The first `env.ts` shape used `process.env[name]`, which compiled
+  and type-checked but threw "Missing NEXT*PUBLIC_SUPABASE_URL" at
+  module load in the browser — Next.js's webpack DefinePlugin only
+  inlines `NEXT_PUBLIC*\*`env vars when accessed via literal
+property syntax. Refactored`env.ts`to use literal`process.env.NEXT_PUBLIC_SUPABASE_URL`(etc.) and pass the
+resolved value into a private`requireEnv(name, value)`validator. Documented the rule in`DECISIONS.md`.
+- **`pnpm seed` missing `.env.local` loading.** The first version
+  of the seed script didn't load `.env.local`, so `pnpm seed`
+  failed with "Missing NEXT_PUBLIC_SUPABASE_URL" before reaching
+  any seed logic. Fixed by adding `--env-file=.env.local` to the
+  `seed` script in `package.json`. tsx 4.19.x supports the flag
+  natively, no dotenv dependency needed.
+
+### Verification
+
+- `pnpm seed` re-run idempotency: clean second run reports
+  `Inserted 0, Updated 0, Deleted 0, Unchanged 173`, plus 47
+  exercises deduplicated and three soft-rule warnings (cardio
+  before lifting on Mon/Sat, recovery on a multi-session Sat).
+  Verified across 5+ consecutive runs.
+- Block-rename idempotency (Test 17): rename "Mid Chest" →
+  "Mid Chest Anchor" produces `Updated 1` (`blocks` row) +
+  `Inserted 1` (new `plan_templates` version). Revert produces
+  another `Updated 1` + `Inserted 1` (third version, JSON-equal to
+  v1). No `block_exercises` churn, no orphans.
+- All 29 Section 6 tests pass.

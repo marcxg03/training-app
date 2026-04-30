@@ -127,6 +127,20 @@ When the slice modifies the schema, the migration file is the
 source of truth — generated TS types in src/lib/supabase/types.ts
 are downstream and must be regenerated after migrations apply.
 
+### Migration immutability rule
+Migrations are append-only after first remote application. When a
+slice needs to add or modify RLS policies on existing tables —
+or add columns, indexes, or new tables — create a NEW
+sequentially-numbered migration file. Never edit a migration that
+has been pushed to the remote, and never use
+`supabase db push --include-all` to force-reapply a modified
+migration.
+
+Migration 007 was extended in Slice 2 as a one-time exception
+(documented in DECISIONS.md and KNOWN_ISSUES.md). This is the rule
+going forward. The quality review pass must reject any Codex
+output that re-opens an already-applied migration file.
+
 ## Environment variables
 - Maintain .env.example with every variable the app uses (keys
   only, no values)
