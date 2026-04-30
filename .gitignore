@@ -1,0 +1,47 @@
+# Output data — never commit scraped or sensitive data
+output/
+logs/
+tmp_logs/
+tmp_output/
+
+# Node.js
+node_modules/
+.next/
+dist/
+build/
+out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+.env.local
+.env*.local
+venv/
+
+# System
+.DS_Store
+Thumbs.db
+
+# AI tools
+.claude/
+
+# Test files
+test_slice_*.py
+
+# Editor
+.vscode/
+.idea/
+
+# PWA / Next.js build artifacts
+public/sw.js
+public/workbox-*.js
+public/sw.js.map
+public/workbox-*.js.map
+
+# Supabase local
+supabase/.branches
+supabase/.temp
