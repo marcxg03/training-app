@@ -2,6 +2,7 @@ import type {
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/session-state";
+import { formatWeight } from "@/lib/units";
 import { PRBadge } from "@/components/log/PRBadge";
 
 type SetLogRowProps = {
@@ -10,15 +11,7 @@ type SetLogRowProps = {
   setLog: LoggerSetLog;
 };
 
-function formatWeight(setLog: LoggerSetLog, exercise: LoggerExercise) {
-  if (exercise.is_bodyweight || setLog.weight_kg === null) {
-    return "Bodyweight";
-  }
-
-  return `${setLog.weight_kg} kg`;
-}
-
-export function SetLogRow({ exercise, label, setLog }: SetLogRowProps) {
+export function SetLogRow({ label, setLog }: SetLogRowProps) {
   return (
     <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
@@ -27,7 +20,7 @@ export function SetLogRow({ exercise, label, setLog }: SetLogRowProps) {
             {label}
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">
-            {formatWeight(setLog, exercise)} × {setLog.reps}
+            {formatWeight(setLog.weight_kg ?? 0)} × {setLog.reps}
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">

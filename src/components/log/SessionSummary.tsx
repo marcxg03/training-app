@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { Enums } from "@/lib/supabase/types";
+import { formatWeight } from "@/lib/units";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
@@ -87,7 +88,7 @@ export function SessionSummary({
               Volume
             </p>
             <p className="mt-2 text-2xl font-semibold text-foreground">
-              {totalVolume}
+              {formatWeight(totalVolume)}
             </p>
           </div>
         </div>
@@ -109,7 +110,7 @@ export function SessionSummary({
                         {pr.exerciseName}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {pr.weightKg} kg × {pr.reps}
+                        {formatWeight(pr.weightKg)} × {pr.reps}
                       </p>
                     </div>
                     <span className="text-xs uppercase tracking-[0.18em] text-accent">

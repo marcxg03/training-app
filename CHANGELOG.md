@@ -369,3 +369,63 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
 - `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
 - `@radix-ui/react-dialog ^1.1.15` added (transitive deps via shadcn
   install); `pnpm-lock.yaml` updated accordingly.
+
+## Slice 4.5 — Display Unit Correction (lbs/kg) (2026-05-01)
+
+### What was built
+
+- UnitFormatter utility at `src/lib/units/index.ts`: `KG_PER_LB`,
+  `LB_PER_KG`, `DISPLAY_UNIT`, `lbsToKg` (3-decimal-rounded for
+  storage), `kgToLbs` (unrounded), `formatWeight` (whole-number lbs
+  display, "Bodyweight" for 0, "—" for NaN/undefined/null).
+- Form layer: `SetEntryForm` changed from "WEIGHT (KG)" to
+  "WEIGHT (LBS)", restricts input to 1 decimal, converts on save via
+  `lbsToKg`.
+- Display layer: `SetLogRow` and `SessionSummary` use `formatWeight`
+  everywhere a weight renders. Volume totals also through
+  `formatWeight`.
+- Schema layer: `weight_kg` columns altered from `numeric` to
+  `numeric(7,3)` on both `set_logs` and `pr_history` for round-trip
+  precision.
+- Migration 012 backfills existing data: multiplies `weight_kg` by
+  `0.45359237` for `set_logs.logged_at < '2026-05-01 16:30:00+00'`
+  and `pr_history.achieved_at < '2026-05-01 16:30:00+00'`, with
+  `WHERE weight_kg > 0` to skip bodyweight rows. Idempotent by
+  construction.
+
+### Deviations from the slice spec
+
+- Codex's first pass assumed bodyweight storage should switch from
+  `weight_kg = 0` (Slice 4 convention) to `weight_kg = NULL` going
+  forward. Corrected via single-line follow-up before review pass;
+  bodyweight stays as 0 to preserve the cross-slice convention.
+- Bodyweight storage convention preserved without a migration to
+  clean up Slice 4 testing rows that had been written as NULL during
+  the bodyweight-form-handling iteration. Those NULL rows are
+  skipped by the migration's `WHERE weight_kg > 0` guard but
+  represent a small data-shape inconsistency. Acceptable; logged to
+  KNOWN_ISSUES.md as 🟢 Low.
+
+### Bugs caught and fixed during the build
+
+- `DISPLAY_UNIT` type annotation: `'lbs' = 'lbs'`
+  literal-type-annotation form caught by ESLint
+  `@typescript-eslint/prefer-as-const`; fixed to `as const` form
+  during quality review pass.
+- supabase CLI install prompt corrupted `types.ts` during the regen
+  step (npx interactive prompt redirected into the file). Resolved
+  by installing supabase CLI via Homebrew and re-running. Documented
+  as a Workflow Improvement Candidate.
+
+### Verification
+
+- All 10 Section 6 tests pass: UnitFormatter REPL checks (1-2),
+  pr_history backfill (Bench 235 → 106.594 kg, OHP 185 → 83.915 kg,
+  Deadlift 435 → 197.313 kg) (3), live SetEntryForm save with
+  conversion (4), SetLogRow display (5), reload-preserved display
+  (6), PR detection idempotency via UNIQUE constraint inherited from
+  Slice 4 (7), Volume tile whole-number lbs (8), no false-positive
+  PR on out-of-range corrected baseline (9), no `kg` in user-visible
+  JSX (10).
+- `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
+- No new dependencies.

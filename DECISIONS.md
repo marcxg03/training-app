@@ -331,3 +331,57 @@ pattern (per MASTER_SPEC) is the right home for crash-resilient
 writes; it will retain unsaved writes and replay on next mount.
 Tracked in `KNOWN_ISSUES.md` as 🟡 Medium for visibility until
 Slice 5 lands.
+
+## Slice 4.5 — Display Unit Correction (lbs/kg)
+
+### Storage canonicalization with display-layer conversion
+
+Keep schema column as `weight_kg` (canonical kg storage). Convert at
+form input boundary (`lbsToKg` on save) and at display boundary
+(`formatWeight` on render). Two boundaries, one canonical storage.
+
+**Options considered**
+
+1. Keep `weight_kg` canonical, convert at form/display boundaries
+   (chosen).
+2. Rename to `weight_value` + add `weight_unit` enum.
+3. Flip canonical to `weight_lbs`.
+
+**Reasoning**
+Standard pattern. PR detection, volume calculations, and aggregations
+all run on raw kg without conversion mid-compute. Option 2 forces
+every aggregation to normalize across rows. Option 3 abandons SI
+units, hurting any future research/dataset interoperability.
+
+### Bodyweight storage convention preserved across slices
+
+Bodyweight sets continue to store `weight_kg = 0` (Slice 4
+convention). Future bodyweight writes will NOT switch to
+`weight_kg = NULL`.
+
+**Reasoning**
+Codex initially proposed NULL as more semantically correct ("not
+applicable"), but two semantic representations for the same concept
+(0 vs NULL bodyweight) creates exactly the cross-slice drift the
+workflow tries to avoid. `formatWeight(0)` cleanly returns
+"Bodyweight". The `is_bodyweight` column on `exercises` is the
+canonical "is this a bodyweight exercise" flag — `weight_kg` doesn't
+need to encode that twice.
+
+General rule: storage conventions are spec-locked, not
+Codex-discretionary. When Codex proposes a storage change between
+slices, default is "preserve prior convention unless there's a
+strong reason."
+
+### Migration timestamp locked at write time, not apply time
+
+Backfill migrations use a literal ISO timestamp hardcoded in the
+WHERE clause, computed once at migration write time, generously
+buffered against any future writes. Slice 4.5's migration 012 uses
+`'2026-05-01 16:30:00+00'`.
+
+**Reasoning**
+Double idempotency. Supabase's migration tracker prevents
+re-application; the WHERE clause filter prevents accidental ad-hoc
+SQL re-runs from corrupting future data. Reusable across any future
+"fix existing data" migration in any project.

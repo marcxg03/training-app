@@ -10,6 +10,7 @@ import type {
 import type { TablesInsert } from "@/lib/supabase/types";
 import { detectPRs } from "@/lib/methodology/pr-detection";
 import { createClient } from "@/lib/supabase/client";
+import { lbsToKg } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 
 type SetEntryFormProps = {
@@ -59,12 +60,17 @@ export function SetEntryForm({
       return;
     }
 
-    let parsedWeight: number | null = null;
+    let parsedWeightLbs: number | null = null;
 
     if (!exercise.is_bodyweight) {
-      parsedWeight = Number(weight);
+      if (/^-?\d+\.\d{2,}$/.test(weight.trim())) {
+        setError("Enter a weight with no more than 1 decimal place.");
+        return;
+      }
 
-      if (!weight || Number.isNaN(parsedWeight) || parsedWeight <= 0) {
+      parsedWeightLbs = Number(weight);
+
+      if (!weight || Number.isNaN(parsedWeightLbs) || parsedWeightLbs <= 0) {
         setError(
           "Enter a weight or mark this exercise as bodyweight in your plan.",
         );
@@ -81,7 +87,11 @@ export function SetEntryForm({
       block_id: blockId,
       exercise_id: exercise.exercise_id,
       set_index: setIndex,
-      weight_kg: exercise.is_bodyweight ? null : parsedWeight,
+      weight_kg: exercise.is_bodyweight
+        ? 0
+        : parsedWeightLbs === null
+          ? null
+          : lbsToKg(parsedWeightLbs),
       reps: parsedReps,
       is_to_failure: showFailureCheckbox ? toFailure : false,
       prescribed_min: exercise.prescribed_min,
@@ -178,12 +188,12 @@ export function SetEntryForm({
         {!exercise.is_bodyweight ? (
           <label className="space-y-2">
             <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Weight (kg)
+              WEIGHT (LBS)
             </span>
             <input
               type="number"
               min="0"
-              step="0.5"
+              step="0.1"
               inputMode="decimal"
               value={weight}
               onChange={(event) => setWeight(event.target.value)}

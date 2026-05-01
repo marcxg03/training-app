@@ -92,6 +92,30 @@ Session summary's Total Volume tile shows 0 for bodyweight-only
 sessions like Pull's Muscle Ups block. Replace with "Bodyweight
 session" label or hide the tile when total volume is zero.
 
+### Settings tab kg/lbs display toggle (Slice 9)
+
+`formatWeight` currently hardcodes lbs as the display unit via
+`DISPLAY_UNIT = 'lbs' as const`. When Slice 9 (Settings) lands, this
+constant should be replaced with a profile-level preference lookup.
+The display unit toggle UI lives in Settings; `formatWeight` reads
+from a context or session-scoped value rather than the hardcoded
+constant. The conversion utilities (`lbsToKg`, `kgToLbs`) stay
+unchanged — they're pure math and don't care about user preference.
+Estimated scope: 2-3 hours during Slice 9.
+
+### gen:types script and supabase CLI installation (DX, low priority)
+
+`package.json` has no script for regenerating Supabase types. The
+raw CLI command
+(`supabase gen types typescript --linked > src/lib/supabase/types.ts`)
+was needed during Slice 4.5 and surfaced two friction points: (1)
+no shorthand command, (2) `npx supabase` prompts interactively to
+install the package on first use, and the prompt text gets
+redirected into the output file. Recommendation: add a `gen:types`
+script to `package.json` once Slice 5+ stabilizes, AND add a setup-
+guide note recommending `brew install supabase/tap/supabase` (Mac)
+or equivalent local install over `npx` invocation.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state
@@ -123,3 +147,41 @@ Slice 4 delivers that. The queue-on-failure pattern from MASTER_SPEC
 is the right home for crash-resilient writes. Worth logging as
 evidence that the slice boundaries in MASTER_SPEC were drawn
 correctly.
+
+### Bypass project chat for small corrective slices
+
+Slice 4.5's slice doc was written outside the project chat and saved
+directly to Claude Code via the conversation. The reasoning: the
+design was fully locked through a 4-question Q&A in conversation,
+the migration timestamp was the only late-binding value, and the
+chat would have just regenerated what was already written. The
+Workflow doc currently assumes every slice doc is produced by the
+project chat — in practice, corrective half-slices that emerge from
+a parent slice's testing phase don't always need the full
+chat-driven Phase 0-2 ceremony.
+
+Workflow addition candidate: a Workflow doc note on "corrective
+slices" defining when slice N.5 is appropriate (representation bugs,
+data corrections, small refactors that emerge from slice N's
+testing) and what discipline can be relaxed (project chat ceremony)
+vs preserved (slice doc, two-agent discipline, post-slice
+automation, mandatory quality review). Could land as a new section
+in v2.2 alongside the existing Phase 4 slice loop.
+
+### CLI tools that prompt interactively don't compose with stdout redirection
+
+During Slice 4.5,
+`npx supabase gen types typescript --linked > src/lib/supabase/types.ts`
+corrupted the output file by writing the npx install prompt text
+("Need to install the following packages: supabase@2.98.0 Ok to
+proceed? (y)") into the redirect target. Cause: stdin/stdout
+interleaving when the CLI is being installed for the first time via
+npx.
+
+Workflow addition candidate: a Setup Guide note that any CLI used in
+shell pipelines (`>`, `|`, `$()`) should be locally installed
+(Homebrew on Mac, scoop on Windows) rather than invoked through
+`npx` or `pipx`. The pattern generalizes beyond supabase: any time a
+tool's first-run install path can pollute its own output stream,
+redirection breaks. Local installation is the discipline-preserving
+fix.

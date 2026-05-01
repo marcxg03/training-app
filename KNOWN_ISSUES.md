@@ -55,3 +55,18 @@ Once a `session_completion` row exists for today, the only ways to
 remove it are End Session Early (which marks complete) or manual SQL
 deletion. There is no in-app "throw away this session and start
 over" button. Worth adding to Settings (Slice 9).
+
+## Slice 4.5 — Display Unit Correction (lbs/kg)
+
+### 🟢 Low — Slice 4 testing data inconsistency for bodyweight rows
+
+Some Slice 4 testing rows were written with `weight_kg = NULL`
+during the iteration where Codex's first SetEntryForm pass had
+bodyweight saving as NULL (corrected to 0 mid-Slice-4.5 before any
+new writes). The migration 012 `WHERE weight_kg > 0` guard correctly
+skips both 0 and NULL, so display behavior is consistent
+(`formatWeight` handles both via "Bodyweight" and "—"). Cosmetic
+data shape only. No fix needed unless future analytics queries
+explicitly require uniform 0-storage; if so, a one-shot
+`UPDATE set_logs SET weight_kg = 0 WHERE weight_kg IS NULL` would
+normalize.
