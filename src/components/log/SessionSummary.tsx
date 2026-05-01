@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 
-type SessionSummaryProps = {
+export type SessionSummaryProps = {
   completedAt: string;
   prs: Array<{
     exerciseName: string;
@@ -16,6 +16,7 @@ type SessionSummaryProps = {
     weightKg: number;
   }>;
   sessionName: string;
+  statusMessage?: string;
   setLogs: Array<{
     exerciseName: string;
     isBodyweight: boolean;
@@ -41,6 +42,7 @@ export function SessionSummary({
   completedAt,
   prs,
   sessionName,
+  statusMessage,
   setLogs,
   wasEndedEarly,
 }: SessionSummaryProps) {
@@ -66,6 +68,12 @@ export function SessionSummary({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {statusMessage ? (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground">
+            {statusMessage}
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-border/70 bg-background/60 p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">

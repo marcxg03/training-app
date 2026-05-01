@@ -30,7 +30,44 @@ Decisions explicitly NOT made and why:
   Migration files in /supabase/migrations/ are the schema source of
   truth.
 
-## 2. File and Folder Structure
+## 2. File Inventory (Slice 5)
+
+New files (Slice 5):
+  src/lib/sync/queue.ts
+  src/lib/sync/drain.ts
+  src/lib/sync/handlers.ts
+  src/lib/sync/classify.ts
+  src/lib/sync/triggers.ts
+  src/lib/sync/useQueueState.ts
+  src/components/log/QueueIndicator.tsx
+  src/components/log/QueuePanel.tsx
+
+Modified files (Slice 5):
+  src/components/log/LoggerShell.tsx
+    — register drain triggers on mount
+    — render <QueueIndicator /> in header slot
+  src/components/log/SetEntryForm.tsx
+    — on save failure, classify error; if retryable, enqueue;
+      otherwise show inline error (current behavior)
+    — pre-generate set_log_id client-side (UUID v4) before insert
+      so retries are idempotent against the UNIQUE constraint
+  src/components/log/LoggerShell.tsx (block_complete handler)
+    — on "Done with this block" failure, same classify-and-route
+      pattern as SetEntryForm
+  src/components/log/SessionSummary.tsx
+    — same pattern for "End session" / "End early" actions
+  src/lib/auth/signOut.ts
+    — check queue is non-empty for current user; if so, show
+      confirmation modal; on confirm, proceed; on cancel, abort
+  src/lib/supabase/types.ts
+    — no changes (queue is localStorage, not DB)
+
+Unchanged files (Slice 5):
+  src/lib/pr-detection.ts (Slice 4 PR detection logic — invoked by
+    handlers.ts after successful set_log_insert retry)
+  All Slice 4 PR detection acceptance criteria still pass
+
+## 3. File and Folder Structure
 
 training-app/
 ├── .env.example
@@ -148,7 +185,7 @@ training-app/
 │
 └── tests/                      # placeholder folder, not in MVP
 
-## 3. Module Map
+## 4. Module Map
 
 One responsibility per module. Cross-cutting logic in src/lib/, scoped
 to a single concern per file.
@@ -172,11 +209,6 @@ to a single concern per file.
 - queue.ts — Reads/writes the localStorage offline queue.
   pending_writes key. Each entry is
   { id, table, payload, attempts, last_error }.
-- retry.ts — Listens for online event and visibilitychange; drains
-  queue with exponential backoff capped at 60s.
-- set-log-writer.ts — Wraps SetLog writes specifically: optimistic
-  local update, attempt Supabase write, queue on failure, run PR
-  detection on the optimistic record.
 
 ### Data access (src/lib/supabase/)
 - client.ts — Browser Supabase client. Used in client components.
@@ -188,7 +220,43 @@ No repository pattern. Server components query Supabase directly via
 the server client; client components use the browser client.
 Methodology functions take plain data, not DB rows.
 
-## 4. API Contract
+### Sync layer (src/lib/sync/) — Slice 5 additions
+
+src/lib/sync/
+  queue.ts            // localStorage read/write; key namespacing per
+                      // user_id; serialization; quota error handling
+  drain.ts            // drainQueue() — re-entrant, dispatches each row
+                      // by kind to its handler; manages drainState
+                      // module-scope flag for re-entrancy guard
+  handlers.ts         // per-kind handlers (set_log_insert,
+                      // session_completion_start, _block_complete, _end);
+                      // each handler returns { ok: boolean, retryable: boolean }
+  classify.ts         // isRetryable(error | response) → boolean;
+                      // single source of truth for retry classification
+  triggers.ts         // setupDrainTriggers(): registers 'online' event
+                      // listener and provides hooks for mount-time and
+                      // manual-retry triggers
+  pre-detect.ts       // (Slice 4 PR detection — UNCHANGED in Slice 5)
+                      // imported by handlers.ts as a derived effect of
+                      // successful set_log_insert retries
+
+src/components/log/
+  QueueIndicator.tsx  // dot indicator in Logger header; reads queue
+                      // state via useQueueState() hook; renders gray /
+                      // lilac / amber based on state
+  QueuePanel.tsx      // expanded panel content; per-row list with
+                      // attempt counts; manual retry button at bottom
+
+src/lib/sync/
+  useQueueState.ts    // React hook; subscribes to queue change events;
+                      // returns { rows, drainState, lastDrainAt }
+
+src/lib/auth/
+  signOut.ts          // (existing module — MODIFIED in Slice 5 to add
+                      // queue-non-empty check and confirmation modal
+                      // gate before clearing session)
+
+## 5. API Contract
 
 There is no custom HTTP API in MVP. All data access is direct Supabase
 client calls authenticated via the user's session. RLS policies
@@ -281,7 +349,128 @@ upsertProfile({ bodyweightKg, heightCm }) → Profile
 setGoalMode({ goalMode }) → Profile
 upsertNutritionTargets({ ...nineFields }) → NutritionTargets
 
-## 5. State Management
+## 6. Component / Function Contracts (Slice 5)
+
+### queue.ts
+
+  enqueue(row: QueueRow): void
+    — writes row to localStorage under
+      training-app:queue:<user_id>:<row.id>
+    — throws QuotaExceededError on storage full; caller responsible
+      for surfacing inline error
+    — emits 'queue-change' event on window for useQueueState() to
+      react to
+
+  dequeue(rowId: string): void
+    — removes row from localStorage
+    — emits 'queue-change' event
+
+  loadQueue(userId: string): QueueRow[]
+    — scans localStorage for keys matching
+      training-app:queue:<userId>:*
+    — returns rows sorted by enqueued_at ascending
+    — does NOT touch other users' queues
+
+  updateAttempt(rowId: string, error: string | null): void
+    — increments attempts counter
+    — sets last_attempt_at to now
+    — sets last_error to truncated error message (max 200 chars)
+    — emits 'queue-change' event
+
+### drain.ts
+
+  drainQueue(userId: string): Promise<DrainResult>
+    — re-entrancy guard: if drainState.inProgress, returns immediately
+      with { skipped: true }
+    — sets drainState.inProgress = true
+    — loads queue via queue.loadQueue(userId)
+    — for each row in order: dispatch to handlers[row.kind](row)
+      • on { ok: true }: dequeue(row.id); run derived effects
+        (pr-detect for set_log_insert kind only)
+      • on { ok: false, retryable: true }: updateAttempt(row.id);
+        leave row in queue; continue to next row
+      • on { ok: false, retryable: false }: this should not happen
+        in the queue layer (retryable check happens at enqueue
+        time); log error, leave row in queue, continue
+    — sets drainState.inProgress = false
+    — sets drainState.lastDrainAt = now
+    — returns { skipped: false, succeeded: number, failed: number }
+
+  drainState (module-scope, not exported):
+    inProgress: boolean
+    lastDrainAt: ISO timestamp | null
+
+### handlers.ts
+
+  HandlerResult: { ok: boolean, retryable: boolean }
+
+  handlers: Record<QueueRow['kind'], (row: QueueRow) => Promise<HandlerResult>>
+
+  set_log_insert handler:
+    — POSTs to Supabase set_logs with row.payload
+    — on success: returns { ok: true, retryable: false }
+      → drain.ts will trigger pr-detection.runDetection()
+        with the inserted set_log
+    — on 23505 / 409 (UNIQUE violation): returns { ok: true, retryable: false }
+      → row already exists in DB from earlier successful retry;
+        drain.ts will STILL trigger pr-detection (idempotent via
+        existing pr_history UNIQUE)
+    — on retryable error: returns { ok: false, retryable: true }
+    — on non-retryable error: returns { ok: false, retryable: false }
+      (logged; should not happen if enqueue did its job)
+
+  session_completion_start handler:
+    — INSERT into session_completions with payload
+    — on UNIQUE violation (re-start of existing completion):
+      returns { ok: true, retryable: false } (idempotent)
+
+  session_completion_block_complete handler:
+    — UPDATE session_completions SET completed_block_ids =
+        array_append(completed_block_ids, $1)
+        WHERE completion_id = $2
+        AND NOT ($1 = ANY(completed_block_ids))
+    — the WHERE clause makes this idempotent on retry
+    — on 0 rows affected: still returns { ok: true, retryable: false }
+      (block was already in array — success)
+
+  session_completion_end handler:
+    — UPDATE session_completions SET completed_at = $1,
+        was_ended_early = $2 WHERE completion_id = $3
+    — idempotent by nature (UPDATE to same values is no-op)
+
+### classify.ts
+
+  isRetryable(errorOrResponse: Error | Response): boolean
+    — Error (network failure, fetch abort, etc.): true
+    — Response with status 408, 429, 5xx: true
+    — Response with status 4xx other: false
+    — Response with status 2xx: never reaches this function (success path)
+    — Response with status 23505 (Postgres) / 409 (HTTP):
+      false IF first attempt (real conflict, surface to user);
+      true IF on retry (idempotency boundary, treated as success
+      in handlers.ts before this fn is consulted)
+
+### triggers.ts
+
+  setupDrainTriggers(userId: string): () => void
+    — registers window 'online' event listener → calls drainQueue(userId)
+    — returns cleanup function for useEffect deregistration
+    — does NOT register mount-time trigger (caller's responsibility,
+      see LoggerShell integration below)
+
+### useQueueState.ts
+
+  useQueueState(userId: string): {
+    rows: QueueRow[]
+    drainState: { inProgress: boolean, lastDrainAt: string | null }
+    pendingCount: number  // rows.length, but cached
+  }
+    — subscribes to 'queue-change' window events
+    — re-reads queue on event fire
+    — re-reads drainState on event fire
+    — cleanup on unmount
+
+## 7. State Management
 
 Three layers:
 
@@ -296,16 +485,31 @@ optimistic UX (Logger), the mutation updates local React state
 immediately and refreshes server data in the background.
 
 ### Cross-component state
-Two pieces of UI state cross component boundaries; both use Context:
-- OfflineStatus — read by the global banner, written by sync layer.
-  { pending: number, lastError?: string, isOnline: boolean }.
+One piece of UI state crosses component boundaries; it uses Context:
 - ActiveWorkoutSession — read by the bottom tab bar, written by the
   Logger.
 
 Everything else is local state inside the route or component that
 owns it. No global store.
 
-## 6. Auth Flow
+### Slice 5 — queue layer hybrid state pattern
+
+The queue layer uses a hybrid state pattern:
+
+- localStorage is the source of truth (durable across reloads)
+- React state in useQueueState() is a cache, updated via
+  'queue-change' events
+- Module-scope drainState in drain.ts is the source of truth for
+  in-progress flag (not React state, because it must persist across
+  hook unmounts during drain)
+
+This is intentionally NOT in a global store (Zustand, Redux, etc.).
+The whole point of the queue is durability beyond React's lifecycle;
+storing it in React state would defeat that. The 'queue-change' event
+pattern is sufficient for the limited UI consumers (QueueIndicator,
+QueuePanel) without needing a full state management layer.
+
+## 8. Auth Flow
 
 Supabase magic-link, three steps end-to-end.
 
@@ -331,7 +535,24 @@ First-login profile creation is automatic: on the first session
 exchange, the auth callback also inserts a default profiles row with
 goal_mode = 'maintain' and null bodyweight/height.
 
-## 7. Key Dependencies
+### Slice 5 — sign-out flow modification
+
+Sign-out flow is modified in Slice 5:
+
+1. User taps "Sign out" in Settings (or wherever sign-out is exposed)
+2. signOut.ts checks queue.loadQueue(currentUserId).length > 0
+   - If false: proceed with existing Supabase signOut() flow
+   - If true: open confirmation modal
+     • Modal: "You have N unsynced sets. They'll be saved next time
+       you sign in to this account on this device."
+     • Buttons: [Cancel] [Sign out anyway]
+     • On Cancel: close modal, do nothing
+     • On Sign out anyway: proceed with Supabase signOut()
+3. The queue is NOT cleared on sign-out. It persists in localStorage
+   under its user_id-namespaced keys until that user signs back in
+   (which triggers loadQueue(userId) and a drain attempt).
+
+## 9. Key Dependencies
 
 next, react, react-dom, typescript
 @supabase/supabase-js, @supabase/ssr
@@ -351,7 +572,15 @@ Deliberately excluded: zustand, redux, jotai, swr, tanstack-query,
 prisma, drizzle, axios, lodash, moment, sentry, posthog,
 react-icons.
 
-## 8. Schema Details and RLS Policies
+### Slice 5 — no additions
+
+No new packages. Slice 5 uses:
+- localStorage (built-in browser API)
+- crypto.randomUUID() (built-in for client-side UUID generation)
+- Existing @supabase/ssr client (no new SDK)
+- Existing React hooks (no new state management library)
+
+## 10. Schema Details and RLS Policies
 
 ### Migration file order
 001_init_auth_profile.sql        — profiles, default goal_mode
@@ -392,7 +621,7 @@ CREATE INDEX idx_meal_entries_user_date
 CREATE INDEX idx_workout_sessions_user_status
   ON workout_sessions (user_id, status, started_at DESC);
 
-## 9. PR Detection Implementation
+## 11. PR Detection Implementation
 
 Pure function in src/lib/methodology/pr-detection.ts. Runs after every
 successful W1 or W2 SetLog write (server-side via a DB trigger as
@@ -430,31 +659,72 @@ DB trigger: AFTER INSERT trigger on set_logs calls a pl/pgsql function
 that runs detection and inserts pr_history rows in the same
 transaction.
 
-## 10. Sync Strategy — Queue-on-Failure
+## 12. Sync Strategy — Queue-on-Failure
 
-The Logger is the only critical write path. SetLog writes use this
-flow:
+The queue-on-failure pattern is locked across three sections of this
+document and one section of MASTER_SPEC.md. This section exists as
+the navigational anchor.
 
-1. User taps ✓ on a set row.
-2. Compute prescribed_min, prescribed_max from the active Exercise.
-3. Optimistic UI update: row marked complete, advance enabled.
-4. Try supabase.from('set_logs').insert(payload).
-   On success: PR detection runs server-side via trigger; UI updates
-     with PR flag.
-   On failure (network):
-     a. Push payload to localStorage queue
-     b. Show "offline — will sync" banner
-     c. Continue workout normally
-5. retry.ts listens for online and visibilitychange; drains queue in
-   FIFO order with exponential backoff.
-6. On successful drain, server-side PR detection runs for any queued
-   rows representing W1/W2 sets.
+For the canonical end-to-end save → enqueue → drain → success flow,
+see §13 Critical Path: Queue Lifecycle. For module-by-module
+contracts (queue.ts, drain.ts, handlers.ts, classify.ts, triggers.ts,
+useQueueState.ts), see §6 Component / Function Contracts (Slice 5).
+For idempotency, retry classification, durability envelope, and the
+explicit out-of-scope items (cross-device sync, retry cap, periodic
+drain), see MASTER_SPEC.md §8 Sync semantics.
 
-PR detection runs server-side as canonical source. If a client-side
-optimistic flag turns out to be wrong, server's version wins on next
-refresh. Single-writer in MVP makes this almost impossible.
+The queue handles four operation kinds: set_log_insert,
+session_completion_start, session_completion_block_complete, and
+session_completion_end. Pr_history is not queued — it is recomputed
+client-side as a derived effect of successful set_log_insert retries
+(see §11 PR Detection Implementation, unchanged from Slice 4).
 
-## 11. Module Boundaries — What Lives Where
+## 13. Critical Path: Queue Lifecycle
+
+This is the canonical path through the queue layer for a save that
+fails and recovers. Reading this end-to-end is the fastest way to
+understand the whole subsystem.
+
+1. User taps "Save set" in SetEntryForm.
+2. SetEntryForm validates input client-side. If invalid (empty weight
+   etc.), shows inline error and stops. (Slice 4 behavior, unchanged.)
+3. SetEntryForm pre-generates set_log_id (UUID v4 client-side).
+4. SetEntryForm POSTs to Supabase set_logs.
+5. Path A — Success: row inserted, response returned, SetEntryForm
+   updates local state to show the saved set, advances to next set
+   form. PR detection runs on the response. Done.
+6. Path B — Failure: response (or thrown error) classified by
+   isRetryable():
+   - Not retryable (validation, schema mismatch, auth): SetEntryForm
+     shows inline error. (Slice 4 behavior, unchanged.) Done.
+   - Retryable (network, 5xx, etc.): SetEntryForm calls
+     queue.enqueue({ kind: 'set_log_insert', id: <uuid>,
+     payload: { set_log_id, ...form data }, attempts: 0,
+     enqueued_at: now, last_attempt_at: null, last_error: null }).
+     SetEntryForm updates local state to show the set as "saved
+     locally — will sync" (UI to be designed during slice doc).
+     Advances to next set form. Drain attempt fires (best-effort).
+7. Drain fires (from any of: 'online' event, mount, manual retry):
+8. drainQueue() acquires drainState.inProgress lock.
+9. drainQueue() loads queue rows for current user.
+10. For each row: handler dispatched.
+11. set_log_insert handler POSTs to set_logs.
+    - Success: row removed from queue. PR detection runs.
+    - 23505 (already exists): row removed from queue (idempotent).
+      PR detection still runs (idempotent at pr_history layer).
+    - Retryable error: row stays, attempts incremented, error logged.
+    - Non-retryable error: row stays (logged, should not happen).
+12. drainQueue() releases lock. emits 'queue-change'.
+13. QueueIndicator re-renders (via useQueueState). Color updates.
+14. If queue is empty: dot turns gray. If still has rows: dot stays
+    amber. If drain is in progress at any point: dot is lilac with
+    pulse animation.
+
+The same critical path applies to the three session_completion
+handlers, with the database operation differing per handler kind
+but the queue mechanics identical.
+
+## 14. Module Boundaries — What Lives Where
 
 The most common drift in past projects was logic creeping out of the
 methodology layer into UI components. The rules:
@@ -472,7 +742,7 @@ methodology layer into UI components. The rules:
 If a slice asks Codex to put PR-detection logic inside the Logger
 component, the quality review pass moves it to pr-detection.ts.
 
-## 12. Goal Mode Recommendation Flow
+## 15. Goal Mode Recommendation Flow
 
 User selects new goal_mode in 5E (Profile). On save:
 1. setGoalMode({ goalMode }) writes to profiles.

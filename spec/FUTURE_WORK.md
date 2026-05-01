@@ -116,6 +116,17 @@ script to `package.json` once Slice 5+ stabilizes, AND add a setup-
 guide note recommending `brew install supabase/tap/supabase` (Mac)
 or equivalent local install over `npx` invocation.
 
+### Backfill Edge Cases section in MASTER_SPEC with E1.x–E4.x from prior slice docs
+
+The new `## 9. Edge Cases` section in `spec/MASTER_SPEC.md` was
+introduced during the Slice 5 spec update and currently contains
+only E5.1–E5.8 under a `### Slice 5 — Sync queue` subsection. Slices
+1–4 each have their own Section 5 "Edge Cases to Handle" lists in
+the per-slice docs that were never lifted into MASTER_SPEC. Backfill
+those into MASTER_SPEC §9 as `### Slice N — ...` subsections with
+E*N*.x numbering, in the order they were authored. Project-end
+documentation pass; not blocking any subsequent slice.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state
@@ -167,6 +178,35 @@ testing) and what discipline can be relaxed (project chat ceremony)
 vs preserved (slice doc, two-agent discipline, post-slice
 automation, mandatory quality review). Could land as a new section
 in v2.2 alongside the existing Phase 4 slice loop.
+
+### Quality review must check auto-advance / synthetic-completion parity
+
+Slice 5's failure-block testing surfaced a latent gap from earlier
+slices: the failure-block auto-advance handler in `LoggerShell`'s
+`<FailureProtocol onComplete={...}>` callback was wired to
+`advanceToNextBlock` directly, bypassing the
+`session_completions.completed_block_ids` writer that the
+free-form / mobility "Done with this block" button correctly went
+through. Slice 4's quality review missed the gap because the test
+pass exercised only the explicit-button path, not the synthetic
+auto-advance path. The DB symptom was silent: `set_logs` persisted
+correctly, the UI advanced to the next block, but
+`completed_block_ids` stayed empty.
+
+Workflow addition candidate: a Phase 4B quality-review checklist
+item that says "for any auto-advance / synthetic-completion path,
+verify the same DB writes fire as the explicit-button path." The
+generalization beyond this specific bug: any time a UI infers
+"the user is done with X" without an explicit gesture (terminal-set
+detection, last-step inference, idle-timeout completion), the
+inferred-completion handler must converge on the same write path as
+the explicit-completion handler. Two paths to the same conceptual
+event should share one writer, or the review must check that both
+writers exist and stay in sync.
+
+Could land as a new bullet in the Phase 4B prompt template's review
+checklist alongside the existing "every Codex deviation flagged"
+and "every column reference matches live schema" items.
 
 ### CLI tools that prompt interactively don't compose with stdout redirection
 

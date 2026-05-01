@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type {
@@ -16,12 +16,19 @@ import {
   isBlockComplete,
 } from "@/lib/methodology/session-state";
 import { createClient } from "@/lib/supabase/client";
+import { isRetryable } from "@/lib/sync/classify";
+import { drainQueue } from "@/lib/sync/drain";
+import { enqueue } from "@/lib/sync/queue";
+import { setupDrainTriggers } from "@/lib/sync/triggers";
 import { cn } from "@/lib/utils/cn";
 import { BlockHeader } from "@/components/log/BlockHeader";
 import { EndSessionDialog } from "@/components/log/EndSessionDialog";
 import { ExercisePicker } from "@/components/log/ExercisePicker";
 import { FailureProtocol } from "@/components/log/FailureProtocol";
 import { FreeFormProtocol } from "@/components/log/FreeFormProtocol";
+import { QueueIndicator } from "@/components/log/QueueIndicator";
+import type { SessionSummaryProps } from "@/components/log/SessionSummary";
+import { SessionSummary } from "@/components/log/SessionSummary";
 import { SetLogRow } from "@/components/log/SetLogRow";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -55,6 +62,72 @@ function getBlockExercise(block: LoggerBlock, exerciseId: string | null) {
   );
 }
 
+function getQueueErrorMessage(error: unknown) {
+  if (error instanceof DOMException && error.name === "QuotaExceededError") {
+    return "Local storage full — clear browser data or contact support";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Could not queue this write.";
+}
+
+function buildLocalSummary(
+  blocks: LoggerBlock[],
+  completedAt: string,
+  sessionName: string,
+  statusMessage: string,
+  wasEndedEarly: boolean,
+): SessionSummaryProps {
+  const setLogs = blocks.flatMap((block) =>
+    block.setLogs
+      .slice()
+      .sort((left, right) => left.set_index - right.set_index)
+      .map((setLog) => {
+        const exercise =
+          block.exercises.find(
+            (candidate) => candidate.exercise_id === setLog.exercise_id,
+          ) ?? null;
+
+        return {
+          exerciseName: exercise?.name ?? "Unknown exercise",
+          isBodyweight: exercise?.is_bodyweight ?? false,
+          reps: setLog.reps,
+          setLogId: setLog.set_log_id,
+          weightKg: setLog.weight_kg,
+        };
+      }),
+  );
+
+  const prs = blocks.flatMap((block) =>
+    block.setLogs.flatMap((setLog) => {
+      const exercise =
+        block.exercises.find(
+          (candidate) => candidate.exercise_id === setLog.exercise_id,
+        ) ?? null;
+
+      return setLog.prTypes.map((prType) => ({
+        exerciseName: exercise?.name ?? "Unknown exercise",
+        prId: `${setLog.set_log_id}:${prType}`,
+        prType,
+        reps: setLog.reps,
+        weightKg: setLog.weight_kg ?? 0,
+      }));
+    }),
+  );
+
+  return {
+    completedAt,
+    prs,
+    sessionName,
+    setLogs,
+    statusMessage,
+    wasEndedEarly,
+  };
+}
+
 export function LoggerShell({
   blocks,
   initialBlockIndex,
@@ -70,6 +143,8 @@ export function LoggerShell({
   const [completedBlockIds, setCompletedBlockIds] = useState(
     sessionCompletion.completed_block_ids,
   );
+  const [completedSummary, setCompletedSummary] =
+    useState<SessionSummaryProps | null>(null);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(initialBlockIndex);
   const [selectedExerciseByBlockId, setSelectedExerciseByBlockId] = useState(
     buildSelectedExerciseMap(blocks),
@@ -77,6 +152,14 @@ export function LoggerShell({
 
   const blocksRef = useRef(blocks);
   const completedBlockIdsRef = useRef(sessionCompletion.completed_block_ids);
+
+  useEffect(() => {
+    void drainQueue(userId);
+
+    const cleanup = setupDrainTriggers(userId);
+
+    return cleanup;
+  }, [userId]);
 
   function updateBlocks(nextBlocks: LoggerBlock[]) {
     blocksRef.current = nextBlocks;
@@ -120,17 +203,57 @@ export function LoggerShell({
     nextCompletedBlockIds: string[],
   ) {
     setActionError(null);
+    const completedAt = new Date().toISOString();
 
-    const { error } = await supabase
+    const { error, status } = await supabase
       .from("session_completions")
       .update({
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
         completed_block_ids: nextCompletedBlockIds,
         was_ended_early: wasEndedEarly,
       })
       .eq("completion_id", sessionCompletion.completion_id);
 
     if (error) {
+      if (
+        isRetryable({
+          code: error.code,
+          message: error.message,
+          status,
+        })
+      ) {
+        try {
+          enqueue(userId, {
+            id: crypto.randomUUID(),
+            kind: "session_completion_end",
+            payload: {
+              completion_id: sessionCompletion.completion_id,
+              completed_at: completedAt,
+              completed_block_ids: nextCompletedBlockIds,
+              was_ended_early: wasEndedEarly,
+            },
+            attempts: 0,
+            enqueued_at: completedAt,
+            last_attempt_at: null,
+            last_error: null,
+          });
+        } catch (queueError) {
+          throw new Error(getQueueErrorMessage(queueError));
+        }
+
+        updateCompletedBlockIds(nextCompletedBlockIds);
+        setCompletedSummary(
+          buildLocalSummary(
+            blocksRef.current,
+            completedAt,
+            session.session_name,
+            "Session saved locally. It will sync when you're back online.",
+            wasEndedEarly,
+          ),
+        );
+        return;
+      }
+
       throw new Error(error.message);
     }
 
@@ -159,7 +282,8 @@ export function LoggerShell({
       new Set([...completedBlockIdsRef.current, blockId]),
     );
 
-    const { error } = await supabase
+    const completedAt = new Date().toISOString();
+    const { error, status } = await supabase
       .from("session_completions")
       .update({
         completed_block_ids: nextCompletedBlockIds,
@@ -167,6 +291,35 @@ export function LoggerShell({
       .eq("completion_id", sessionCompletion.completion_id);
 
     if (error) {
+      if (
+        isRetryable({
+          code: error.code,
+          message: error.message,
+          status,
+        })
+      ) {
+        try {
+          enqueue(userId, {
+            id: crypto.randomUUID(),
+            kind: "session_completion_block_complete",
+            payload: {
+              completion_id: sessionCompletion.completion_id,
+              block_id: blockId,
+            },
+            attempts: 0,
+            enqueued_at: completedAt,
+            last_attempt_at: null,
+            last_error: null,
+          });
+        } catch (queueError) {
+          throw new Error(getQueueErrorMessage(queueError));
+        }
+
+        updateCompletedBlockIds(nextCompletedBlockIds);
+        await advanceToNextBlock(nextCompletedBlockIds);
+        return;
+      }
+
       throw new Error(error.message);
     }
 
@@ -176,6 +329,26 @@ export function LoggerShell({
   }
 
   const currentBlock = blocksState[currentBlockIndex] ?? null;
+
+  if (completedSummary) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
+              Workout Logger
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              {session.session_name}
+            </h1>
+          </div>
+          <QueueIndicator userId={userId} />
+        </div>
+
+        <SessionSummary {...completedSummary} />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -216,11 +389,14 @@ export function LoggerShell({
                 totalBlocks={blocksState.length}
                 endSessionAction={
                   isCurrent ? (
-                    <EndSessionDialog
-                      onConfirm={() =>
-                        completeSession(true, completedBlockIdsRef.current)
-                      }
-                    />
+                    <div className="flex items-center gap-2">
+                      <QueueIndicator userId={userId} />
+                      <EndSessionDialog
+                        onConfirm={() =>
+                          completeSession(true, completedBlockIdsRef.current)
+                        }
+                      />
+                    </div>
                   ) : null
                 }
               />
@@ -254,16 +430,16 @@ export function LoggerShell({
                           )
                         }
                         onComplete={() => {
-                          void advanceToNextBlock(
-                            completedBlockIdsRef.current,
-                          ).catch((error: unknown) => {
-                            const message =
-                              error instanceof Error
-                                ? error.message
-                                : "Could not advance to the next block.";
+                          void handleFreeFormComplete(block.block_id).catch(
+                            (error: unknown) => {
+                              const message =
+                                error instanceof Error
+                                  ? error.message
+                                  : "Could not advance to the next block.";
 
-                            setActionError(message);
-                          });
+                              setActionError(message);
+                            },
+                          );
                         }}
                       />
                     ) : (

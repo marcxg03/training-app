@@ -108,6 +108,16 @@ prescribed range, in-range PR) as a first-class entity.
   next-pwa)
 - Queue-on-failure sync for SetLog writes
 
+7. Sync queue (Slice 5)
+   7.1. Queue-on-failure for set_log inserts and session_completion updates
+   7.2. localStorage persistence keyed by user_id
+   7.3. Three drain triggers: window 'online' event, LoggerShell mount,
+        manual retry from queue indicator
+   7.4. Queue indicator in Logger header: gray (idle), lilac (syncing),
+        amber (pending), expand-on-tap panel
+   7.5. Sign-out confirmation when queue non-empty; queue persists for
+        same-user re-sign-in
+
 ### P1 — Phase 2 (next horizon)
 - Progress charts beyond the basic PR ladder (volume, frequency, e1RM
   trends)
@@ -319,6 +329,57 @@ The plan_templates table is created in MVP but unused by the UI. Its
 existence at MVP time means Phase 4 ("Train with Marcus") requires
 zero schema migration — only a UI surface and a snapshot writer.
 
+### Slice 5 — localStorage (not Postgres)
+
+The queue does not add new database tables. Queue rows live in
+localStorage under the key pattern:
+
+  training-app:queue:<user_id>:<queue_row_id>
+
+Queue row schema (in-memory representation):
+
+  QueueRow:
+    id              string  // UUID
+    kind            'set_log_insert' | 'session_completion_start' |
+                    'session_completion_block_complete' |
+                    'session_completion_end'
+    payload         object  // shape varies by kind
+    attempts        number  // increments on each drain attempt
+    enqueued_at     ISO timestamp
+    last_attempt_at ISO timestamp | null
+    last_error      string | null  // truncated error message for UI
+
+Payload shapes by kind:
+
+  set_log_insert:
+    set_log_id    UUID  // pre-generated client-side for idempotent retry
+    user_id       UUID
+    session_id    UUID
+    block_id      UUID
+    exercise_id   UUID
+    set_index     integer
+    set_kind      'wu' | 'w1' | 'w2' | 'free_form'
+    weight_kg     numeric(7,3) | null  // 0 for bodyweight
+    reps          integer
+    is_failure    boolean
+    notes         text | null
+    logged_at     ISO timestamp
+
+  session_completion_start:
+    completion_id UUID  // pre-generated client-side
+    user_id       UUID
+    session_id    UUID
+    started_at    ISO timestamp
+
+  session_completion_block_complete:
+    completion_id UUID
+    block_id      UUID  // appended to completed_block_ids array idempotently
+
+  session_completion_end:
+    completion_id UUID
+    completed_at  ISO timestamp
+    was_ended_early boolean
+
 ## 7. External Integrations
 - Supabase Auth: magic-link email authentication. Single integration
   point; no other auth flow in MVP.
@@ -386,7 +447,65 @@ zero schema migration — only a UI surface and a snapshot writer.
 - Client errors logged to console only in MVP. No external error
   tracking (Sentry etc.) — single user, low traffic.
 
-## 9. Out of Scope (MVP)
+### Sync semantics
+- Durability envelope: best-effort persistence within localStorage's
+  reliability boundary. Browser data-clearing flows (devtools
+  clear, Safari ITP, manual settings reset) can drop the queue
+  without warning. The app does not guarantee durability beyond
+  what the storage layer provides.
+- Idempotency: retry of a set_log_insert that already exists in
+  the database returns Postgres error 23505 (unique violation).
+  The queue layer treats 23505 / HTTP 409 on retry as SUCCESS,
+  removes the row from the queue, and proceeds with derived effects
+  (PR detection re-run).
+- Retry classification:
+  - Inline error, no queue: validation failures, 4xx other than
+    408/429, schema mismatches, auth failures
+  - Queue and retry: network unreachable, 5xx, 408 Request Timeout,
+    429 Rate Limited, fetch abort
+- Retry cap: none in Slice 5. The attempts counter is tracked for
+  diagnostic display but does not trigger any state change. A retry
+  cap is deferred to a future slice if production usage surfaces
+  stuck-queue scenarios.
+- Cross-device sync: out of scope. Queue is per-device, per-user.
+- Cross-tab coordination: not implemented. Multiple tabs may attempt
+  to drain the queue simultaneously; idempotency at the database
+  layer makes this safe but wasteful.
+
+## 9. Edge Cases
+
+### Slice 5 — Sync queue
+E5.1. Drain attempt while drain already in progress:
+      drainQueue() must be re-entrant or guarded; second concurrent
+      call should no-op rather than fire duplicate requests.
+E5.2. Queue contains rows with kind not recognized by current code
+      (e.g., user upgraded from a future version back to current):
+      log warning, leave row in queue, do not crash drain loop.
+E5.3. Sign-out while queue is mid-drain: complete current row's
+      attempt, then proceed with sign-out; do not interrupt an
+      in-flight HTTP request.
+E5.4. Logger remounts during active drain: the new mount's drain
+      attempt should detect in-flight drain (via drainState flag
+      in module scope) and no-op.
+E5.5. Same set saved twice client-side (user double-tap on Save):
+      Slice 4's existing UNIQUE constraint catches this at the DB
+      layer; the second insert fails with 23505; queue layer treats
+      as success.
+E5.6. Block completion queued, but user later ends session early
+      before that block_complete drains: both rows in queue;
+      session_completion_end's payload reflects the FINAL state
+      including the queued block_complete; on drain, both apply
+      idempotently (array_append for block, then completed_at
+      update).
+E5.7. localStorage quota exceeded during enqueue:
+      catch QuotaExceededError, surface inline error "Local storage
+      full — clear browser data or contact support"; do not silently
+      drop the write.
+E5.8. User signs in as different account: queue rows for previous
+      user_id are NOT loaded, NOT cleared, remain dormant in
+      localStorage until that user signs in again.
+
+## 10. Out of Scope (MVP)
 - Body-fat % and progress photo tracking
 - Bodyweight history (single editable field on profile, no log table)
 - Goal mode change history (only the current goal is stored)
@@ -402,7 +521,23 @@ zero schema migration — only a UI surface and a snapshot writer.
 - Android app
 - Native iOS app
 
-## 10. Open Questions
+### Slice 5 — Sync queue
+OS5.1. Cross-device queue synchronization (queue lives only on the
+       device where the write originated)
+OS5.2. Periodic background drain interval (deferred — only event-driven
+       triggers in Slice 5)
+OS5.3. Retry attempt cap with "needs attention" UI (deferred until
+       production usage surfaces stuck-queue scenarios)
+OS5.4. Service worker integration for true offline-first behavior
+       (deferred to Slice 10 PWA Configuration)
+OS5.5. Queue inspection / management from Settings tab (deferred to
+       Slice 9 Settings)
+OS5.6. Per-row retry button (manual retry drains the entire queue;
+       no per-row controls in Slice 5)
+OS5.7. Drain progress percentage in queue indicator (just shows
+       count, not progress bar)
+
+## 11. Open Questions
 None blocking Phase 2.
 
 Resolutions logged from Phase 1 review:

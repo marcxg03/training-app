@@ -70,3 +70,42 @@ data shape only. No fix needed unless future analytics queries
 explicitly require uniform 0-storage; if so, a one-shot
 `UPDATE set_logs SET weight_kg = 0 WHERE weight_kg IS NULL` would
 normalize.
+
+## Slice 5 — Sync Layer
+
+### 🟢 Low — Failure-block auto-advance writer gap (workflow improvement candidate, not a code issue)
+
+🟢 Low — Failure-block auto-advance writer gap was a latent issue
+surfaced during Slice 5 verification testing on the Pull session.
+The explicit-button mobility path (verified in Slice 4 on Lower
+ATG) was wired to the writer correctly and remains so. The
+auto-advance path on failure blocks was never wired. Phase 4B
+quality review checklist should be extended to include: "For any
+auto-advance or synthetic-completion code path, verify the same
+DB writes fire as on the corresponding explicit-button path."
+This is a workflow improvement candidate, not a code follow-up —
+the code is fixed.
+
+### 🟢 Low — pr_history.set_log_id FK population is path-specific or intermittent
+
+🟢 Low — pr_history.set_log_id FK population is path-specific or
+intermittent. Verified populated correctly on the failure-block PR
+detection path during Slice 5 verification (two PR rows inserted
+with correct set_log_id values during failure-block testing on
+Cable Lat Pulldown). Original "always NULL" diagnosis from this
+morning's mobility cleanup does not match Slice 5 verification
+data — earlier cleanup also swept 2 rows on a
+`set_log_id IS NOT NULL` filter, contradicting "always NULL."
+Status on the mobility PR detection path remains unverified.
+Downgraded to 🟢 Low; full investigation deferred to the next
+mobility session when both paths can be observed end-to-end.
+
+### 🟢 Low — Slice 5 AC 3 verification deferred
+
+🟢 Low — Slice 5 AC 3 verification deferred. The mobility
+explicit-button block-complete path was not directly re-verified
+during Slice 5 verification testing because the test session was
+Pull-focused. Code path was untouched by the fix, so risk is
+near-zero, but spot-verify on the next Lower ATG mobility session:
+confirm `completed_block_ids` contains the just-completed block
+UUID after clicking "Done with this block" in mobility mode.

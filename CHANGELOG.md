@@ -429,3 +429,113 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
   JSX (10).
 - `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
 - No new dependencies.
+
+## Slice 5 — Sync Layer (2026-05-01)
+
+### What was built
+
+- localStorage-backed write queue catching retryable failures
+  (network, 5xx, 408, 429) for `set_log` and `session_completion`
+  writes. Queue rows live in localStorage under
+  `training-app:queue:<user_id>:<row_id>` and survive page reloads,
+  navigations, and sign-outs (queue persists per-user, not per-tab,
+  not per-session).
+- Eight new files in `src/lib/sync/` and `src/components/log/`:
+  - `queue.ts` — `enqueue` / `dequeue` / `loadQueue` /
+    `updateAttempt`, all emit a `queue-change` window CustomEvent.
+    Discriminated `QueueRow` union over four kinds:
+    `set_log_insert`, `session_completion_start`,
+    `session_completion_block_complete`, `session_completion_end`.
+  - `classify.ts` — `isRetryable(errorOrResponse)`. True for
+    network errors, fetch aborts, 408, 429, 5xx; false for 4xx
+    other than 408/429 (including 23505 unique-violation on first
+    attempt).
+  - `handlers.ts` — typed handler map per kind. Each handler
+    treats Postgres 23505 / HTTP 409 on retry as
+    `{ ok: true, retryable: false }` (idempotent re-application).
+    `set_log_insert` handler also runs PR detection as a derived
+    effect via `runPrDetectionForSetLog`, re-querying
+    `exercises.is_bodyweight` and `pr_history` at drain time
+    (fresh state, not stale from enqueue time).
+  - `drain.ts` — `drainQueue(userId)` with module-scope re-entrancy
+    guard (`drainState.inProgress`), iterates rows in
+    `enqueued_at` ascending order, dispatches to handlers, runs
+    PR detection on `set_log_insert` success only. Lock released
+    in `finally`.
+  - `triggers.ts` — `setupDrainTriggers(userId)` registers the
+    `window.online` listener; LoggerShell mount-time and
+    QueuePanel manual-retry triggers are wired directly by their
+    callers.
+  - `useQueueState.ts` — React hook returning
+    `{ rows, drainState, pendingCount }`, subscribed to
+    `queue-change` events with cleanup on unmount.
+  - `QueueIndicator.tsx` — Logger header dot with three states:
+    muted gray (idle), lilac with 1s CSS-keyframe opacity pulse
+    (syncing), amber (pending). Tap toggles QueuePanel.
+  - `QueuePanel.tsx` — expanded panel showing per-row labels
+    ("Set 2 saved", "Block marked done", "Session started",
+    "Session completed", "Session ended early") and a "Retry now"
+    button.
+- Four files modified to integrate the queue:
+  - `SetEntryForm.tsx` pre-generates `set_log_id` via
+    `crypto.randomUUID()` before insert (idempotent against the
+    Slice 4 UNIQUE constraint on
+    `(user_id, session_id, block_id, set_index)` if the same
+    payload retries). On save failure, classifies the error: if
+    retryable, enqueues a `set_log_insert` row and advances the
+    UI as if locally-saved; if not, shows the existing Slice 4
+    inline error.
+  - `LoggerShell.tsx` registers drain triggers on mount, calls
+    `drainQueue` directly on mount, renders `<QueueIndicator />`
+    in the header. The "Done with this block" and "End session" /
+    "End early" handlers all enqueue on retryable failure.
+  - `SessionSummary.tsx` accepts a new optional `statusMessage`
+    prop so the locally-saved-pending-sync state can surface in
+    the rendered summary (the end-session action handlers live in
+    LoggerShell per the structurally-correct relocation).
+  - `signOut.ts` — new file. Checks `loadQueue(userId).length > 0`
+    before calling Supabase `signOut`; if non-empty, shows a
+    queue-aware confirmation dialog ("You have N unsynced sets.
+    They'll be saved next time you sign in to this account on
+    this device.") with Cancel / Sign out anyway. The queue is
+    NOT cleared on sign-out — it persists in localStorage under
+    its `user_id`-namespaced keys until that user signs back in.
+- Sign-out wiring: `src/components/auth/SignOutButton.tsx` (added
+  `userId: string` prop, routes through `signOut(userId)`,
+  handles the `{ aborted: boolean }` return shape) and
+  `src/app/(app)/settings/page.tsx` (converted to async server
+  component, fetches session via `supabase.auth.getUser()`,
+  passes `user.id` to the button). Both files were added to the
+  Slice 5 allowlist mid-review to make AC 13 reachable from the
+  user-facing button.
+- shadcn Dialog primitive (already installed in Slice 4 review)
+  reused for the sign-out confirmation via an inline `<dialog>`
+  in `signOut.ts` — no new modal component file.
+
+### Bug fix included in the same slice (not a corrective Slice 5.1)
+
+- Failure-block auto-advance was bypassing the block-completion
+  writer. `src/components/log/LoggerShell.tsx` — failure-block
+  `onComplete` callback now calls
+  `handleFreeFormComplete(block.block_id)` instead of
+  `advanceToNextBlock(completedBlockIdsRef.current)`. Both failure
+  and free-form protocols now converge on the same writer.
+
+### Verification
+
+- AC 1 verified: bodyweight muscle-ups block writes
+  `completed_block_ids` on auto-advance (block_array_len went
+  from NULL to 1 after Set 3 save).
+- AC 2 verified: weighted Cable Lat Pulldown failure block also
+  writes correctly (block_array_len = 2 after second block
+  auto-advance). Failure protocol path was directly exercised,
+  which is the exact code path the fix targeted.
+- AC 4 verified: `set_logs` persistence path unchanged; six
+  successful 201 POSTs across both blocks.
+- AC 5 verified: no new console errors; only a pre-existing
+  Next.js dev-mode CSS preload warning.
+- AC 3 (mobility explicit-button path regression check):
+  DEFERRED to next Lower ATG mobility session. Risk of regression
+  is near-zero (explicit-button code path was untouched by the
+  fix). Reminder logged in KNOWN_ISSUES.md to verify on next
+  mobility session.

@@ -7,9 +7,10 @@ import type {
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/session-state";
-import type { TablesInsert } from "@/lib/supabase/types";
 import { detectPRs } from "@/lib/methodology/pr-detection";
 import { createClient } from "@/lib/supabase/client";
+import { isRetryable } from "@/lib/sync/classify";
+import { enqueue, type SetLogInsertPayload } from "@/lib/sync/queue";
 import { lbsToKg } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +31,18 @@ const inputClassName =
 
 const textareaClassName =
   "flex min-h-24 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
+
+function getQueueErrorMessage(error: unknown) {
+  if (error instanceof DOMException && error.name === "QuotaExceededError") {
+    return "Local storage full — clear browser data or contact support";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Could not queue this write.";
+}
 
 export function SetEntryForm({
   blockId,
@@ -81,7 +94,10 @@ export function SetEntryForm({
     setError(null);
     setIsSaving(true);
 
-    const insertPayload: TablesInsert<"set_logs"> = {
+    const loggedAt = new Date().toISOString();
+    const setLogId = crypto.randomUUID();
+    const insertPayload: SetLogInsertPayload = {
+      set_log_id: setLogId,
       user_id: userId,
       session_id: sessionId,
       block_id: blockId,
@@ -97,15 +113,54 @@ export function SetEntryForm({
       prescribed_min: exercise.prescribed_min,
       prescribed_max: exercise.prescribed_max,
       notes: notes.trim() || null,
+      logged_at: loggedAt,
     };
 
-    const { data: insertedSetLog, error: insertError } = await supabase
+    const {
+      data: insertedSetLog,
+      error: insertError,
+      status,
+    } = await supabase
       .from("set_logs")
       .insert(insertPayload)
       .select("*")
       .single();
 
     if (insertError) {
+      if (
+        isRetryable({
+          code: insertError.code,
+          message: insertError.message,
+          status,
+        })
+      ) {
+        try {
+          enqueue(userId, {
+            id: crypto.randomUUID(),
+            kind: "set_log_insert",
+            payload: insertPayload,
+            attempts: 0,
+            enqueued_at: loggedAt,
+            last_attempt_at: null,
+            last_error: null,
+          });
+        } catch (queueError) {
+          setError(getQueueErrorMessage(queueError));
+          setIsSaving(false);
+          return;
+        }
+
+        onSaved({
+          ...insertPayload,
+          weight_kg: insertPayload.weight_kg ?? null,
+          notes: insertPayload.notes ?? null,
+          is_to_failure: insertPayload.is_to_failure ?? false,
+          prTypes: [],
+        });
+        setIsSaving(false);
+        return;
+      }
+
       setError(insertError.message);
       setIsSaving(false);
       return;

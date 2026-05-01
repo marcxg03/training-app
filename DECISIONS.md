@@ -385,3 +385,32 @@ Double idempotency. Supabase's migration tracker prevents
 re-application; the WHERE clause filter prevents accidental ad-hoc
 SQL re-runs from corrupting future data. Reusable across any future
 "fix existing data" migration in any project.
+
+## Slice 5 — Sync Layer
+
+### handleFreeFormComplete kept under original name despite serving both protocols (Slice 5)
+
+**Context:** The failure-block-writer fix consolidated two
+auto-advance code paths onto a single block-completion writer,
+`handleFreeFormComplete`. The function now services both failure
+and free-form protocols, making its current name misleading.
+
+**Options considered:**
+
+1. Rename inline as part of the surgical fix to
+   `handleBlockComplete`.
+2. Keep the original name; schedule rename for a future cleanup
+   pass.
+
+**Decision:** Option 2.
+
+**Reasoning:** The fix was scoped as a surgical one-line behavioral
+change inside Slice 5. A rename touches every call site and would
+expand the diff surface unnecessarily for a verification-day fix.
+The rename is pure cosmetics — no semantic change — and is
+scheduled as a 🟢 Low-priority cleanup. Logged in `FUTURE_WORK.md`.
+
+**What would break if Option 1 was chosen:** nothing functionally,
+but the surgical-fix discipline would be violated and the diff would
+no longer be isolated to a single `onComplete` callback edit,
+complicating any future `git revert` if the fix needs rollback.

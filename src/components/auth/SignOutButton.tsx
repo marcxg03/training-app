@@ -4,22 +4,32 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "@/lib/auth/signOut";
 
-export function SignOutButton() {
+type SignOutButtonProps = {
+  userId: string;
+};
+
+export function SignOutButton({ userId }: SignOutButtonProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSignOut() {
     setIsPending(true);
     setErrorMessage(null);
 
-    const { error } = await supabase.auth.signOut();
+    try {
+      const result = await signOut(userId);
 
-    if (error) {
-      setErrorMessage(error.message);
+      if (result.aborted) {
+        setIsPending(false);
+        return;
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Sign out failed.",
+      );
       setIsPending(false);
       return;
     }
