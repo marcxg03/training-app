@@ -292,6 +292,21 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
 'basketball'` and is never rendered). Today tab matches that
   pattern exactly — no parity drift, no fix needed.
 
+### Tracked future work
+
+- New `spec/FUTURE_WORK.md` introduced. First entry tracks the
+  **recovery activity type granularity** structural improvement
+  (Slice 8 or earlier): Marcus wants `recovery_type` as an
+  extensible enum on `sessions` (initial values `'hot_yoga'`,
+  `'sauna'`; reserved future values for stretching, ice bath,
+  mobility flow, etc.) so recovery activities can be logged,
+  counted, and capped independently. Affects schema, seed parser,
+  Logger (Slice 4), History (Slice 6), Plan Editor (Slice 8).
+  Mirrored as a 🟢 Low entry near the top of `KNOWN_ISSUES.md`
+  for visibility during scans. The file also reserves a
+  "Workflow Improvement Candidates" section for v2.2 workflow
+  observations as they emerge.
+
 ### Verification
 
 - All 24 Section 6 tests pass.

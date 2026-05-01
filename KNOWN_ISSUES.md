@@ -1,5 +1,9 @@
 # KNOWN_ISSUES
 
+🟢 Low — Recovery activity type granularity. See
+`spec/FUTURE_WORK.md` for the full structural item; this entry
+exists so the issue is visible in the known-issues scan.
+
 ## Slice 1 — Project Scaffold + Auth
 
 ### 🟢 Low — Supabase free-tier email rate limit blocks rapid repeat sign-ins
