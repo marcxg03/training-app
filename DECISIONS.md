@@ -211,3 +211,27 @@ the bank survives the rename for free. Tested against Section 6
 Test 17: rename Mid Chest → Mid Chest Anchor and back produced
 exactly one `Updated` blocks row per direction, no
 `block_exercises` churn, no orphans.
+
+## Slice 3 — Today Dashboard
+
+### `is_rest_day` is plan metadata, not a Today-render gate
+
+The Today tab shows `RestDayEmpty` if and only if there are zero
+sessions for today, OR there is no active training plan. The
+`daily_schedules.is_rest_day` flag does NOT short-circuit session
+rendering: a day with `is_rest_day=true` but one or more seeded
+sessions still renders those sessions.
+
+**Reasoning**
+Marcus's seeded plan has Sunday with `is_rest_day=true` AND a
+"Hot Yoga or Sauna" recovery session. Both states are valid: the
+day is "rest" in the sense of no lifting/cardio prescription, but
+the recovery session is real work the user might still log. Using
+`is_rest_day` as a render gate would erase that recovery session
+from Today, contradicting the Plan tab's Day Detail. The correct
+contract is: presence of sessions decides what renders; the flag
+is metadata for downstream displays (e.g., a future weekly summary
+might count rest days separately from cardio days).
+
+`/today/page.tsx` implements this as
+`todaySchedule && todaySchedule.sessions.length > 0`.

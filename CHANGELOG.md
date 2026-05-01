@@ -206,3 +206,94 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
   another `Updated 1` + `Inserted 1` (third version, JSON-equal to
   v1). No `block_exercises` churn, no orphans.
 - All 29 Section 6 tests pass.
+
+## Slice 3 — Today Dashboard (2026-05-01)
+
+### What was built
+
+- Today tab landing (Screen 1A) at `/today` — Server Component
+  computes today's `day_of_week` server-side via `Intl.DateTimeFormat`
+  and a 3-letter map, fetches today's sessions in a single
+  Supabase relational query
+  (`daily_schedules → sessions → training_plans!inner`), renders
+  `<TodayHeader />` (full day name + formatted date) plus
+  `<TodaySessionList />`. Sessions are sorted post-fetch by
+  `timing` (am → anytime → pm) then `display_order`.
+- Today session detail (Screen 1B) at
+  `/today/session/[session_id]` — Server Component fetches the
+  session, its blocks, and the bank exercises in a single
+  relational query, validates that the session belongs to today's
+  active plan + day_of_week, redirects to `/today` on any
+  mismatch. Renders the existing
+  `<SessionDetailPanel />` from `src/components/plan/`; lifting
+  sessions also render `<StartWorkoutButton />` at the top, plus
+  a "Back to today" link mirroring Plan tab's "Back to week"
+  pattern.
+- Logger placeholder at `/log/[session_id]` — Server Component
+  renders a centered Card with "Workout logger coming in Slice 4"
+  and a "Back to today" link. No data fetching, no validation.
+  The single intentional stub for this slice; Slice 4 replaces
+  contents.
+- Nine new files matching the Section 3 file list verbatim:
+  - Routes: `(app)/today/session/[session_id]/page.tsx`,
+    `(app)/log/[session_id]/page.tsx`
+  - Components: `TodayHeader.tsx`, `TodaySessionList.tsx`,
+    `TodaySessionCard.tsx`, `StartWorkoutButton.tsx`,
+    `RestDayEmpty.tsx` (all under `src/components/today/`)
+  - Helper: `src/lib/methodology/today.ts` exporting
+    `getTodayDayOfWeek(date?: Date)`
+  - Plus the in-place replacement of
+    `src/app/(app)/today/page.tsx` (Screen 1A).
+- Full reuse of Plan-tab session-detail components without
+  duplication: `<SessionDetailPanel />`, `<BlockList />`,
+  `<ExerciseBankList />`, `<SessionSummaryRow />` are all
+  imported as-is from `src/components/plan/`. The shadcn `Card`
+  primitive is reused from `src/components/ui/card.tsx`. No
+  Today-specific shadow components ("TodayBlockList",
+  "TodaySessionDetailPanel") were created.
+- `<StartWorkoutButton />` is the only Client Component in the
+  slice — uses `Link` to navigate to `/log/[id]` with a defensive
+  `event.stopPropagation()` on click. All other Today components
+  are Server Components.
+
+### Deviations from the slice spec
+
+- None. Codex's output matched Section 3's file list exactly. No
+  new dependencies, no schema changes, no edits to files outside
+  the create list.
+
+### Bugs caught and fixed
+
+- None during the quality review pass. All 14 review checklist
+  items passed without modification. Documentation-only change:
+  added the Slice 3 DECISIONS.md entry (see below) and verified
+  Plan/Today parity on cardio field rendering.
+
+### Notable design rule captured
+
+- **`is_rest_day` is plan metadata, not a Today-render gate.**
+  `RestDayEmpty` renders if and only if there are zero sessions
+  for today OR no active training plan, independent of the
+  `daily_schedules.is_rest_day` flag. Sunday in Marcus's plan
+  has `is_rest_day=true` AND a Hot Yoga or Sauna recovery session
+  — both states are valid; the recovery session must still
+  render. Implemented as
+  `todaySchedule && todaySchedule.sessions.length > 0`. Full
+  rationale in DECISIONS.md.
+
+### Plan-tab parity check (Observation B)
+
+- The user's review note suggested the Plan tab's Day Detail
+  surfaces `cardio_format` alongside `cardio_distance` and
+  `cardio_target_zone`. Verified the Plan tab actually surfaces
+  only `cardio_distance` + `cardio_target_zone` (the example
+  "5×100m · sprint" is exactly those two fields; `cardio_format`
+  is the structured taxonomy `'speed_run' | 'endurance_run' |
+'basketball'` and is never rendered). Today tab matches that
+  pattern exactly — no parity drift, no fix needed.
+
+### Verification
+
+- All 24 Section 6 tests pass.
+- `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
+- No `pnpm-lock.yaml` change — Slice 3 added zero dependencies.
