@@ -43,6 +43,67 @@ editor needs structured recovery types anyway. Could also be a
 dedicated mid-project slice (e.g., Slice 7.5) if Slice 4-7 surface a
 stronger reason to land it earlier.
 
+### PR detection query optimization (defer until Slice 6 or later)
+
+Surfaced during Slice 4 review. SetEntryForm currently fetches the
+full pr_history for (user_id, exercise_id) and computes max weight /
+max reps client-side. Acceptable for Marcus's scale (3 historical PRs
+at slice start, ~10-20 per exercise over years of use) but
+inefficient for long-term growth. Optimization path: replace full-
+history fetch with two server-side queries using
+`.order('weight_kg', { ascending: false }).limit(1)` for Type A and
+`.order('reps', { ascending: false }).eq('weight_kg', candidate_weight).limit(1)`
+for Type B. Defer until pr_history per (user, exercise) reaches ~1000
+rows or until other PR detection refactors happen for unrelated
+reasons (multi-user, additional PR types, etc.).
+
+### Display unit — lbs vs kg (CRITICAL — fix before Slice 6 History)
+
+The schema column is `weight_kg` but the user trains in lbs. All
+weights entered through Slice 4 testing were intended as lbs but
+stored as kg, making them functionally wrong. Slice 2's seeded
+historical PRs (Bench 235, OHP 185, Deadlift 435) similarly were
+intended as lbs. Slice 6 will surface PR weight values prominently
+in the History tab and PR Tracker — the unit mismatch must be
+resolved before that.
+
+Recommended approach: keep schema column name as `weight_kg`
+(canonical internal storage); add a `UnitFormatter` utility that
+converts at display time and form input/output; default new users to
+lbs display; add a Settings (Slice 9) toggle for kg display; write a
+one-shot SQL migration to multiply existing `weight_kg` values by
+`0.45359237` to correct the mis-stored Slice 2 + Slice 4 testing
+data.
+
+Possible landing slots: Slice 4.5 (dedicated mini-slice), Slice 5
+(fold into the sync layer's write path), or as a pre-Slice 6
+prerequisite.
+
+### Discard session feature
+
+No in-app way to throw away an in-progress `session_completion`.
+Currently only End Session Early (which marks complete) or manual
+SQL. Belongs in Settings (Slice 9) or as a secondary action on the
+Logger page itself.
+
+### Volume = 0 UX for bodyweight-only sessions
+
+Session summary's Total Volume tile shows 0 for bodyweight-only
+sessions like Pull's Muscle Ups block. Replace with "Bodyweight
+session" label or hide the tile when total volume is zero.
+
+### Form library — react-hook-form + zod (Slice 7-8 evaluation)
+
+Surfaced during Slice 4 implementation. SetEntryForm uses local state
+validation since the repo doesn't have react-hook-form + zod
+installed. This is fine for simple weight/reps forms but multi-field
+forms with cross-field validation (Nutrition Tracking, Plan Editor)
+will benefit from a form library. Decision deferred until Slice 7
+begins; if Slice 7 surfaces multi-field validation pain, evaluate
+adding react-hook-form + zod as devDeps. Current SetEntryForm pattern
+is fine to keep even after the library lands — it's a small simple
+form.
+
 ## Workflow Improvement Candidates
 
 Items that are not about training-app specifically but about the
@@ -52,4 +113,13 @@ or documentation in a future revision (v2.2 or later). At project
 completion (after Slice 10), these get consolidated into a Workflow
 v2.2 proposal.
 
-(empty — entries will be added as they emerge in subsequent slices)
+### Save-on-close race condition validates Slice 5 scope
+
+During Test 17 (resume verification) the Cable Lat Pulldown WU was
+lost when the browser tab closed mid-save. This was correctly
+identified as a Slice 5 (Sync Layer) concern rather than a Slice 4
+bug — the spec promises resume of *successfully-saved* set_logs, and
+Slice 4 delivers that. The queue-on-failure pattern from MASTER_SPEC
+is the right home for crash-resilient writes. Worth logging as
+evidence that the slice boundaries in MASTER_SPEC were drawn
+correctly.

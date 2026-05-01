@@ -135,6 +135,7 @@ export type Database = {
         Row: {
           created_at: string;
           exercise_id: string;
+          is_bodyweight: boolean;
           is_compound: boolean;
           muscle_groups: string[];
           name: string;
@@ -147,6 +148,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           exercise_id?: string;
+          is_bodyweight?: boolean;
           is_compound?: boolean;
           muscle_groups?: string[];
           name: string;
@@ -159,6 +161,7 @@ export type Database = {
         Update: {
           created_at?: string;
           exercise_id?: string;
+          is_bodyweight?: boolean;
           is_compound?: boolean;
           muscle_groups?: string[];
           name?: string;
@@ -317,6 +320,13 @@ export type Database = {
             referencedRelation: "exercises";
             referencedColumns: ["exercise_id"];
           },
+          {
+            foreignKeyName: "pr_history_set_log_id_fkey";
+            columns: ["set_log_id"];
+            isOneToOne: false;
+            referencedRelation: "set_logs";
+            referencedColumns: ["set_log_id"];
+          },
         ];
       };
       profiles: {
@@ -348,6 +358,114 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      session_completions: {
+        Row: {
+          completed_at: string | null;
+          completed_block_ids: string[];
+          completion_id: string;
+          session_id: string;
+          started_at: string;
+          user_id: string;
+          was_ended_early: boolean;
+        };
+        Insert: {
+          completed_at?: string | null;
+          completed_block_ids?: string[];
+          completion_id?: string;
+          session_id: string;
+          started_at?: string;
+          user_id: string;
+          was_ended_early?: boolean;
+        };
+        Update: {
+          completed_at?: string | null;
+          completed_block_ids?: string[];
+          completion_id?: string;
+          session_id?: string;
+          started_at?: string;
+          user_id?: string;
+          was_ended_early?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "session_completions_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "sessions";
+            referencedColumns: ["session_id"];
+          },
+        ];
+      };
+      set_logs: {
+        Row: {
+          block_id: string;
+          exercise_id: string;
+          is_to_failure: boolean;
+          logged_at: string;
+          notes: string | null;
+          prescribed_max: number;
+          prescribed_min: number;
+          reps: number;
+          session_id: string;
+          set_index: number;
+          set_log_id: string;
+          user_id: string;
+          weight_kg: number | null;
+        };
+        Insert: {
+          block_id: string;
+          exercise_id: string;
+          is_to_failure?: boolean;
+          logged_at?: string;
+          notes?: string | null;
+          prescribed_max: number;
+          prescribed_min: number;
+          reps: number;
+          session_id: string;
+          set_index: number;
+          set_log_id?: string;
+          user_id: string;
+          weight_kg?: number | null;
+        };
+        Update: {
+          block_id?: string;
+          exercise_id?: string;
+          is_to_failure?: boolean;
+          logged_at?: string;
+          notes?: string | null;
+          prescribed_max?: number;
+          prescribed_min?: number;
+          reps?: number;
+          session_id?: string;
+          set_index?: number;
+          set_log_id?: string;
+          user_id?: string;
+          weight_kg?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "set_logs_block_id_fkey";
+            columns: ["block_id"];
+            isOneToOne: false;
+            referencedRelation: "blocks";
+            referencedColumns: ["block_id"];
+          },
+          {
+            foreignKeyName: "set_logs_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["exercise_id"];
+          },
+          {
+            foreignKeyName: "set_logs_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "sessions";
+            referencedColumns: ["session_id"];
+          },
+        ];
       };
       sessions: {
         Row: {

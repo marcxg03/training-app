@@ -1,0 +1,241 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+import type {
+  LoggerExercise,
+  LoggerSetLog,
+} from "@/lib/methodology/session-state";
+import type { TablesInsert } from "@/lib/supabase/types";
+import { detectPRs } from "@/lib/methodology/pr-detection";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+
+type SetEntryFormProps = {
+  blockId: string;
+  defaultFailureChecked?: boolean;
+  exercise: LoggerExercise;
+  label: string;
+  sessionId: string;
+  setIndex: number;
+  showFailureCheckbox?: boolean;
+  userId: string;
+  onSaved: (setLog: LoggerSetLog) => void;
+};
+
+const inputClassName =
+  "flex min-h-11 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
+
+const textareaClassName =
+  "flex min-h-24 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
+
+export function SetEntryForm({
+  blockId,
+  defaultFailureChecked = false,
+  exercise,
+  label,
+  sessionId,
+  setIndex,
+  showFailureCheckbox = false,
+  userId,
+  onSaved,
+}: SetEntryFormProps) {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [reps, setReps] = useState("");
+  const [toFailure, setToFailure] = useState(defaultFailureChecked);
+  const [weight, setWeight] = useState("");
+
+  async function handleSave() {
+    const parsedReps = Number(reps);
+
+    if (!Number.isInteger(parsedReps) || parsedReps < 1) {
+      setError("Enter at least 1 rep.");
+      return;
+    }
+
+    let parsedWeight: number | null = null;
+
+    if (!exercise.is_bodyweight) {
+      parsedWeight = Number(weight);
+
+      if (!weight || Number.isNaN(parsedWeight) || parsedWeight <= 0) {
+        setError(
+          "Enter a weight or mark this exercise as bodyweight in your plan.",
+        );
+        return;
+      }
+    }
+
+    setError(null);
+    setIsSaving(true);
+
+    const insertPayload: TablesInsert<"set_logs"> = {
+      user_id: userId,
+      session_id: sessionId,
+      block_id: blockId,
+      exercise_id: exercise.exercise_id,
+      set_index: setIndex,
+      weight_kg: exercise.is_bodyweight ? null : parsedWeight,
+      reps: parsedReps,
+      is_to_failure: showFailureCheckbox ? toFailure : false,
+      prescribed_min: exercise.prescribed_min,
+      prescribed_max: exercise.prescribed_max,
+      notes: notes.trim() || null,
+    };
+
+    const { data: insertedSetLog, error: insertError } = await supabase
+      .from("set_logs")
+      .insert(insertPayload)
+      .select("*")
+      .single();
+
+    if (insertError) {
+      setError(insertError.message);
+      setIsSaving(false);
+      return;
+    }
+
+    let prTypes: LoggerSetLog["prTypes"] = [];
+
+    if (!exercise.is_bodyweight) {
+      const { data: prHistory, error: prHistoryError } = await supabase
+        .from("pr_history")
+        .select("pr_type, reps, weight_kg")
+        .eq("user_id", userId)
+        .eq("exercise_id", exercise.exercise_id);
+
+      if (prHistoryError) {
+        console.error("Failed to load PR history", prHistoryError);
+      } else {
+        const maxWeightKg = prHistory
+          .filter((row) => row.pr_type === "weight")
+          .reduce<
+            number | null
+          >((highest, row) => (highest === null || row.weight_kg > highest ? row.weight_kg : highest), null);
+
+        const maxRepsAtWeight = prHistory
+          .filter(
+            (row) =>
+              row.pr_type === "in_range_rep" &&
+              row.weight_kg === insertedSetLog.weight_kg,
+          )
+          .reduce<
+            number | null
+          >((highest, row) => (highest === null || row.reps > highest ? row.reps : highest), null);
+
+        const detectedPRs = detectPRs(insertedSetLog, {
+          isBodyweight: exercise.is_bodyweight,
+          maxRepsAtWeight,
+          maxWeightKg,
+        });
+
+        prTypes = detectedPRs.map((detection) => detection.prType);
+
+        for (const detection of detectedPRs) {
+          const { error: prInsertError } = await supabase
+            .from("pr_history")
+            .insert({
+              user_id: userId,
+              exercise_id: detection.exerciseId,
+              set_log_id: insertedSetLog.set_log_id,
+              pr_type: detection.prType,
+              weight_kg: detection.weightKg,
+              reps: detection.reps,
+              achieved_at: detection.achievedAt,
+            });
+
+          if (prInsertError && prInsertError.code !== "23505") {
+            console.error("Failed to insert PR history row", prInsertError);
+          }
+        }
+      }
+    }
+
+    onSaved({
+      ...insertedSetLog,
+      prTypes,
+    });
+    router.refresh();
+    setIsSaving(false);
+  }
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border/70 bg-background/60 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          Set {setIndex}
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {!exercise.is_bodyweight ? (
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              Weight (kg)
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              inputMode="decimal"
+              value={weight}
+              onChange={(event) => setWeight(event.target.value)}
+              className={inputClassName}
+            />
+          </label>
+        ) : null}
+
+        <label className="space-y-2">
+          <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            Reps
+          </span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={reps}
+            onChange={(event) => setReps(event.target.value)}
+            className={inputClassName}
+          />
+        </label>
+      </div>
+
+      <label className="space-y-2">
+        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          Notes (optional)
+        </span>
+        <textarea
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          className={textareaClassName}
+        />
+      </label>
+
+      {showFailureCheckbox ? (
+        <label className="flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={toFailure}
+            onChange={(event) => setToFailure(event.target.checked)}
+            className="h-4 w-4 accent-[rgb(var(--accent))]"
+          />
+          To failure
+        </label>
+      ) : null}
+
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      <Button type="button" onClick={handleSave} disabled={isSaving}>
+        {isSaving ? "Saving..." : "Save set"}
+      </Button>
+    </div>
+  );
+}

@@ -312,3 +312,60 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
 - All 24 Section 6 tests pass.
 - `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
 - No `pnpm-lock.yaml` change — Slice 3 added zero dependencies.
+
+## Slice 4 — Workout Logger (2026-05-01)
+
+### What was built
+
+- Workout Logger with linear walkthrough across all 7 blocks for
+  failure, mobility, and corrective block types.
+- Set logging: WU/W1/W2 for failure blocks (W2 always marked
+  `is_to_failure=true`); free-form sets for mobility/corrective.
+- Bodyweight handling via new `exercises.is_bodyweight` column
+  (migration 009); bodyweight exercises hide the Weight field in the
+  form and store `weight_kg=0`.
+- PR detection: Type A (first-ever-weight ladder) and Type B
+  (in-range top-rep) — both fire on weighted set inserts only, never
+  on bodyweight; idempotent via `UNIQUE (set_log_id, pr_type)`.
+- Inline PR badges on logged set rows; bodyweight sets explicitly
+  excluded.
+- Resume support: reopening `/log/[session_id]` for an in-progress
+  `session_completion` picks up at the last incomplete block; Block 1
+  sets render read-only above the active Block 2 form.
+- End session early flow with shadcn Dialog confirm; session summary
+  screen with totals and PR list.
+- Three new tables: `set_logs` (with `UNIQUE` on
+  `user_id+session_id+block_id+set_index` per migration 011),
+  `session_completions` (with `completed_block_ids uuid[]`),
+  `exercises.is_bodyweight` column.
+- Extended RLS policies (migration 010) for `set_logs` (4 policies)
+  and `session_completions` (4 policies).
+- Three migrations: 009 (schema), 010 (RLS), 011 (set_logs UNIQUE
+  constraint added mid-slice during review pass).
+
+### Deviations from the slice spec
+
+- Codex initially used a custom modal for End Session Early; review
+  pass swapped it to the shadcn Dialog primitive (added
+  `@radix-ui/react-dialog` dep).
+- `set_logs` UNIQUE constraint was not in the original Codex output —
+  added during quality review pass via migration 011 to prevent
+  duplicate-tap data corruption.
+- Form library deferred to Slice 7 — Slice 4 uses local component
+  state for forms, validates inline via simple boolean checks.
+
+### Bugs caught and fixed during the build
+
+- Migration 009 initial draft was missing extended RLS for the new
+  tables (caught in review, addressed in migration 010).
+- PR detection initially fired on bodyweight sets — fixed during
+  review pass to require `weight_kg > 0`.
+- EndSessionDialog originally trapped focus incorrectly on first
+  paint — fixed during review pass after shadcn migration.
+
+### Verification
+
+- All Section 6 tests pass.
+- `pnpm lint`, `pnpm typecheck`, `pnpm format:check` all clean.
+- `@radix-ui/react-dialog ^1.1.15` added (transitive deps via shadcn
+  install); `pnpm-lock.yaml` updated accordingly.

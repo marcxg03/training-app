@@ -21,6 +21,7 @@ import type {
   TrainingPlanSpec,
   WikiFiles,
 } from "./lib/types";
+import { bodyweightExerciseNames } from "./lib/bodyweight-exercises";
 
 type AdminClient = SupabaseClient<Database>;
 type TrainingPlanRow = Tables<"training_plans">;
@@ -716,6 +717,67 @@ async function syncExercises(
   return new Map(refreshedRows.map((row) => [row.name, row]));
 }
 
+async function syncBodyweightExerciseFlags(
+  supabase: AdminClient,
+  userId: string,
+  exercisesByName: Map<string, ExerciseRow>,
+) {
+  const namesToMark = bodyweightExerciseNames.filter((name) =>
+    exercisesByName.has(name),
+  );
+
+  if (namesToMark.length === 0) {
+    return exercisesByName;
+  }
+
+  const { data: existingRows, error: loadError } = await supabase
+    .from("exercises")
+    .select("*")
+    .eq("user_id", userId)
+    .in("name", namesToMark);
+
+  if (loadError) {
+    throw new Error(
+      `Failed to load bodyweight exercises for flag sync: ${loadError.message}`,
+    );
+  }
+
+  const rowsToUpdate = existingRows.filter((row) => !row.is_bodyweight);
+
+  if (rowsToUpdate.length > 0) {
+    const { error: updateError } = await supabase
+      .from("exercises")
+      .update({ is_bodyweight: true })
+      .eq("user_id", userId)
+      .in(
+        "exercise_id",
+        rowsToUpdate.map((row) => row.exercise_id),
+      );
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update bodyweight exercise flags: ${updateError.message}`,
+      );
+    }
+
+    countChange("updated");
+  }
+
+  const { data: refreshedRows, error: refreshError } = await supabase
+    .from("exercises")
+    .select("*")
+    .eq("user_id", userId)
+    .in("name", [...exercisesByName.keys()]);
+
+  if (refreshError) {
+    throw new Error(
+      `Failed to refresh exercises after bodyweight sync: ${refreshError.message}`,
+    );
+  }
+
+  return new Map(refreshedRows.map((row) => [row.name, row]));
+}
+
 function getDesiredBlockExerciseRows(
   block: ParsedBlock,
   blockRow: BlockRow,
@@ -1072,17 +1134,22 @@ async function main() {
   const sessions = await syncSessions(supabase, plan.days, schedules);
   const blocks = await syncBlocks(supabase, plan.days, sessions);
   const exercisesByName = await syncExercises(supabase, userId, plan.days);
+  const exercisesWithBodyweightFlags = await syncBodyweightExerciseFlags(
+    supabase,
+    userId,
+    exercisesByName,
+  );
 
   await syncBlockExercises(
     supabase,
     plan.days,
     sessions,
     blocks,
-    exercisesByName,
+    exercisesWithBodyweightFlags,
   );
   await syncNutritionTargets(supabase, userId, plan);
   await syncPlanTemplate(supabase, userId, plan);
-  await syncHistoricalPrs(supabase, userId, plan, exercisesByName);
+  await syncHistoricalPrs(supabase, userId, plan, exercisesWithBodyweightFlags);
   printSummary(plan);
 }
 

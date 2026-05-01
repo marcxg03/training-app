@@ -235,3 +235,99 @@ might count rest days separately from cardio days).
 
 `/today/page.tsx` implements this as
 `todaySchedule && todaySchedule.sessions.length > 0`.
+
+## Slice 4 — Workout Logger
+
+### `set_logs` unique constraint added in migration 011 mid-slice
+
+Migration 011 adds `UNIQUE (user_id, session_id, block_id, set_index)`
+on `set_logs` via
+`ALTER TABLE set_logs ADD CONSTRAINT set_logs_user_session_block_set_index_key`.
+
+**Reasoning**
+Data integrity for the duplicate-tap scenario: a user taps Save twice
+on the same set during a network blip and the client could otherwise
+insert two rows with the same `set_index`. The `isBlockComplete`
+helper masks the symptom (a `Set` of distinct `set_index` values
+still completes the block correctly), but downstream consumers
+(History tab volume math, future edit/delete affordances, Slice 5
+sync layer) would see ghost rows. Constraint at the DB layer makes
+the insert fail loud with `23505` so the client can show a clear
+error rather than silently writing duplicates.
+
+Caught during Slice 4 quality review and landed before Section 6
+testing — the third validation of the migration immutability rule
+(after the Slice 2 007→008 incident and the routine 010 split). It
+also avoids Slice 5 having to dedupe in client code, since the DB
+won't let the duplicates exist in the first place.
+
+### Custom EndSessionDialog modal replaced with shadcn Dialog primitive in review
+
+Codex initially built an in-scope modal inside `EndSessionDialog.tsx`
+(card-based overlay, manual open state). The review pass installed
+shadcn's Dialog primitive (`pnpm dlx shadcn@latest add dialog`) and
+refactored the component to use it while keeping the same prop
+signature (`disabled`, `onConfirm`).
+
+**Reasoning**
+Same pattern as the Slice 2 Card primitive review fix: install the
+primitive once, reuse across slices. The hand-rolled modal worked,
+but every future dialog in the app would have to re-derive the same
+overlay/positioning/animation/focus-trap behavior from scratch. The
+shadcn Dialog gives us Radix's accessibility (focus trap, esc-to-
+close, scroll lock, aria roles) for free, and pulls in
+`@radix-ui/react-dialog` once for the rest of the project.
+
+Codex was correct to defer the install — `src/components/ui/` was
+outside the original allowed edit surface. The review pass is the
+right place for primitive-install decisions because it weighs the
+refactor against the broader pattern.
+
+### Form library deferred until Slice 7-8 (react-hook-form + zod)
+
+`SetEntryForm` uses local `useState` validation. The repo does not
+have react-hook-form or zod installed.
+
+**Reasoning**
+The Slice 4 forms are single-row weight/reps entries — a form library
+is overkill. Multi-field cross-validated forms arrive in Slice 7
+(Nutrition Tracking) and Slice 8 (Plan Editor); evaluation defers to
+that point. `spec/FUTURE_WORK.md` tracks the decision. Current
+`SetEntryForm` is small enough that even after a form library lands,
+keeping it on plain `useState` is fine.
+
+### Quality review pass earned its keep this slice
+
+The mandatory Claude Code quality review after every Codex pass
+produced four substantive corrections in Slice 4: shadcn Dialog
+migration, `set_logs` UNIQUE constraint (migration 011), bodyweight
+exclusion in PR detection, EndSessionDialog focus trap fix. None
+would have been caught by a passing test alone — the unique
+constraint surfaces only under double-tap, the bodyweight exclusion
+only on a Muscle Ups PR check, the focus trap only via screen
+reader / keyboard navigation.
+
+**Reasoning**
+Worth logging as a recurring data point — the v2.1 workflow change
+(Step 5 mandatory review) is paying off in practice. Slice 4 alone
+prevented at least one data-integrity bug (duplicate set_logs) and
+at least one wrong-PR-history bug (bodyweight false positives) from
+landing in the test pass.
+
+### Save-on-close race condition deferred to Slice 5
+
+Slice 4 does not guarantee crash-resilient writes for sets in flight
+when the browser tab closes. If a save request is mid-flight when
+the tab closes, the set is lost. The user has to re-enter the lost
+set on resume.
+
+**Reasoning**
+Solving this in Slice 4 would require localStorage queueing
+infrastructure that overlaps significantly with Slice 5 (Sync Layer).
+The Slice 4 spec's resume contract — "prior set*logs visible on
+resume" — is satisfied for \_successfully-saved* set_logs, which the
+implementation correctly delivers. Slice 5's queue-on-failure
+pattern (per MASTER_SPEC) is the right home for crash-resilient
+writes; it will retain unsaved writes and replay on next mount.
+Tracked in `KNOWN_ISSUES.md` as 🟡 Medium for visibility until
+Slice 5 lands.
