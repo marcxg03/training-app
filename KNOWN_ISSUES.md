@@ -99,13 +99,3 @@ data — earlier cleanup also swept 2 rows on a
 Status on the mobility PR detection path remains unverified.
 Downgraded to 🟢 Low; full investigation deferred to the next
 mobility session when both paths can be observed end-to-end.
-
-### 🟢 Low — Slice 5 AC 3 verification deferred
-
-🟢 Low — Slice 5 AC 3 verification deferred. The mobility
-explicit-button block-complete path was not directly re-verified
-during Slice 5 verification testing because the test session was
-Pull-focused. Code path was untouched by the fix, so risk is
-near-zero, but spot-verify on the next Lower ATG mobility session:
-confirm `completed_block_ids` contains the just-completed block
-UUID after clicking "Done with this block" in mobility mode.
