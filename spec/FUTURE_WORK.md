@@ -127,6 +127,64 @@ those into MASTER_SPEC §9 as `### Slice N — ...` subsections with
 E*N*.x numbering, in the order they were authored. Project-end
 documentation pass; not blocking any subsequent slice.
 
+### Cardio and Recovery activity completion tracking
+
+**Status:** Open. Surfaced May 2, 2026 during Slice 5 verification on
+Lower ATG mobility session.
+
+**Problem:** The Today tab currently shows three card types — LIFT,
+CARDIO, RECOVERY. Only LIFT cards have an action affordance ("Start
+Workout"). Cardio and Recovery cards are read-only with no way to mark
+the activity completed and no visible state indicating the user did the
+activity today. This breaks the consistency of the Today tab as a
+"daily plan you act on" surface and means cardio/recovery completion
+data is invisible to History.
+
+**Proposal:** Add completion-acknowledgment for Cardio and Recovery
+activities. Minimal logging:
+
+- Start timestamp (when user taps "Start" or equivalent)
+- End timestamp (when user taps "Mark complete")
+- Optional notes field
+- Optional perceived-intensity field (RPE-style 1-10 or simple
+  Easy/Moderate/Hard tag — to be decided in spec)
+- Optional duration auto-calculated from timestamps
+
+UI: Today card shows a "Mark Complete" or "Log Activity" button when
+incomplete; shows a checkmark/completed-state with brief summary when
+done.
+
+**Open data-model question (must resolve before Slice 6 finalizes
+History tab schema):** Do cardio and recovery completions UNION with
+`session_completions`, or live in a separate `activity_completions`
+table?
+
+Tradeoffs:
+
+- UNION with `session_completions`: cleaner History tab query (one
+  source), but requires schema flexibility —
+  `session_completions` assumes block-based structure
+  (`completed_block_ids` array) which doesn't apply to
+  cardio/recovery. Would need nullable block columns, or a
+  discriminator column distinguishing session types.
+- Separate `activity_completions` table: cleaner schema (no nullable
+  block-related columns for non-block activities), but History tab
+  needs to UNION across both at query time.
+
+**Recommendation pending:** Likely separate `activity_completions`
+table — schema cleanliness is worth the History query complexity, and
+cardio/recovery completions have their own natural fields (duration,
+perceived_intensity) that don't fit `session_completions`' shape.
+
+**Estimated delivery:** Slice 7 (Plan tab — week-ahead view, where
+incomplete cardio/recovery becomes most visible) or Slice 9 (Settings
+/ profile).
+
+**Blocking decision:** Slice 6 (History tab) cannot finalize its query
+shape without resolving the data-model question. Suggested: spend 15
+minutes during Slice 6 Discovery to lock the data-model decision, even
+though Slice 6 itself will only display the LIFT-derived data.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state

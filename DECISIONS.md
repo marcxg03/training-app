@@ -414,3 +414,92 @@ scheduled as a 🟢 Low-priority cleanup. Logged in `FUTURE_WORK.md`.
 but the surgical-fix discipline would be violated and the diff would
 no longer be isolated to a single `onComplete` callback edit,
 complicating any future `git revert` if the fix needs rollback.
+
+## Slice 6 — History tab Discovery decisions (May 2, 2026)
+
+Phase 0 Discovery for the History tab produced six decisions worth recording
+durably. Each represents a conscious choice between viable alternatives.
+
+### 1. Chronological PR Timeline as landing surface (departure from v0 plan)
+
+Context: The v0 master plan (Screen 3A) specified a muscle-group-grouped
+current-PR snapshot view as the History landing surface. Slice 6 ships a
+chronological PR Timeline instead.
+
+Reasoning: The primary use case is progressive-overload validation in a
+5-second-glance pattern (open History → see most recent progress → close).
+A chronological feed serves this directly; a muscle-group-grouped snapshot
+is better for whole-body audit ("show me all my back progress") which is a
+secondary, lower-frequency use case. v1 anchors on the daily-glance pattern;
+the audit pattern can be added later if usage demand surfaces.
+
+What would break if the alternative was chosen: A muscle-group-grouped
+landing would over-elevate audit-style use over daily-glance use. The cross-
+linked navigation pattern (PR row → exercise progress → session detail) also
+works more naturally from a chronological feed than from a grouped snapshot.
+
+### 2. LIFT-only scope; cardio/recovery deferred
+
+Context: The app currently has no completion tracking for cardio or recovery
+activities. History could either stay LIFT-only (consuming session_completions
+and pr_history only) or wait for the activity_completions table to be designed
+and shipped before History tab launches.
+
+Reasoning: Cardio and recovery completion is a binary "did it" log without
+the metric depth that progressive overload requires (no "stronger over time"
+chart for sauna sessions). Their data shape is small enough that Slice 7
+(Plan tab) can absorb both the activity_completions table and the Today-tab
+completion buttons, keeping that work close to where it's most user-visible.
+Slice 6 ships the high-value LIFT data first.
+
+### 3. Cross-linked landing navigation pattern (over sub-tabs or hub-and-spoke)
+
+Context: Three plausible navigation patterns for History's three surfaces —
+sub-tabs, hub-and-spoke, or single-landing-with-cross-links.
+
+Reasoning: Sub-tabs put all three surfaces at equal nav weight, which is
+wrong because the surfaces are not equally weighted (PR Timeline is daily-
+glance, the journal is occasional). Hub-and-spoke adds a navigation step
+with no information benefit because the surfaces are tightly coupled (a PR
+row is also a data point in the exercise chart and also from a specific
+session). Cross-linked landing — PR Timeline as default, with each row
+cross-linking to exercise progress and session detail, plus a persistent
+"All Sessions" header link — matches the actual usage hierarchy.
+
+### 4. Single weight-over-time chart line, dot color distinguishes PR type
+
+Context: pr_history has two PR types (weight, in_range_rep). The exercise
+progress chart could render them as separate lines or as one line with
+visual differentiation per dot.
+
+Reasoning: Two lines doubles visual complexity for a distinction that is
+meaningful but not the primary signal of the chart. A single weight-over-
+time line preserves the strength-progress narrative; dot color-coding
+preserves the PR-type distinction without forcing the reader to mentally
+overlay two lines. Recharts handles this natively.
+
+### 5. Incomplete sessions display in All Sessions list with state indicators
+
+Context: The session_completions table has both completed_at NULL (in-
+progress sessions) and was_ended_early flag (deliberately ended). The v0
+plan implied "only days with at least one completed session appear" but
+that schema only had a binary completed flag.
+
+Reasoning: With richer state available, hiding incomplete sessions hides
+real training data. Showing them with visual state indicators (e.g., a
+muted style or "in progress" / "ended early" badge) preserves the audit
+trail without misrepresenting completion status. This handles the verifica-
+tion-data case (we currently have an incomplete Pull session in the DB
+from May 1 verification) and the genuine real-world case where the user
+ends a session early due to fatigue or time.
+
+### 6. "All Sessions" routes to a list view, not most-recent-detail
+
+Context: The "All Sessions" header link could either route to a list of past
+sessions (each tappable into detail) or directly into the most recent session
+detail with prev/next navigation.
+
+Reasoning: List-then-tap-into-detail is more discoverable, less surprising,
+and supports both "give me an overview of recent training" and "let me find
+that specific session from two weeks ago" use cases. Direct-into-detail
+optimizes for one use case at the expense of the other.
