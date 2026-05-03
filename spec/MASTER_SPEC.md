@@ -145,9 +145,10 @@ Five tabs, sixteen screens total in MVP. Bottom tab bar always visible.
 - 2B Day Detail (read-only)
 
 ### Tab 3 — History
-- 3A PR Tracker (grouped by muscle group)
-- 3B Exercise PR History (drill-down with chart)
-- 3C Session History
+See `## 12. Tab 3 — History` (Phase 1 spec) for the full route map,
+data contracts, and use cases. This subsection is intentionally
+brief — superseded by the dedicated tab spec at the end of the
+document.
 
 ### Tab 4 — Nutrition
 - 4A Nutrition Dashboard (day-type framework + 4 progress bars)
@@ -551,3 +552,297 @@ Resolutions logged from Phase 1 review:
   affordance). Reconsider in Phase 2.
 - Goal mode change shows per-field recommendation screen with apply
   toggles, never auto-overwrites targets.
+
+## 12. Tab 3 — History
+
+### 1. Problem Statement
+
+The training-app captures session, set, and PR data through Slices 1–5 but exposes no read surface outside the Logger. The user trains week after week with no visual confirmation of progressive overload, no PR trend, and no way to recall block-variant choices from past sessions. The History tab is the read surface that answers "am I getting stronger?" as its anchor question and "what did I do last time?" as its secondary question.
+
+### 2. Target Users
+
+Primary: Marcus Gao. Personal-first product, single user in production for the foreseeable future. Mobile-first usage pattern; primary contexts are gym floor (pre/post workout) and couch (evening review). Comfortable interpreting line charts; uninterested in raw data tables. Engagement pattern: 5-second glance is the dominant interaction, with occasional deeper dives into exercise progress and past sessions.
+
+Multi-user readiness: data scoping (RLS on every table) is already in place from Slices 1–4 — no Slice 6 changes needed. History remains personal-per-user even when the app eventually ships to others; no shared or exportable surfaces.
+
+### 3. User Stories
+
+P0 (must ship in v1):
+
+- As Marcus, I want to open History and immediately see whether I've hit a PR recently so that I can confirm progressive overload at a glance without navigating further.
+- As Marcus, I want to tap any PR row and see that exercise's weight-over-time trend so that I can validate the trajectory, not just the latest data point.
+- As Marcus, I want to tap any PR row's session reference and see the full session detail so that I can recall the context (other exercises chosen, notes, what felt good) of a high-performing session.
+- As Marcus, I want to find any past session by date so that I can recall what variant I picked for a given block last time.
+- As Marcus, I want past sessions that I ended early or didn't complete to still appear in history with clear visual state so that the audit trail is honest, not curated.
+
+P1 (nice to have, may ship if scope allows):
+
+- As Marcus, I want to find an exercise's progress chart even if it hasn't recently PR'd so that I can audit slow-progressing or recently-deloaded exercises. (Reachable via search/picker, not just PR-Timeline cross-link.)
+- As Marcus, I want the PR Timeline to show in_range_rep PRs distinguishably from weight PRs so that I can tell at a glance which kind of progress is happening.
+
+P2 (deferred to later slices, named here so they aren't quietly dropped):
+
+- Muscle-group-grouped current-PR audit view (deferred; conscious deviation from v0)
+- Body-part comparison views ("show me all my back progress")
+- Date-range filtering, exercise-category filtering
+- Search across session notes
+- Volume calculations, training load metrics
+- Cardio / recovery completion display (Slice 7)
+- Calendar / week-grid views (Slice 7 — Plan tab)
+- Streaks / consistency stats (Slice 7)
+- PR celebration animations
+- Export / share
+
+### 4. Feature List
+
+P0 — must ship:
+
+- F1: PR Timeline (landing surface). Server-rendered chronological feed of pr_history rows for the current user. Default window: last 90 days. "Show all" toggle that reveals full history. Each row displays exercise name, PR type badge (weight | in_range_rep), weight × reps, and a session+date caption. Both exercise name and session caption are independently tappable as cross-links.
+- F2: Exercise Progress view. Server-rendered route receiving an exercise_id. Three stacked layers: current PR header (most recent best per existing PR detection logic), weight-over-time line chart (Recharts, 6-month default with "Show all" toggle), and full chronological set log for that exercise (most recent first). Reachable from PR Timeline cross-link.
+- F3: Session Detail view. Server-rendered route receiving a completion_id. Renders the session in chronological block order. For each block: block name, exercise chosen, all sets logged. Failure-protocol blocks render with WU/W1/W2 typing and W2 failure flag preserved. Free-form blocks render as flat "Set 1 / Set 2 / Set 3..." lists. Notes (if any) display under the relevant set. PR badges where applicable.
+- F4: All Sessions list. Header link from every History surface. Server-rendered chronological list of session_completions rows for the current user. Each row: session name (Pull / Lower ATG / etc.), date, completion-state indicator (complete | in-progress | ended-early), and a brief summary (block count completed, PR count if any). Tap into Session Detail.
+- F5: Empty state handling. PR Timeline shows a deliberate empty-state when no PRs in the default window — accepted as accurate (deload, focused training cycle) rather than supplemented with substitute content.
+- F6: Cross-link navigation contract. Exercise names anywhere in History are tappable to Exercise Progress. Session captions/dates anywhere in History are tappable to Session Detail. This is a cross-cutting contract, not a single feature; enforced by a shared component.
+
+P1 — ship if scope allows:
+
+- F7: Exercise picker. Search/browse interface to find any exercise's progress chart even when it hasn't appeared in recent PR Timeline. Reachable from a header affordance on PR Timeline. If P1 cut, Exercise Progress is only reachable via PR cross-link.
+- F8: PR-type visual distinction in PR Timeline. Distinct badge/color for weight vs. in_range_rep PR rows. Cosmetic polish; rows still render and link correctly without it.
+
+### 5. Screens / Pages / Flows
+
+Routes:
+
+- /history — PR Timeline (landing). Server Component.
+- /history/exercises/[exercise_id] — Exercise Progress view. Server Component for layout + set-log layers; Client Component sub-component for the Recharts chart + "Show all" toggle.
+- /history/sessions — All Sessions list. Server Component.
+- /history/sessions/[completion_id] — Session Detail view. Server Component.
+
+Navigation flows:
+
+- Daily-glance flow (anchor): Open app → bottom nav → History → land on PR Timeline → glance at most recent PR → close. Zero further navigation.
+- Progressive-overload validation flow: PR Timeline → tap exercise name on a PR row → Exercise Progress → review chart → optionally scroll to set log → back.
+- Block-variant journal flow: PR Timeline → header "All Sessions" link → All Sessions list → tap session row by date → Session Detail → review block-by-block → back.
+- Cross-context flow (PR row → session context): PR Timeline → tap session caption on a PR row → Session Detail (jumps directly to that session) → optionally tap an exercise within that session to Exercise Progress.
+
+State indicators on All Sessions list:
+
+- Complete (completed_at IS NOT NULL AND was_ended_early = false): default styling.
+- Ended early (was_ended_early = true): muted styling, "ended early" badge.
+- In progress (completed_at IS NULL AND was_ended_early = false): muted styling, "in progress" badge. Tappable; Session Detail handles partial data gracefully.
+
+Empty states:
+
+- PR Timeline empty: "No PRs in the last 90 days. Tap Show all to see your full history, or All Sessions to browse past sessions." — never substitute content.
+- Exercise Progress empty (no set_logs for that exercise): "No history for this exercise yet." Chart hidden; set log shows the empty message.
+- All Sessions empty: "No completed sessions yet." (Realistic only on a fresh install.)
+- Session Detail with zero set_logs: shows the session header and any logged blocks (which may have zero sets); no errors.
+
+### 6. Data Model
+
+Slice 6 is read-only against the existing schema. No new tables, columns, indexes, RLS policies, or views are introduced. The data model section documents what Slice 6 reads from, the access patterns, and the entity relationships that History surfaces depend on.
+
+#### Tables read from (existing, unchanged by Slice 6)
+
+- session_completions — one row per training session attempt. Slice 6 reads: completion_id (PK), user_id (RLS), session_id, started_at, completed_at, completed_block_ids (uuid[]), was_ended_early.
+- set_logs — one row per logged set. Slice 6 reads: set_log_id (PK), user_id (RLS), session_id, block_id, exercise_id, set_index, weight_kg, reps, is_to_failure, prescribed_min, prescribed_max, notes, logged_at.
+- pr_history — one row per detected PR (append-only). Slice 6 reads: pr_id (PK), user_id (RLS), exercise_id, set_log_id, pr_type (enum: weight | in_range_rep), weight_kg, reps, achieved_at.
+- exercises — exercise catalog. Slice 6 reads: exercise_id (PK), name, is_bodyweight, muscle_group, exercise_type (compound | isolation | etc.).
+- sessions — session-template catalog (Pull, Push, Lower ATG, etc.). Slice 6 reads: session_id (PK), name.
+- blocks — block-template catalog. Slice 6 reads: block_id (PK), session_id, name, protocol_type (failure | mobility | corrective), order_index, prescribed_min, prescribed_max.
+
+#### Access patterns by surface
+
+PR Timeline (/history):
+
+- Primary query: pr_history for current user, ordered by achieved_at DESC, default windowed to last 90 days. JOIN to exercises for name and to set_logs (via set_log_id FK) for session context.
+- Secondary lookup per row: derive session display name (e.g., "Pull · May 1") from the set_logs.session_id FK joined to a session_completions row matching that session_id and the closest started_at <= achieved_at. The Architecture phase will resolve whether this is a single denormalized join or a separate query per row; the spec only requires the data is reachable.
+- Cross-link payloads: each rendered row carries exercise_id (for exercise cross-link) and completion_id (for session cross-link). Resolved at query time, not at click time.
+
+Exercise Progress (/history/exercises/[exercise_id]):
+
+- Header: most recent pr_history row for (user_id, exercise_id) ordered by achieved_at DESC LIMIT 1. Used to display the current PR.
+- Chart data: all set_logs for (user_id, exercise_id), ordered by logged_at ASC, default windowed to last 6 months. The chart plots weight_kg over logged_at. Each data point is annotated with whether a PR fired on that set (LEFT JOIN to pr_history on set_log_id).
+- Set log layer: same set_logs query as the chart, but rendered chronologically newest-first with full set detail (weight × reps, set_index, notes if any, PR badge if applicable).
+
+All Sessions (/history/sessions):
+
+- Primary query: session_completions for current user, ordered by started_at DESC, full history (no default window — assumes session count per user grows slowly enough that paging is not P0; revisit if usage proves otherwise).
+- Per-row enrichment: session display name from sessions.name via session_id FK; PR count for the session via COUNT(\*) FROM pr_history WHERE achieved_at BETWEEN started_at AND COALESCE(completed_at, NOW()) (Architecture phase resolves the precise temporal-bounds query — the spec specifies "PRs that fired during this session," not the SQL).
+- State derivation: complete | in_progress | ended_early derived from (completed_at IS NULL, was_ended_early) at query time, not stored.
+
+Session Detail (/history/sessions/[completion_id]):
+
+- Session header: session_completions row for completion_id. JOIN to sessions for the name.
+- Block list: blocks for this session_id from blocks, ordered by order_index ASC. For each block: was it in completed_block_ids? (read-only check against the array column.)
+- Per-block sets: set_logs filtered by (user_id, session_id, block_id), ordered by set_index ASC. JOIN to exercises for the chosen exercise's name. PR badge per set: LEFT JOIN to pr_history on set_log_id.
+
+#### Entity relationship summary
+
+```
+exercises 1───* set_logs *───1 sessions
+                  ▲                      ▲
+                  │                      │
+                  │ (set_log_id, FK)     │ (session_id, FK)
+                  │                      │
+              pr_history              session_completions
+                                          ▲
+                                          │ (block_id IN completed_block_ids)
+                                          │
+                                       blocks
+```
+
+Slice 6 traverses these relationships in queries; it never modifies any of them.
+
+#### Pseudo-schema (read-side projections, not new tables)
+
+For Architecture phase reference. These are the shapes the UI components consume; the actual SQL projection is decided in Phase 2.
+
+```
+PRTimelineRow {
+  pr_id: uuid
+  achieved_at: timestamp
+  exercise_id: uuid
+  exercise_name: string
+  pr_type: 'weight' | 'in_range_rep'
+  weight_kg: number
+  reps: number
+  is_bodyweight: boolean
+  set_log_id: uuid
+  completion_id: uuid
+  session_display_name: string
+}
+
+ExerciseProgressChartPoint {
+  logged_at: timestamp
+  weight_kg: number
+  reps: number
+  is_pr: boolean
+  pr_type: 'weight' | 'in_range_rep' | null
+}
+
+ExerciseProgressSetLogRow {
+  set_log_id: uuid
+  logged_at: timestamp
+  weight_kg: number
+  reps: number
+  set_index: number
+  is_to_failure: boolean
+  notes: string | null
+  pr_badge: 'weight' | 'in_range_rep' | null
+}
+
+AllSessionsRow {
+  completion_id: uuid
+  session_display_name: string
+  started_at: timestamp
+  state: 'complete' | 'in_progress' | 'ended_early'
+  blocks_completed_count: number
+  blocks_total_count: number
+  pr_count: number
+}
+
+SessionDetailBlock {
+  block_id: uuid
+  block_name: string
+  protocol_type: 'failure' | 'mobility' | 'corrective'
+  was_completed: boolean
+  exercise_id: uuid | null
+  exercise_name: string | null
+  sets: SessionDetailSet[]
+}
+
+SessionDetailSet {
+  set_log_id: uuid
+  set_index: number
+  weight_kg: number
+  reps: number
+  is_to_failure: boolean
+  notes: string | null
+  pr_badge: 'weight' | 'in_range_rep' | null
+}
+```
+
+### 7. External Integrations
+
+None. Slice 6 is fully self-contained against the existing Supabase schema and uses no external APIs, third-party services, or webhooks.
+
+The two existing infrastructure dependencies that Slice 6 inherits from prior slices but does not modify:
+
+- Supabase (auth, RLS, Postgres) — same client as Slices 1–5.
+- Recharts (NPM dependency, to be added in Phase 2 / installed in Phase 4 if not already present) — bundled with the app, no external service call.
+
+### 8. Non-Functional Requirements
+
+#### Performance
+
+- PR Timeline initial render: under 200ms server-side query time on a realistic dataset (estimate: ~1,200 PRs/year over multi-year usage). Default 90-day window keeps the working query small. The "Show all" toggle is permitted to be slower (up to ~1s) on large datasets — it's a deep-engagement surface, not a glance surface.
+- Exercise Progress chart: 6-month default windowed query and chart render combined under 500ms. Recharts handles ~200 data points without strain; a 6-month window for a frequently-trained exercise yields ~50–100 points.
+- All Sessions list: acceptable up to ~500 rows (estimate: 10 sessions/week × 52 weeks = ~500 sessions/year) without pagination. Beyond that, pagination is added — but P2, not P0.
+- Session Detail: under 300ms for typical sessions (5–10 blocks, 15–30 sets). No streaming or skeleton needed at typical sizes.
+
+#### Security & access control
+
+- All queries enforce user_id = auth.uid() via existing RLS policies. Slice 6 introduces no new policies and changes no existing ones.
+- No surface accepts user input that becomes part of a query string beyond the route params (exercise_id, completion_id). Both are UUIDs validated at the route layer.
+- No data leaves the user's account. No exports, no shareable URLs, no cross-user references.
+
+#### Accessibility
+
+- All cross-link affordances (exercise names, session captions, "Show all" toggles) are keyboard-navigable and have descriptive accessible labels.
+- The Recharts chart includes ARIA attributes for the data series; the set log layer below the chart serves as the screen-reader-accessible representation of the same data (already a P0 feature, not an a11y add-on).
+- Dark theme contrast meets WCAG AA for body text against #000 background with the existing lilac (#9b7fd4) accent — same standards as prior slices.
+- Empty states use plain prose, not icon-only signaling.
+
+#### Mobile-first responsive behavior
+
+- All four routes designed for ~375–414px viewport width as the primary target. Layouts are vertical stacks; no horizontal scrolling on charts or set logs.
+- The Recharts chart adapts width to viewport. On narrow screens the chart's x-axis tick density auto-reduces (Recharts default behavior).
+- Touch targets ≥ 44×44 CSS px for all tappable elements per existing app conventions.
+
+#### Reliability
+
+- Read failures (Supabase unreachable, RLS denial, malformed UUID in route param) render a clear error state per surface, not a blank page or a thrown exception. Error boundaries already in place from prior slices.
+- Slice 6 has no write paths, so no offline queue / sync layer integration is needed. The existing queue (Slice 5) is unaffected.
+
+#### Maintainability
+
+- The cross-link navigation contract (F6) is enforced via a single shared component used by every History surface. Renaming or restyling cross-links later is a one-file change, not a hunt across four routes.
+- Query shapes are documented in Phase 2 (ARCHITECTURE.md) so the same projections are not re-derived per surface.
+
+### 9. Out of Scope
+
+The following are intentionally not part of Slice 6 and will not be added mid-build. Each is named explicitly to prevent quiet scope creep:
+
+- Cardio and Recovery activity completion display. Logged in FUTURE_WORK.md as a Slice 7 item with its own data-model decision (activity_completions table vs. UNION with session_completions).
+- Calendar / week-grid views — Plan tab territory (Slice 7).
+- Streaks, consistency stats, training frequency metrics — Plan tab.
+- Body-part-grouped audits ("show me all my back exercise progress at once"). v1 anchors on chronological PR Timeline; the muscle-group-grouped alternative was a v0 plan feature consciously deferred per DECISIONS.md "Slice 6 — History tab Discovery decisions" entry 1.
+- Comparison views ("Pull this month vs. last month").
+- Date-range filtering, exercise-category filtering, full-text search across notes or session content.
+- PR celebration animations, confetti, badges-as-rewards — not aligned with the glance-and-close usage pattern.
+- Volume calculations (sets × reps × weight, weekly tonnage, etc.).
+- Body metrics tracking (weight, body fat, measurements) — Phase 2 enhancement per v0 master plan; not Slice 6.
+- Export, sharing, public PR cards. All of History is personal-only.
+- In-Logger "last time I did this exercise" reference. This is a Logger-side feature; Slice 6's Exercise Progress view serves the History-side audit case, not the in-workout reference case.
+- Pagination on All Sessions list — assumed unnecessary at expected data scale; revisit only if usage proves otherwise (P2).
+- Real-time updates of History surfaces while a workout is in progress. History reflects committed data. The Logger is the live surface.
+- Editing or deleting historical data from any History surface. Read-only. Data corrections happen at the DB layer (manual SQL) until a future data-editing surface is specced.
+
+### 10. Open Questions
+
+Three items where Phase 1 surfaces a decision that Phase 2 (Architecture) must resolve before Phase 4 builds. Each is named with the resolution deadline and the current leaning, so Phase 2 is not starting from a blank page.
+
+Q1: Session display name format.
+PR Timeline rows and All Sessions rows need a "session_display_name" string (e.g., "Pull · May 1"). Two construction options:
+(a) `<sessions.name> · <formatted_date>` — current leaning, matches v0 master plan's session-naming convention.
+(b) Just `<formatted_date>` with the session name as a separate sub-line element. Cleaner but adds vertical density.
+Resolution: Phase 2 ARCHITECTURE Module Map. Default to (a) unless a layout constraint surfaces in chart or list density.
+
+Q2: PR-count-per-session derivation.
+All Sessions rows show a PR count per session. The query needs to bound "PRs that fired during this session" — either by achieved_at falling between started_at and completed_at (or NOW() if NULL), or by joining pr_history.set_log_id to set_logs and filtering by session_id. The second is more correct (a PR is unambiguously tied to a specific set_log, not just a time window) but requires the FK to be populated, which prior verification showed is path-specific (KNOWN_ISSUES.md entry on pr_history.set_log_id intermittent FK population).
+Resolution: Phase 2 ARCHITECTURE API Contract. Default to FK-based join; fallback to time-window query if FK is not reliable. The intermittent-FK known issue may need to be promoted from 🟢 Low back to 🟡 Medium if Phase 2 finds the FK-based query is unsafe.
+
+Q3: Recharts version pin and bundle impact.
+Recharts will be added as a dependency (assuming not already present). Phase 2 ARCHITECTURE Key Dependencies must specify the version. Default to whatever the latest stable major is at install time, with the constraint that it must work with React 19 (which Next.js 15 includes).
+Resolution: Phase 2 install verification.

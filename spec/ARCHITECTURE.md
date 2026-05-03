@@ -125,10 +125,11 @@ training-app/
 │   │   │   ├── plan/
 │   │   │   │   ├── page.tsx                     # 2A
 │   │   │   │   └── [day]/page.tsx               # 2B
-│   │   │   ├── history/
-│   │   │   │   ├── page.tsx                     # 3A
-│   │   │   │   ├── exercise/[id]/page.tsx       # 3B
-│   │   │   │   └── sessions/page.tsx            # 3C
+│   │   │   ├── history/                         # see §16 Tab 3 — History (Slice 6)
+│   │   │   │   ├── page.tsx                     # PR Timeline
+│   │   │   │   ├── exercises/[exercise_id]/page.tsx   # Exercise Progress
+│   │   │   │   ├── sessions/page.tsx            # All Sessions list
+│   │   │   │   └── sessions/[completion_id]/page.tsx  # Session Detail
 │   │   │   ├── nutrition/
 │   │   │   │   ├── page.tsx                     # 4A
 │   │   │   │   └── log/page.tsx                 # 4B
@@ -290,18 +291,11 @@ getActivePlan(userId) →
     sessionsBySchedule: Map<scheduleId, Session[]>
   }
 
-getPRTracker(userId) →
-  {
-    exercisesByMuscleGroup: Map<MuscleGroup, ExerciseWithCurrentPR[]>
-  }
-
-getExercisePRHistory(exerciseId) →
-  {
-    exercise: Exercise,
-    weightLadder: PRHistory[],
-    inRangeRepPRs: PRHistory[],
-    allSetLogs: SetLog[]
-  }
+// History tab read contract — see §16 Tab 3 — History (Slice 6) for the
+// full Phase 2 spec. The four data-layer functions there
+// (getPRTimeline, getExerciseProgress, getAllSessions,
+// getSessionDetail) supersede the v0-era getPRTracker /
+// getExercisePRHistory sketches.
 
 getNutritionContext(userId, date) →
   {
@@ -759,3 +753,540 @@ If the user backs out of 5E.1 without saving, profile.goal_mode is
 already updated but targets are unchanged. The mode change itself is
 the user's commitment; applying defaults is a separate, granular
 decision.
+
+## 16. Tab 3 — History (Slice 6)
+
+> Per MASTER_SPEC §12 (History tab, ten-section spec). Read-only — no
+> schema/RLS/auth changes. Phase 0 Discovery decisions logged in
+> DECISIONS.md "Slice 6 — History tab Discovery decisions (May 2, 2026)".
+
+### 1. Tech Stack Decision
+
+Slice 6 inherits the Slices 1–5 stack with one addition. No removals, no substitutions.
+
+Inherited from prior slices, unchanged:
+
+- Next.js 15 App Router with React 19
+- TypeScript strict mode
+- Tailwind CSS + shadcn/ui (existing component library)
+- Supabase JS client v2.x (existing instance, RLS enforced)
+- pnpm + Node 20 LTS
+- @ducanh2912/next-pwa (PWA wrapper, unaffected by Slice 6)
+- Existing dark theme tokens (#000 background, #9b7fd4 lilac accent)
+
+New dependency:
+
+- recharts — charting library for the Exercise Progress weight-over-time line chart. React-native, declarative API, mobile-friendly defaults, small bundle relative to Chart.js or D3-based alternatives. Version pinned in §7 Key Dependencies, resolves MASTER_SPEC §12.10 Q3.
+
+Rationale: Recharts was selected during Phase 0 Discovery for fit with the existing React/shadcn idiom and bundle size. The single line chart in Exercise Progress is a Recharts Cartesian LineChart with date-typed x-axis and weight_kg-typed y-axis — a primitive use of the library, no exotic features. If Recharts ever needs to be swapped (e.g., for visx or react-chartjs-2), the swap surface is contained to a single client component (see §3 Module Map).
+
+Server Components vs Client Components split:
+
+- Server Components: route entries (page.tsx) for /history, /history/exercises/[exercise_id], /history/sessions, /history/sessions/[completion_id]. Data fetching happens in these.
+- Client Components: only the chart + "Show all" toggle in Exercise Progress, and the "Show all" toggle in PR Timeline. State is local to these components; no global store.
+
+This split serves three goals: smaller client bundle (no Supabase client shipped to browser), faster first paint (HTML streamed with data), and clean RLS enforcement (queries always run server-side with the user's auth context).
+
+### 2. File / Folder Structure
+
+```
+src/
+├── app/
+│   └── (app)/
+│       └── history/
+│           ├── page.tsx                              # PR Timeline (server)
+│           ├── exercises/
+│           │   └── [exercise_id]/
+│           │       └── page.tsx                      # Exercise Progress (server)
+│           ├── sessions/
+│           │   ├── page.tsx                          # All Sessions list (server)
+│           │   └── [completion_id]/
+│           │       └── page.tsx                      # Session Detail (server)
+│           └── _components/
+│               ├── PRTimelineRow.tsx                 # Server, presentational
+│               ├── PRTimelineShowAllToggle.tsx       # Client, local state
+│               ├── ExerciseProgressChart.tsx         # Client, Recharts
+│               ├── ExerciseProgressShowAllToggle.tsx # Client, local state
+│               ├── ExerciseProgressSetLogList.tsx    # Server, presentational
+│               ├── AllSessionsRow.tsx                # Server, presentational
+│               ├── SessionDetailBlock.tsx            # Server, presentational
+│               ├── SessionStateBadge.tsx             # Server, presentational
+│               ├── PRTypeBadge.tsx                   # Server, presentational
+│               └── HistoryHeaderLink.tsx             # Server, "All Sessions" link
+│
+├── lib/
+│   └── history/
+│       ├── queries.ts          # All Supabase read queries for History
+│       ├── projections.ts      # Pseudo-schema → TS types from MASTER_SPEC §12.6
+│       ├── displayName.ts      # Session display name formatting (Q1 resolution)
+│       └── crossLinks.ts       # Cross-link href construction (F6 contract)
+│
+└── components/
+    └── shared/
+        ├── ExerciseLink.tsx    # Cross-cutting exercise→progress link (F6)
+        └── SessionLink.tsx     # Cross-cutting session→detail link (F6)
+```
+
+Key structural decisions:
+
+- Routes live under `src/app/(app)/history/` matching the existing `(app)` route group convention used by Logger and Settings in prior slices.
+- `_components/` (with leading underscore) is an internal route-scoped components folder; Next.js App Router treats it as private to the route subtree. History-specific components that aren't reused live here.
+- The two cross-link components (ExerciseLink, SessionLink) live in `src/components/shared/` not in History's `_components/`, because the F6 cross-link contract from MASTER_SPEC §12.4 says exercise names and session captions should be tappable everywhere — these components must be importable from outside History (e.g., when Slice 7's Plan tab needs to link into a session). Sharing them now prevents Slice 7 from re-implementing the same link semantics.
+- `src/lib/history/` is the data layer. Components import from here; they do not call Supabase directly. This is the same pattern Slice 5 used for sync-layer modules.
+
+### 3. Module Map
+
+Each module has a single clear responsibility. The list maps cleanly to the file structure in §2.
+
+#### Data layer modules (src/lib/history/)
+
+**queries.ts**
+
+Responsibility: All Supabase read queries for History surfaces. Exports one function per surface, each returning the corresponding projection type from MASTER_SPEC §12.6.
+
+Exports:
+
+- `getPRTimeline(opts: { showAll: boolean }): Promise<PRTimelineRow[]>`
+- `getExerciseProgress(exerciseId: string, opts: { showAll: boolean }): Promise<ExerciseProgressData>` where `ExerciseProgressData = { currentPR: PRTimelineRow | null; chartPoints: ExerciseProgressChartPoint[]; setLog: ExerciseProgressSetLogRow[]; exercise: { id, name, is_bodyweight } }`
+- `getAllSessions(): Promise<AllSessionsRow[]>`
+- `getSessionDetail(completionId: string): Promise<SessionDetailData>` where `SessionDetailData = { session: { name, started_at, completed_at, was_ended_early, state }; blocks: SessionDetailBlock[] }`
+
+Constraint: never imports React, never returns JSX. Pure data functions. Always called from Server Components.
+
+**projections.ts**
+
+Responsibility: TypeScript type definitions for the pseudo-schemas in MASTER_SPEC §12.6 Data Model.
+
+Exports the seven types: PRTimelineRow, ExerciseProgressChartPoint, ExerciseProgressSetLogRow, AllSessionsRow, SessionDetailBlock, SessionDetailSet, plus the two composite return types (ExerciseProgressData, SessionDetailData) used by queries.ts.
+
+**displayName.ts**
+
+Responsibility: Format `session_display_name` consistently across surfaces. Resolves MASTER_SPEC §12.10 Q1.
+
+Decision: Format (a) — `<sessions.name> · <formatted_date>` — confirmed. Date format: "MMM D" for current year, "MMM D, YYYY" for prior years. Examples: "Pull · May 1", "Lower ATG · Dec 12, 2025".
+
+Exports:
+
+- `formatSessionDisplayName(sessionName: string, startedAt: Date): string`
+
+This is a one-liner module, but isolating it serves three purposes: (1) all surfaces use the same format without copy-paste; (2) future format changes are one-file; (3) queries.ts can call it during projection rather than duplicating the format logic in SQL or per-component.
+
+**crossLinks.ts**
+
+Responsibility: Build href strings for F6 cross-link navigation contract. One source of truth for the URL shape.
+
+Exports:
+
+- `exerciseProgressHref(exerciseId: string): string` → `/history/exercises/{exerciseId}`
+- `sessionDetailHref(completionId: string): string` → `/history/sessions/{completionId}`
+- `allSessionsHref(): string` → `/history/sessions`
+
+If the URL shape ever changes, this is the only file to edit. ExerciseLink and SessionLink (the shared components) consume from here.
+
+#### Component modules
+
+PR Timeline route (page.tsx):
+
+- Calls `getPRTimeline({ showAll })` server-side
+- Renders `<PRTimelineRow>` per row
+- Renders `<PRTimelineShowAllToggle>` (client) at the bottom
+
+PRTimelineRow.tsx:
+
+- Server component, presentational
+- Renders one row: exercise name (via ExerciseLink), PR type badge, weight × reps, session caption (via SessionLink)
+
+PRTimelineShowAllToggle.tsx:
+
+- Client component
+- Local state: `showAll: boolean`
+- On toggle, navigates to `/history?showAll=1` (or back to `/history`)
+- Server route reads the query param and passes to `getPRTimeline`
+
+Exercise Progress route (page.tsx):
+
+- Receives `exercise_id` route param
+- Calls `getExerciseProgress(exerciseId, { showAll })` server-side
+- Renders header (current PR), `<ExerciseProgressChart>` (client), `<ExerciseProgressSetLogList>`, `<ExerciseProgressShowAllToggle>` (client)
+
+ExerciseProgressChart.tsx:
+
+- Client component (because Recharts mounts in the browser DOM)
+- Receives `chartPoints: ExerciseProgressChartPoint[]` as props
+- Renders a Recharts LineChart with `weight_kg` over `logged_at`
+- Dots colored by `pr_type` field per Phase 0 Discovery decision 4
+- Empty state: hides the chart entirely if `chartPoints.length === 0`
+
+ExerciseProgressSetLogList.tsx:
+
+- Server component, presentational
+- Receives `setLog: ExerciseProgressSetLogRow[]` as props
+- Renders chronologically newest-first with full set detail
+
+ExerciseProgressShowAllToggle.tsx:
+
+- Client component, mirror of PRTimelineShowAllToggle pattern
+- Toggles `?showAll=1` query param
+
+All Sessions route (page.tsx):
+
+- Calls `getAllSessions()` server-side
+- Renders `<AllSessionsRow>` per row
+
+AllSessionsRow.tsx:
+
+- Server component, presentational
+- Renders one row: session display name (via SessionLink), date, `<SessionStateBadge>`, blocks-completed summary, PR count if > 0
+
+SessionStateBadge.tsx:
+
+- Server component, presentational
+- Receives `state: 'complete' | 'in_progress' | 'ended_early'`
+- Returns appropriate badge styling
+
+Session Detail route (page.tsx):
+
+- Receives `completion_id` route param
+- Calls `getSessionDetail(completionId)` server-side
+- Renders session header, then `<SessionDetailBlock>` per block
+
+SessionDetailBlock.tsx:
+
+- Server component, presentational
+- Receives one `SessionDetailBlock` projection
+- Renders block name, exercise (via ExerciseLink), all sets
+
+PRTypeBadge.tsx:
+
+- Server component, presentational
+- Receives `pr_type: 'weight' | 'in_range_rep'`
+- Returns badge with appropriate label (P1 feature F8 — visual distinction)
+
+HistoryHeaderLink.tsx:
+
+- Server component, presentational
+- Renders the "All Sessions" link as a header affordance
+- Used on `/history` and `/history/exercises/[id]` (and could be used on Session Detail too, but redundant since you came from there)
+
+#### Shared cross-link components (src/components/shared/)
+
+ExerciseLink.tsx:
+
+- Server component
+- Receives `exerciseId: string`, `children: ReactNode`
+- Wraps children in a Next.js `<Link href={exerciseProgressHref(exerciseId)}>`
+- Single source of truth for "exercise name → progress view" navigation
+- Importable by any future slice that displays exercise names
+
+SessionLink.tsx:
+
+- Same pattern, for session captions → Session Detail
+- Importable by any future slice that displays session references
+
+### 4. API Contract
+
+Every History query is a server-side Supabase call. No HTTP API endpoints are introduced — all data fetching is in-process inside Server Components via the existing Supabase server client.
+
+The "API Contract" here documents the four data-layer functions in `src/lib/history/queries.ts`, since those are the read contract that the UI layer consumes.
+
+#### `getPRTimeline(opts)`
+
+Input:
+
+- `opts.showAll: boolean` — false: 90-day window; true: full history
+
+Returns: `PRTimelineRow[]` ordered by `achieved_at DESC`.
+
+Query shape:
+
+```sql
+SELECT
+  pr.pr_id, pr.achieved_at, pr.pr_type, pr.weight_kg, pr.reps,
+  ex.exercise_id, ex.name AS exercise_name, ex.is_bodyweight,
+  sl.set_log_id, sl.session_id,
+  sc.completion_id, sc.started_at,
+  s.name AS session_name
+FROM pr_history pr
+JOIN exercises ex ON ex.exercise_id = pr.exercise_id
+JOIN set_logs sl ON sl.set_log_id = pr.set_log_id
+JOIN session_completions sc
+  ON sc.session_id = sl.session_id
+  AND sc.user_id = pr.user_id
+  AND sc.started_at <= pr.achieved_at
+  AND (sc.completed_at IS NULL OR sc.completed_at >= pr.achieved_at)
+JOIN sessions s ON s.session_id = sc.session_id
+WHERE pr.user_id = auth.uid()
+  AND pr.set_log_id IS NOT NULL  -- skips rows where FK is NULL (see Q2 resolution)
+  -- AND pr.achieved_at >= now() - interval '90 days'  -- omitted if showAll
+ORDER BY pr.achieved_at DESC
+```
+
+The application then constructs `session_display_name` via `formatSessionDisplayName(session_name, started_at)` in projection.ts.
+
+#### `getExerciseProgress(exerciseId, opts)`
+
+Input:
+
+- `exerciseId: string` — UUID, validated at route layer
+- `opts.showAll: boolean` — false: 6-month window; true: full history
+
+Returns: `ExerciseProgressData`.
+
+Three sub-queries (or one with subqueries; Phase 4 implementation choice):
+
+Query 1 — Current PR header:
+
+```sql
+SELECT pr_id, pr_type, weight_kg, reps, achieved_at
+FROM pr_history
+WHERE user_id = auth.uid() AND exercise_id = $1
+ORDER BY achieved_at DESC
+LIMIT 1
+```
+
+Query 2 — Chart points + set log (same data, two presentations):
+
+```sql
+SELECT
+  sl.set_log_id, sl.logged_at, sl.weight_kg, sl.reps, sl.set_index,
+  sl.is_to_failure, sl.notes,
+  pr.pr_type AS pr_badge
+FROM set_logs sl
+LEFT JOIN pr_history pr ON pr.set_log_id = sl.set_log_id
+WHERE sl.user_id = auth.uid() AND sl.exercise_id = $1
+  -- AND sl.logged_at >= now() - interval '6 months'  -- omitted if showAll
+ORDER BY sl.logged_at ASC
+```
+
+Query 3 — Exercise metadata:
+
+```sql
+SELECT exercise_id, name, is_bodyweight
+FROM exercises
+WHERE exercise_id = $1
+```
+
+(Slice 6 implementation may roll Query 3 into Query 2's JOIN if performance warrants; spec only requires the data is reachable.)
+
+#### `getAllSessions()`
+
+Input: none.
+
+Returns: `AllSessionsRow[]` ordered by `started_at DESC`.
+
+Query shape:
+
+```sql
+SELECT
+  sc.completion_id, sc.started_at, sc.completed_at, sc.was_ended_early,
+  sc.session_id,
+  s.name AS session_name,
+  array_length(sc.completed_block_ids, 1) AS blocks_completed_count,
+  (SELECT COUNT(*) FROM blocks b WHERE b.session_id = sc.session_id) AS blocks_total_count,
+  (SELECT COUNT(*) FROM pr_history pr
+   JOIN set_logs sl ON sl.set_log_id = pr.set_log_id
+   WHERE pr.user_id = sc.user_id
+     AND sl.session_id = sc.session_id
+     AND pr.achieved_at >= sc.started_at
+     AND pr.achieved_at <= COALESCE(sc.completed_at, now())) AS pr_count
+FROM session_completions sc
+JOIN sessions s ON s.session_id = sc.session_id
+WHERE sc.user_id = auth.uid()
+ORDER BY sc.started_at DESC
+```
+
+The pr_count subquery uses BOTH the FK join (`sl.set_log_id = pr.set_log_id`) AND the time-window check (`achieved_at BETWEEN started_at AND completed_at`) — see Q2 resolution below for why this hybrid is correct.
+
+State derivation (in projection):
+
+- `completed_at IS NOT NULL AND was_ended_early = false` → `'complete'`
+- `was_ended_early = true` → `'ended_early'`
+- otherwise (i.e., `completed_at IS NULL AND was_ended_early = false`) → `'in_progress'`
+
+#### `getSessionDetail(completionId)`
+
+Input:
+
+- `completionId: string` — UUID, validated at route layer
+
+Returns: `SessionDetailData`.
+
+Three sub-queries:
+
+Query 1 — Session header:
+
+```sql
+SELECT sc.completion_id, sc.started_at, sc.completed_at,
+       sc.was_ended_early, sc.completed_block_ids,
+       s.name AS session_name, s.session_id
+FROM session_completions sc
+JOIN sessions s ON s.session_id = sc.session_id
+WHERE sc.completion_id = $1 AND sc.user_id = auth.uid()
+```
+
+Query 2 — Blocks for this session template:
+
+```sql
+SELECT block_id, name, protocol_type, order_index, prescribed_min, prescribed_max
+FROM blocks
+WHERE session_id = $session_id_from_query_1
+ORDER BY order_index ASC
+```
+
+Query 3 — Sets logged in this session, with PR badges:
+
+```sql
+SELECT
+  sl.set_log_id, sl.block_id, sl.exercise_id, sl.set_index,
+  sl.weight_kg, sl.reps, sl.is_to_failure, sl.notes,
+  ex.name AS exercise_name,
+  pr.pr_type AS pr_badge
+FROM set_logs sl
+JOIN exercises ex ON ex.exercise_id = sl.exercise_id
+LEFT JOIN pr_history pr ON pr.set_log_id = sl.set_log_id
+WHERE sl.user_id = auth.uid()
+  AND sl.session_id = (SELECT session_id FROM session_completions WHERE completion_id = $1)
+ORDER BY sl.block_id, sl.set_index ASC
+```
+
+The application assembles `SessionDetailBlock[]` by grouping Query 3 results by `block_id`, joining against Query 2 for block metadata. Blocks with no sets logged get `sets: []` and `exercise_id: null, exercise_name: null`. Block `was_completed` is derived: `block_id IN session.completed_block_ids`.
+
+#### Resolution of MASTER_SPEC §12.10 Q2: PR-count-per-session derivation
+
+Decision: hybrid query — filter by both `set_log_id` FK AND time-window.
+
+Reasoning: The FK is more correct in principle (a PR is unambiguously tied to a specific set_log, not just a time range), but the FK is intermittently NULL per the KNOWN_ISSUES.md entry. The time-window-only approach risks attributing a PR to the wrong session if two sessions overlap in time (which shouldn't happen per the workout flow but is a real edge case across timezones or app glitches).
+
+The hybrid: `JOIN pr_history.set_log_id → set_logs.session_id` AND `pr.achieved_at BETWEEN sc.started_at AND COALESCE(sc.completed_at, now())`.
+
+If `set_log_id` is NULL on a pr_history row, that row is excluded from the count. This is acceptable because:
+
+- The known-issue says FK population is intermittent, not zero. In Slice 5 verification, recent rows had populated FKs.
+- A small undercount in PR count per session is preferable to incorrect attribution.
+- The downstream consequence is: KNOWN_ISSUES.md `pr_history.set_log_id` entry stays at 🟢 Low (we accept the undercount), with a note that the PR count display in All Sessions may be slightly low for older sessions where the FK wasn't populated. Add an entry to FUTURE_WORK.md to backfill `set_log_id` on legacy rows when convenient.
+
+PR Timeline (`getPRTimeline`) takes the same approach: `WHERE pr.set_log_id IS NOT NULL` filters out rows with NULL FKs to avoid JOIN failures. Rows with NULL FKs simply don't appear in PR Timeline. Acceptable trade-off for the same reasons.
+
+### 5. State Management
+
+Slice 6 is read-side. State management is minimal — three categories, all local in scope. No global store, no React Context for History data, no Redux/Zustand. The Server Component / Client Component split in §1 does the heavy lifting; remaining state is per-component.
+
+#### 5.1 Server-side data state
+
+All data state lives server-side and is fetched per-request inside Server Components. There is no client-side cache for History data, no SWR or React Query layer, no revalidation primitives beyond Next.js's built-in behavior.
+
+Per-request flow:
+
+1. Route's `page.tsx` (Server Component) reads route params and search params (`?showAll=1` if present)
+2. Calls the corresponding `lib/history/queries.ts` function with `{ showAll }`
+3. Receives the typed projection
+4. Renders the component tree, passing the projection down as props
+
+This means every navigation refetches. Acceptable per MASTER_SPEC §12.8 NFRs (sub-200ms PR Timeline, sub-500ms Exercise Progress) and matches the read-side nature of the tab — there's no live data to keep in sync.
+
+Cache behavior: Next.js's default `force-dynamic` (since the queries use `auth.uid()` which is request-scoped) means no static caching. Slice 6 does not opt into ISR or `revalidate`. The Logger writes commit through Slice 5's queue + drain layer; History reads see whatever is in the DB at request time.
+
+#### 5.2 Client-side toggle state
+
+Two client components hold local state via `useState`:
+
+**PRTimelineShowAllToggle** — `showAll: boolean`. Toggles between `/history` (90-day window) and `/history?showAll=1` (full history). Implementation: `<Link>` element styled as a toggle, no JS state needed. Even simpler: this could be a Server Component reading the search param and rendering different link targets. Phase 4 implementation choice between the two; both satisfy the contract.
+
+**ExerciseProgressShowAllToggle** — same pattern, scoped to a specific exercise route.
+
+These toggles work via URL state, not React state. Reasoning: bookmarkable ("show all PRs from when I started" is a shareable URL even if no one will share it), keeps the data layer purely a function of route params, and avoids the "client state diverges from server state" failure mode.
+
+#### 5.3 Recharts internal state
+
+Recharts manages its own hover-tooltip and active-data-point state internally. No external state machine for chart interactions. If the chart ever needs cross-component hover sync (e.g., hovering a chart point highlights the corresponding row in the set log list below), that's a Phase 4 enhancement, not a Phase 2 architectural concern. Current spec: chart and set log are independently rendered; no cross-component state.
+
+#### 5.4 What there is no state for
+
+- No "selected exercise" state across surfaces. Each Exercise Progress page is a fresh route navigation; the URL holds the selected exercise.
+- No "favorite PRs" or "pinned exercises" feature → no state needed.
+- No filtering UI (cut to P2 in MASTER_SPEC §12.3) → no filter state.
+- No write paths → no optimistic updates, no pending state, no error retry state. Read failures show error states (handled per MASTER_SPEC §12.8 NFRs); no recovery flow.
+
+### 6. Auth Flow
+
+Inherited from prior slices, unchanged. Slice 6 introduces no new auth surfaces, no new RLS policies, no new sign-in flows.
+
+Per-request auth flow:
+
+1. User opens any `/history/*` route
+2. Next.js middleware (existing, from Slice 1 or 2) validates the Supabase session cookie
+3. If unauthenticated: redirect to sign-in (existing flow)
+4. If authenticated: route renders, Server Component instantiates the Supabase server client with the user's session, calls into `lib/history/queries.ts`, queries run with `auth.uid()` available
+5. RLS enforces `user_id = auth.uid()` on every read
+
+Slice 5's sign-out gate (the `signOut.ts` helper) is unaffected by Slice 6. History routes are protected by the same middleware as Logger.
+
+What this section explicitly does not change:
+
+- No new RLS policies on `pr_history`, `set_logs`, `session_completions`, `exercises`, `sessions`, or `blocks` (all six tables Slice 6 reads)
+- No new auth-scoped helpers in `src/lib/auth/`
+- No middleware additions
+- No new redirect paths
+- No anonymous/public read access (History is fully personal)
+
+If a future slice introduces shared/community PR cards or trainer-readable training logs, that would touch this section. Slice 6 does not.
+
+### 7. Key Dependencies
+
+The dependency surface for Slice 6 is small and largely inherited.
+
+#### New dependency
+
+**recharts** — single new package.
+
+Version pin (resolves MASTER_SPEC §12.10 Q3): `^2.15.0` or whatever the latest 2.x stable major is at install time, with the constraint that it must support React 19 (which Next.js 15 includes). Phase 4 install step verifies React 19 compatibility before locking the version in `package.json`.
+
+Why Recharts (recap from §1): React-native, declarative, mobile-friendly defaults, small bundle relative to alternatives. Used only for the Exercise Progress weight-over-time line chart — a primitive Cartesian LineChart, no exotic features. Swap surface contained to one client component (`ExerciseProgressChart.tsx`).
+
+Bundle impact: Recharts is ~80–100 KB minified+gzipped. It loads only on the Exercise Progress route (client component, code-split per route by Next.js App Router). PR Timeline, All Sessions, and Session Detail do not include Recharts in their client bundles.
+
+If bundle size becomes a concern at any point (e.g., target devices with slow 3G in the future), the swap candidates are:
+
+- visx (low-level, more granular bundle control, harder to use)
+- A custom SVG line chart (hand-rolled, ~5 KB, no library)
+- react-chartjs-2 (similar size to Recharts, no advantage)
+
+None of these are needed in Slice 6. Logged here for reference if the question arises in a future slice.
+
+#### Inherited dependencies (no changes)
+
+- `next` — App Router routes, Server / Client Component split, `<Link>`
+- `react` (19.x) — Server Components, useState in toggles
+- `@supabase/ssr` and `@supabase/supabase-js` — server client for queries
+- `tailwindcss` — styling for all surfaces
+- `@radix-ui/*` (via shadcn/ui) — header link, badges, error boundaries if any History-specific shadcn primitives are needed
+- TypeScript — strict mode, projection types from `lib/history/projections.ts`
+
+No new shadcn/ui components are pulled in for Slice 6. If the empty-state or badge components from prior slices need extending (e.g., a new "in_progress" badge variant), the extension happens in the existing shared components, not in History-specific code.
+
+#### Dev / build dependencies
+
+No additions.
+
+#### What is NOT a dependency
+
+To prevent quiet drift in Phase 4 implementation:
+
+- No date-formatting library (date-fns, dayjs, luxon). Slice 6's date formatting is `formatSessionDisplayName` (defined in `lib/history/displayName.ts`) plus native `Intl.DateTimeFormat`. If date formatting becomes complex enough to warrant a library, it's a separate Phase 0 decision in a future slice, not a quiet add in Slice 6.
+- No charting library beyond Recharts.
+- No state management library (Zustand, Jotai, Redux). `useState` in two toggles is the entire client state surface.
+- No additional Supabase tooling (rpc helpers, codegen). Existing patterns in `lib/supabase/` are sufficient.
+- No animation library for the dot/badge styling. Tailwind classes are enough.
+- No icons beyond what's already in shadcn's icon set (lucide-react, presumably already installed).
+
+### Resolution of MASTER_SPEC §12.10 Open Questions
+
+For audit-trail completeness, the resolutions of all three Phase 1 open questions, consolidated:
+
+**Q1 (Session display name format):** Resolved in §3 Module Map under `displayName.ts`. Format `<sessions.name> · <formatted_date>` — "Pull · May 1" for current year, "Lower ATG · Dec 12, 2025" for prior years. Implemented as `formatSessionDisplayName(sessionName, startedAt)`.
+
+**Q2 (PR-count-per-session derivation):** Resolved in §4 API Contract under `getAllSessions()`. Hybrid query: FK join (`pr_history.set_log_id = set_logs.set_log_id`) AND time-window (`achieved_at BETWEEN started_at AND COALESCE(completed_at, now())`). Accepts small undercount on legacy rows where FK is NULL in exchange for correct attribution. Logged in FUTURE_WORK.md as backfill candidate.
+
+**Q3 (Recharts version pin):** Resolved in §7 Key Dependencies. `^2.15.0` or latest 2.x stable at install time, verified against React 19 in Phase 4.
+
+All three Open Questions from MASTER_SPEC §12.10 are now closed. ARCHITECTURE is complete; Phase 2 closes here.
