@@ -503,3 +503,110 @@ Reasoning: List-then-tap-into-detail is more discoverable, less surprising,
 and supports both "give me an overview of recent training" and "let me find
 that specific session from two weeks ago" use cases. Direct-into-detail
 optimizes for one use case at the expense of the other.
+
+## Slice 6.1 — History Read Scaffold
+
+### `pr_history (set_log_id, pr_type)` partial UNIQUE constraint provenance documented
+
+**Context:** Phase A Test 2's fixture attempted to insert a second
+`pr_type='weight'` row for an already-PR'd `set_log_id` and was
+rejected by a UNIQUE constraint named
+`idx_pr_history_set_log_pr_type_unique`. Provenance was unclear
+during testing.
+
+**Investigation:** The constraint lives in
+`supabase/migrations/009_workout_logger.sql:50–52`:
+
+```sql
+CREATE UNIQUE INDEX idx_pr_history_set_log_pr_type_unique
+  ON pr_history (set_log_id, pr_type)
+  WHERE set_log_id IS NOT NULL;
+```
+
+**Decision:** Document the constraint here for the audit trail;
+no remediation needed. Test 2's rejection was expected behavior —
+the partial unique index correctly enforces "one PR row per
+(set_log, pr_type)" while tolerating legacy rows where the FK is
+NULL. Not a migration immutability rule violation.
+
+**Reasoning:** The partial-index predicate (`WHERE set_log_id IS
+NOT NULL`) is what makes the constraint compatible with the
+intermittent-FK known issue. Slice 4's idempotency-on-retry
+contract relies on this exact shape: a queued `set_log_insert`
+that already landed produces 23505 on the second insert; the
+queue layer treats it as success.
+
+### PR Timeline overlap heuristic — most-recently-started qualifying completion
+
+**Context:** When matching a `pr_history` row to a candidate set
+of `session_completions` rows (filtered by FK chain
+`pr_history.set_log_id → set_logs.session_id`), MASTER_SPEC §12.10
+Q2's resolution required "PR attribution by FK + time window."
+Edge case 9 of the slice doc names the case where two sessions
+of the same template overlap in time.
+
+**Decision:** Pick the most-recently-started qualifying
+completion. Implemented in `findMatchingCompletion`
+(`queries.ts:252–271`): the candidate list is pre-sorted
+descending by `started_at` via `buildSessionCompletionsBySession`
+(lines 244–247); the loop returns the first match where
+`startedAt <= achievedAt && achievedAt <= completedAt` (with
+`completedAt = +Infinity` if NULL).
+
+**Reasoning:** Two-session overlap on the same `session_id` is
+data-model-permitted but extremely rare in practice (the workout
+flow doesn't allow it, but timezone glitches or dev-tool
+manipulations could produce it). When it occurs, picking the
+later session gives the user the more recent context — usually
+the right answer for a daily-glance use case. Alternative
+interpretations (pick the earliest, pick the one with the longest
+duration, pick the one whose `completed_at` is closest to
+`achieved_at`) all have edge cases that feel worse. The
+descending-sort + first-match implementation is unambiguous and
+deterministic; readers don't have to reason about which candidate
+won.
+
+### Visual gold-plating beyond AC retained and justified
+
+**Context:** Phase A surfaced two implementation choices that
+exceed the strict letter of Slice 6.1's acceptance criteria:
+
+1. `PRTypeBadge` ships distinct color schemes per PR type
+   (`weight` uses lilac `accent` token; `in_range_rep` uses
+   `sky-400`/`sky-200` tokens). AC #21 explicitly defers F8
+   (deeper PR-type visual distinction) to Slice 6.2.
+2. `AllSessionsRow` dims the title via `text-foreground/70`
+   when `state === 'in_progress'`, layered on top of the muted
+   state badge required by AC #10.
+
+**Decision:** Keep both. Document them as conscious gold-plating.
+
+**Reasoning:** Both additions cost nothing in complexity, schema,
+or dependencies. Both make the surface more scannable in real use
+— the F8 color-coding makes the Show-all view immediately
+parseable; the title-dimming reinforces the in-progress state
+badge so the row reads as "muted" at a glance, not just "has a
+badge." Both use Tailwind theme tokens, no hardcoded hex.
+
+Slice 6.2 retains F8 ownership; if the sky-vs-accent mapping
+proves wrong during 6.2 testing (e.g., insufficient contrast,
+clashes with chart accent dots), 6.2 can revise. No lock-in here.
+
+### PR Timeline tie-order: secondary `pr_id DESC` key for deterministic same-timestamp ordering
+
+**Context:** Phase A Tests 1 + 2 showed PR pairs with identical
+`achieved_at` timestamps rendering in consistent order, but the
+consistency was incidental to query plan stability — no secondary
+sort key was specified.
+
+**Decision:** Add `pr_id DESC` as the secondary `ORDER BY` clause
+on `getPRTimeline`. Implemented at `queries.ts:362` via
+`.order("pr_id", { ascending: false })`.
+
+**Reasoning:** UUIDs are not chronologically meaningful, so
+`pr_id DESC` doesn't promise anything semantic about which row
+comes first when timestamps tie — it just promises the order is
+the same on every render. Deterministic ordering is the property
+that matters; semantic tie-breaking would require a richer column
+(e.g., `created_at` as a microsecond-precision timestamp), which
+would itself need to be added. Cheap, additive, idempotent.

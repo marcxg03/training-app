@@ -863,7 +863,7 @@ Exports the seven types: PRTimelineRow, ExerciseProgressChartPoint, ExerciseProg
 
 Responsibility: Format `session_display_name` consistently across surfaces. Resolves MASTER_SPEC §12.10 Q1.
 
-Decision: Format (a) — `<sessions.name> · <formatted_date>` — confirmed. Date format: "MMM D" for current year, "MMM D, YYYY" for prior years. Examples: "Pull · May 1", "Lower ATG · Dec 12, 2025".
+Decision: Format (a) — `<sessions.session_name> · <formatted_date>` — confirmed. Date format: "MMM D" for current year, "MMM D, YYYY" for prior years. Examples: "Pull · May 1", "Lower ATG · Dec 12, 2025".
 
 Exports:
 
@@ -1005,7 +1005,7 @@ SELECT
   ex.exercise_id, ex.name AS exercise_name, ex.is_bodyweight,
   sl.set_log_id, sl.session_id,
   sc.completion_id, sc.started_at,
-  s.name AS session_name
+  s.session_name
 FROM pr_history pr
 JOIN exercises ex ON ex.exercise_id = pr.exercise_id
 JOIN set_logs sl ON sl.set_log_id = pr.set_log_id
@@ -1080,7 +1080,7 @@ Query shape:
 SELECT
   sc.completion_id, sc.started_at, sc.completed_at, sc.was_ended_early,
   sc.session_id,
-  s.name AS session_name,
+  s.session_name,
   array_length(sc.completed_block_ids, 1) AS blocks_completed_count,
   (SELECT COUNT(*) FROM blocks b WHERE b.session_id = sc.session_id) AS blocks_total_count,
   (SELECT COUNT(*) FROM pr_history pr
@@ -1118,7 +1118,7 @@ Query 1 — Session header:
 ```sql
 SELECT sc.completion_id, sc.started_at, sc.completed_at,
        sc.was_ended_early, sc.completed_block_ids,
-       s.name AS session_name, s.session_id
+       s.session_name, s.session_id
 FROM session_completions sc
 JOIN sessions s ON s.session_id = sc.session_id
 WHERE sc.completion_id = $1 AND sc.user_id = auth.uid()
@@ -1283,7 +1283,7 @@ To prevent quiet drift in Phase 4 implementation:
 
 For audit-trail completeness, the resolutions of all three Phase 1 open questions, consolidated:
 
-**Q1 (Session display name format):** Resolved in §3 Module Map under `displayName.ts`. Format `<sessions.name> · <formatted_date>` — "Pull · May 1" for current year, "Lower ATG · Dec 12, 2025" for prior years. Implemented as `formatSessionDisplayName(sessionName, startedAt)`.
+**Q1 (Session display name format):** Resolved in §3 Module Map under `displayName.ts`. Format `<sessions.session_name> · <formatted_date>` — "Pull · May 1" for current year, "Lower ATG · Dec 12, 2025" for prior years. Implemented as `formatSessionDisplayName(sessionName, startedAt)`.
 
 **Q2 (PR-count-per-session derivation):** Resolved in §4 API Contract under `getAllSessions()`. Hybrid query: FK join (`pr_history.set_log_id = set_logs.set_log_id`) AND time-window (`achieved_at BETWEEN started_at AND COALESCE(completed_at, now())`). Accepts small undercount on legacy rows where FK is NULL in exchange for correct attribution. Logged in FUTURE_WORK.md as backfill candidate.
 

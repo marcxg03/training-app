@@ -648,7 +648,7 @@ Slice 6 is read-only against the existing schema. No new tables, columns, indexe
 - set_logs — one row per logged set. Slice 6 reads: set_log_id (PK), user_id (RLS), session_id, block_id, exercise_id, set_index, weight_kg, reps, is_to_failure, prescribed_min, prescribed_max, notes, logged_at.
 - pr_history — one row per detected PR (append-only). Slice 6 reads: pr_id (PK), user_id (RLS), exercise_id, set_log_id, pr_type (enum: weight | in_range_rep), weight_kg, reps, achieved_at.
 - exercises — exercise catalog. Slice 6 reads: exercise_id (PK), name, is_bodyweight, muscle_group, exercise_type (compound | isolation | etc.).
-- sessions — session-template catalog (Pull, Push, Lower ATG, etc.). Slice 6 reads: session_id (PK), name.
+- sessions — session-template catalog (Pull, Push, Lower ATG, etc.). Slice 6 reads: session_id (PK), session_name.
 - blocks — block-template catalog. Slice 6 reads: block_id (PK), session_id, name, protocol_type (failure | mobility | corrective), order_index, prescribed_min, prescribed_max.
 
 #### Access patterns by surface
@@ -668,7 +668,7 @@ Exercise Progress (/history/exercises/[exercise_id]):
 All Sessions (/history/sessions):
 
 - Primary query: session_completions for current user, ordered by started_at DESC, full history (no default window — assumes session count per user grows slowly enough that paging is not P0; revisit if usage proves otherwise).
-- Per-row enrichment: session display name from sessions.name via session_id FK; PR count for the session via COUNT(\*) FROM pr_history WHERE achieved_at BETWEEN started_at AND COALESCE(completed_at, NOW()) (Architecture phase resolves the precise temporal-bounds query — the spec specifies "PRs that fired during this session," not the SQL).
+- Per-row enrichment: session display name from sessions.session_name via session_id FK; PR count for the session via COUNT(\*) FROM pr_history WHERE achieved_at BETWEEN started_at AND COALESCE(completed_at, NOW()) (Architecture phase resolves the precise temporal-bounds query — the spec specifies "PRs that fired during this session," not the SQL).
 - State derivation: complete | in_progress | ended_early derived from (completed_at IS NULL, was_ended_early) at query time, not stored.
 
 Session Detail (/history/sessions/[completion_id]):
@@ -835,7 +835,7 @@ Three items where Phase 1 surfaces a decision that Phase 2 (Architecture) must r
 
 Q1: Session display name format.
 PR Timeline rows and All Sessions rows need a "session_display_name" string (e.g., "Pull · May 1"). Two construction options:
-(a) `<sessions.name> · <formatted_date>` — current leaning, matches v0 master plan's session-naming convention.
+(a) `<sessions.session_name> · <formatted_date>` — current leaning, matches v0 master plan's session-naming convention.
 (b) Just `<formatted_date>` with the session name as a separate sub-line element. Cleaner but adds vertical density.
 Resolution: Phase 2 ARCHITECTURE Module Map. Default to (a) unless a layout constraint surfaces in chart or list density.
 

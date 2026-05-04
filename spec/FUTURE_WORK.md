@@ -185,6 +185,118 @@ shape without resolving the data-model question. Suggested: spend 15
 minutes during Slice 6 Discovery to lock the data-model decision, even
 though Slice 6 itself will only display the LIFT-derived data.
 
+### "Library" tab — unified training catalog
+
+**Status:** Open for Slice 7 Phase 0 Discovery. Surfaced May 3, 2026.
+
+**Proposal:** Add a new top-level bottom-nav tab — "Library" — that
+consolidates all reusable training content into one catalog surface.
+The tab houses four categories of content:
+
+1. **Exercises** — lifting movements with per-exercise notes (was v0
+   Exercise Bank under Settings 5C; promoted here)
+2. **Blocks** — named containers that group exercises with a protocol
+   type (failure | mobility | corrective). First-class user-visible
+   objects in this tab; previously implicit in Logger only.
+3. **Cardio activities** — Speed Run, Endurance Run, Basketball, etc.
+   With type, structure, and optional descriptions. Previously had no
+   catalog home in v0.
+4. **Recovery activities** — Hot Yoga, Sauna, etc. (with the separation
+   from the Recovery cleanup entry above). Previously had no catalog
+   home in v0.
+
+**Relationship to other surfaces:**
+
+- Plan Editor under Settings composes plans by pulling from this catalog
+- Today tab cardio/recovery cards reference rows from cardio_activities
+  and recovery_activities (or whatever the schema names land on)
+- Logger continues to read exercises and blocks as it does today —
+  but the user-facing edit surface for both moves here
+
+**Five-tab → six-tab navigation:** The bottom nav grows from
+Today / Plan / History / Nutrition / Settings to
+Today / Plan / Library / History / Nutrition / Settings (or similar
+ordering — IA decision in Slice 7 Discovery).
+
+**Conscious deviation from v0:** v0 had Exercise Bank under Settings 5C
+and no home for cardio/recovery activity definitions. This promotes
+exercise catalog to a tab and gives cardio/recovery their first real
+catalog home.
+
+**Why now (before Slice 7):** Consolidating all four catalog surfaces
+pre-Slice 7 is structurally cheap. Doing it post-Slice 7 means Plan
+Editor, Today cardio/recovery cards, and Settings 5C would have already
+ossified into three separate code paths. Logging the consolidation
+intent in FUTURE_WORK ensures Slice 7 Phase 0 Discovery starts from
+this scope, not from v0's scope.
+
+**Open questions for Slice 7 Discovery:**
+
+1. Is the catalog tab itself in scope for Slice 7, or does it ship as
+   a Slice 7.5 / 8 alongside Plan Editor? Probably the catalog ships
+   first, since Plan Editor depends on it.
+2. Schema implications — `cardio_activities` and `recovery_activities`
+   tables need to be created. Decided alongside the activity_completions
+   table from the existing FUTURE_WORK entry.
+3. IA: are blocks browsed alongside exercises, or in a separate sub-view?
+   Blocks are referenced by exercises (one block has many candidate
+   exercises) so the relationship matters.
+4. Tab ordering in bottom nav.
+
+**Supersedes:** The "Exercise Bank as standalone surface" question in
+the prior Plan editing entry is resolved by this entry — the catalog
+tab is the answer, and it's broader than just exercises.
+
+### Slice 6.1 empty-state copy verified by inspection only
+
+🟢 Low — surfaced May 3, 2026 during Slice 6.1 Phase A. Tests 3, 5,
+and 9 (the three empty-state variants for PR Timeline windowed,
+PR Timeline all-history, and All Sessions) were deferred per Path
+B because running them required wiping `pr_history` and
+`session_completions`, which would have destroyed the verification
+dataset. Empty-state copy was verified by code inspection
+instead — all three strings match AC #6 / AC #13 verbatim, and
+the Show-all toggle correctly renders in both PR Timeline empty
+variants per edge case 11. Verify end-to-end with a fresh user
+account at the first integration milestone (e.g., when seeding a
+test account for Slice 7's "Library" tab Discovery, or when
+running a clean-install dry-run).
+
+### Re-benchmark History TTFB on production with realistic dataset
+
+🟢 Low — surfaced May 3, 2026 during Slice 6.1 Phase A Test 13.
+TTFB on `/history` measured 300–572 ms in dev mode against an
+under-realistic dataset (4 PRs vs spec's ≥5 PRs / ≥50 set_logs).
+Under the 1s 🟡 known-issue threshold but above the 200ms spec
+target. Re-benchmark on production after Slice 6.2 lands and the
+dataset has grown via real usage. If `/history/sessions` exceeds
+500ms with realistic dataset, evaluate replacing the per-row PR-
+count subquery in `getAllSessions` with a single GROUP BY rollup
+that counts PRs by `session_id` in one pass, then bucketed in
+JS. The current shape (one query per session is NOT what's
+implemented — the implementation already buckets in JS) is
+acceptable; the question is whether the underlying SQL needs
+optimization.
+
+### pr_history.set_log_id backfill on legacy rows
+
+🟢 Low — surfaced May 3, 2026 during Slice 6.1 Phase A. Slice
+6.1's queries filter `WHERE set_log_id IS NOT NULL` to handle
+legacy rows where the FK was never populated. Three seeded
+historical PRs from Slice 2 (Bench 235, OHP 185, Deadlift 435)
+intentionally have `set_log_id = NULL` because they predate the
+set_logs table. Other potentially-NULL rows from pre-Slice-4
+testing exist but have no production impact since they don't
+appear in any user-facing surface.
+
+When convenient (no urgency), write a one-shot backfill that
+either (a) creates synthetic set_log rows for the three Slice 2
+PRs and points their FK at them, or (b) accepts the historical
+gap and documents the ~5-10 untraceable rows as expected. Option
+(b) is probably correct — the seed PRs are chronologically real
+but their set context is genuinely lost. Defer until History tab
+analytics surface the gap as user-visible.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state

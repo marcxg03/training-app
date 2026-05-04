@@ -86,16 +86,20 @@ DB writes fire as on the corresponding explicit-button path."
 This is a workflow improvement candidate, not a code follow-up —
 the code is fixed.
 
-### 🟢 Low — pr_history.set_log_id FK population is path-specific or intermittent
+### 🟢 Low — pr_history.set_log_id FK population on legacy rows only
 
-🟢 Low — pr_history.set_log_id FK population is path-specific or
-intermittent. Verified populated correctly on the failure-block PR
-detection path during Slice 5 verification (two PR rows inserted
-with correct set_log_id values during failure-block testing on
-Cable Lat Pulldown). Original "always NULL" diagnosis from this
-morning's mobility cleanup does not match Slice 5 verification
-data — earlier cleanup also swept 2 rows on a
-`set_log_id IS NOT NULL` filter, contradicting "always NULL."
-Status on the mobility PR detection path remains unverified.
-Downgraded to 🟢 Low; full investigation deferred to the next
-mobility session when both paths can be observed end-to-end.
+🟢 Low — `pr_history.set_log_id` is populated correctly on both
+the failure-block PR detection path (Slice 5 verification) and the
+mobility PR detection path (Slice 6.1 Phase A Tests 1 + 8 — Lower
+ATG Split Squat from May 2 produced two PR rows with correctly-
+populated FKs that JOIN cleanly through the hybrid query in
+`getAllSessions`, contributing PR count = 2 on the Lower ATG · May 2
+row).
+
+Remaining concern is scoped to legacy rows where the FK was never
+populated (pre-Slice-4 historical data, Slice 2's three seeded PRs
+with `set_log_id = NULL` by design). Slice 6's queries handle this
+via `WHERE set_log_id IS NOT NULL` filters; legacy rows simply
+don't appear in PR Timeline and don't contribute to All Sessions
+PR counts. No production fix required. Backfill candidate logged
+in FUTURE_WORK.md.

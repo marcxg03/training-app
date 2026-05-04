@@ -539,3 +539,96 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
   is near-zero (explicit-button code path was untouched by the
   fix). Reminder logged in KNOWN_ISSUES.md to verify on next
   mobility session.
+
+## Slice 6.1 — History Read Scaffold (2026-05-03)
+
+### What was built
+
+- History tab read scaffold: PR Timeline (`/history`) and All Sessions
+  list (`/history/sessions`), both Server Components. Slice 6.2 ships
+  Exercise Progress + Session Detail.
+- Four data-layer modules under `src/lib/history/`:
+  - `queries.ts` — `getPRTimeline` and `getAllSessions`. Multi-step
+    server-side reads + in-memory bucketing via Maps; no N+1. Hybrid
+    PR-count derivation (FK join + time-window filter) per
+    ARCHITECTURE §16.4 Q2.
+  - `projections.ts` — `PRTimelineRow` and `AllSessionsRow` types.
+  - `displayName.ts` — `formatSessionDisplayName(name, startedAt)`
+    using native `Intl.DateTimeFormat`. No date library.
+  - `crossLinks.ts` — `exerciseProgressHref`,
+    `sessionDetailHref`, `allSessionsHref`.
+- Six route-scoped components under
+  `src/app/(app)/history/_components/`: `PRTimelineRow`,
+  `PRTimelineShowAllToggle` (the only Client Component in the slice),
+  `AllSessionsRow`, `SessionStateBadge`, `PRTypeBadge`,
+  `HistoryHeaderLink`.
+- Two cross-link components in `src/components/shared/`:
+  `ExerciseLink` and `SessionLink`. Single source of truth for the
+  F6 cross-link contract; reusable by Slice 7's "Library" tab and
+  Slice 6.2's surfaces.
+- Two placeholder routes for Slice 6.2 cross-links:
+  `/history/exercises/[exercise_id]` and
+  `/history/sessions/[completion_id]`. No data fetching.
+- Slice 1 `<h1>History</h1>` placeholder at `(app)/history/page.tsx`
+  replaced with the full PR Timeline Server Component.
+
+### Bugs caught and fixed during the build
+
+- **Schema drift on `sessions.session_name`.** The slice doc,
+  MASTER_SPEC §12.6, ARCHITECTURE §16.4, and Codex's generated queries
+  all referenced a column named `name` on the sessions table. The
+  live DB has the column named `session_name` (the table also has 9
+  other columns out of Slice 6.1 scope). Caught at pre-test
+  environment setup, before any browser test ran. Fixed: 6
+  references in `queries.ts` rewritten to `session_name`; spec docs
+  corrected with a one-line note in §7 of the slice doc that
+  additional columns exist but are out of scope. Workflow
+  improvement candidate logged.
+- **PR Timeline tie-ordering on identical `achieved_at`.** Phase A
+  Tests 1 + 2 surfaced that `getPRTimeline` ordered only by
+  `achieved_at DESC` with no secondary sort key. Same-timestamp PR
+  pairs rendered in incidental query-plan-stable order. Added
+  `pr_id DESC` as deterministic tiebreaker.
+
+### F8 partial delivery (ahead of Slice 6.2 schedule)
+
+- AC #21 deferred F8 (PR-type visual distinction) to Slice 6.2.
+  Codex's `PRTypeBadge` already implements distinct color schemes:
+  `weight` uses the lilac `accent` token; `in_range_rep` uses
+  `sky-400`/`sky-200` tokens. Both Tailwind theme tokens, no
+  hardcoded hex. Zero additional complexity, makes the Show-all
+  view immediately scannable. Retained; documented in DECISIONS.md.
+  Slice 6.2 still owns F8 polish if deeper differentiation surfaces
+  during testing.
+
+### Notable design rules captured
+
+- **PR Timeline overlap heuristic** for matching `pr_history` rows to
+  `session_completions`: pick the most-recently-started qualifying
+  completion. Implemented unambiguously in `findMatchingCompletion`
+  via a descending-`started_at` sort + first-match scan. Logged in
+  DECISIONS.md.
+- **`pr_history (set_log_id, pr_type)` partial UNIQUE constraint**
+  provenance traced to migration `009_workout_logger.sql:50–52`.
+  Test 2 fixture's "duplicate weight PR for same set_log_id" attempt
+  was correctly rejected — the partial unique index does its job.
+  No immutability violation; documented for the audit trail.
+
+### Verification
+
+- Phase A manual tests: 10 of 13 passed end-to-end. Tests 3, 5, 9
+  (empty-state copy variants) deferred per Path B because running
+  them required wiping `pr_history` and `session_completions`.
+  Empty states verified by code inspection: copy matches AC #6 and
+  AC #13 verbatim; Show-all toggle renders in both PR Timeline
+  empty variants (edge case 11). Logged to FUTURE_WORK for
+  end-to-end verification at first integration milestone.
+- Inspection-verified ACs: #6, #7, #13, #15, #20, #21.
+- TTFB on `/history` measured 300–572 ms in dev mode (under the
+  1s 🟡 threshold; spec target is 200ms). Dataset was
+  under-realistic (4 PRs vs spec's ≥5). FUTURE_WORK entry filed
+  for production re-benchmark post-Slice 6.2.
+- `pnpm exec tsc --noEmit` ✓, `pnpm lint` ✓,
+  `pnpm format:check` ✓ (Slice 6.1 files only).
+- No new dependencies. Recharts deferred to Slice 6.2.
+- No schema/RLS/migration changes.
