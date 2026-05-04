@@ -29,7 +29,7 @@ const timingOrder: Record<Enums<"timing_enum">, number> = {
   pm: 2,
 };
 
-function sortSessions(left: Tables<"sessions">, right: Tables<"sessions">) {
+function sortWorkouts(left: Tables<"workouts">, right: Tables<"workouts">) {
   const timingDelta = timingOrder[left.timing] - timingOrder[right.timing];
 
   if (timingDelta !== 0) {
@@ -45,17 +45,17 @@ function formatMuscleLabel(group: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function buildCardioSummary(session: Tables<"sessions">) {
+function formatCardioSummary(workout: Tables<"workouts">) {
   const parts = [
-    session.cardio_distance,
-    session.cardio_target_zone?.replace(/_/g, " "),
+    workout.cardio_distance,
+    workout.cardio_target_zone?.replace(/_/g, " "),
   ].filter(Boolean);
 
   if (parts.length > 0) {
     return parts.join(" · ");
   }
 
-  return session.description ?? "Cardio session.";
+  return workout.description ?? "Cardio workout.";
 }
 
 async function getWeeklyPlan() {
@@ -84,49 +84,47 @@ async function getWeeklyPlan() {
   }
 
   const scheduleIds = schedules.map((schedule) => schedule.schedule_id);
-  const { data: sessions, error: sessionsError } = scheduleIds.length
-    ? await supabase.from("sessions").select("*").in("schedule_id", scheduleIds)
+  const { data: workouts, error: workoutsError } = scheduleIds.length
+    ? await supabase.from("workouts").select("*").in("schedule_id", scheduleIds)
     : { data: [], error: null };
 
-  if (sessionsError) {
-    throw new Error(`Failed to load sessions: ${sessionsError.message}`);
+  if (workoutsError) {
+    throw new Error(`Failed to load workouts: ${workoutsError.message}`);
   }
 
-  const liftingSessionIds = (sessions ?? [])
-    .filter((session) => session.session_type === "lifting")
-    .map((session) => session.session_id);
-  const { data: blocks, error: blocksError } = liftingSessionIds.length
+  const workoutIds = (workouts ?? []).map((workout) => workout.workout_id);
+  const { data: workoutBlocks, error: workoutBlocksError } = workoutIds.length
     ? await supabase
-        .from("blocks")
-        .select("*")
-        .in("session_id", liftingSessionIds)
-        .order("display_order")
+        .from("workout_blocks")
+        .select("workout_id, block_id")
+        .in("workout_id", workoutIds)
     : { data: [], error: null };
 
-  if (blocksError) {
-    throw new Error(`Failed to load blocks: ${blocksError.message}`);
-  }
-
-  const blockIds = (blocks ?? []).map((block) => block.block_id);
-  const { data: blockExercises, error: blockExercisesError } = blockIds.length
-    ? await supabase
-        .from("block_exercises")
-        .select("*")
-        .in("block_id", blockIds)
-        .order("display_order")
-    : { data: [], error: null };
-
-  if (blockExercisesError) {
+  if (workoutBlocksError) {
     throw new Error(
-      `Failed to load block exercise rows: ${blockExercisesError.message}`,
+      `Failed to load workout blocks: ${workoutBlocksError.message}`,
     );
   }
 
-  const exerciseIds = (blockExercises ?? []).map((row) => row.exercise_id);
+  const blockIds = (workoutBlocks ?? []).map((row) => row.block_id);
+  const { data: liftingItems, error: liftingItemsError } = blockIds.length
+    ? await supabase
+        .from("block_lifting_items")
+        .select("block_id, exercise_id")
+        .in("block_id", blockIds)
+    : { data: [], error: null };
+
+  if (liftingItemsError) {
+    throw new Error(
+      `Failed to load lifting bank items: ${liftingItemsError.message}`,
+    );
+  }
+
+  const exerciseIds = (liftingItems ?? []).map((row) => row.exercise_id);
   const { data: exercises, error: exercisesError } = exerciseIds.length
     ? await supabase
         .from("exercises")
-        .select("*")
+        .select("exercise_id, muscle_groups")
         .in("exercise_id", exerciseIds)
     : { data: [], error: null };
 
@@ -134,31 +132,33 @@ async function getWeeklyPlan() {
     throw new Error(`Failed to load exercises: ${exercisesError.message}`);
   }
 
-  const blocksBySessionId = new Map<string, Tables<"blocks">[]>();
+  const exercisesById = new Map(
+    (exercises ?? []).map(
+      (exercise) => [exercise.exercise_id, exercise] as const,
+    ),
+  );
+  const blockIdsByWorkoutId = new Map<string, string[]>();
 
-  for (const block of blocks ?? []) {
-    const list = blocksBySessionId.get(block.session_id) ?? [];
-    list.push(block);
-    blocksBySessionId.set(block.session_id, list);
+  for (const row of workoutBlocks ?? []) {
+    const list = blockIdsByWorkoutId.get(row.workout_id) ?? [];
+    list.push(row.block_id);
+    blockIdsByWorkoutId.set(row.workout_id, list);
   }
 
-  const exercisesById = new Map(
-    (exercises ?? []).map((exercise) => [exercise.exercise_id, exercise]),
-  );
   const exerciseIdsByBlockId = new Map<string, string[]>();
 
-  for (const row of blockExercises ?? []) {
+  for (const row of liftingItems ?? []) {
     const list = exerciseIdsByBlockId.get(row.block_id) ?? [];
     list.push(row.exercise_id);
     exerciseIdsByBlockId.set(row.block_id, list);
   }
 
-  const sessionsByScheduleId = new Map<string, Tables<"sessions">[]>();
+  const workoutsByScheduleId = new Map<string, Tables<"workouts">[]>();
 
-  for (const session of sessions ?? []) {
-    const list = sessionsByScheduleId.get(session.schedule_id) ?? [];
-    list.push(session);
-    sessionsByScheduleId.set(session.schedule_id, list);
+  for (const workout of workouts ?? []) {
+    const list = workoutsByScheduleId.get(workout.schedule_id) ?? [];
+    list.push(workout);
+    workoutsByScheduleId.set(workout.schedule_id, list);
   }
 
   return {
@@ -177,30 +177,30 @@ async function getWeeklyPlan() {
         };
       }
 
-      const sortedSessions = [
-        ...(sessionsByScheduleId.get(schedule.schedule_id) ?? []),
-      ].sort(sortSessions);
+      const sortedWorkouts = [
+        ...(workoutsByScheduleId.get(schedule.schedule_id) ?? []),
+      ].sort(sortWorkouts);
 
-      const cardSessions = sortedSessions.map<DayCardSession>((session) => {
-        if (session.session_type !== "lifting") {
+      const cardSessions = sortedWorkouts.map<DayCardSession>((workout) => {
+        if (workout.workout_type !== "lifting") {
           return {
-            sessionType: session.session_type,
-            sessionName: session.session_name,
-            timing: session.timing,
-            gym: session.gym,
+            sessionType: workout.workout_type,
+            sessionName: workout.workout_name,
+            timing: workout.timing,
+            gym: workout.gym,
             summary:
-              session.session_type === "cardio"
-                ? buildCardioSummary(session)
-                : (session.description ?? "Recovery session."),
+              workout.workout_type === "cardio"
+                ? formatCardioSummary(workout)
+                : (workout.description ?? "Recovery workout."),
           };
         }
 
-        const sessionBlocks = blocksBySessionId.get(session.session_id) ?? [];
+        const workoutBlockIds =
+          blockIdsByWorkoutId.get(workout.workout_id) ?? [];
         const focusGroups = new Set<string>();
 
-        for (const block of sessionBlocks) {
-          const blockExerciseIds =
-            exerciseIdsByBlockId.get(block.block_id) ?? [];
+        for (const blockId of workoutBlockIds) {
+          const blockExerciseIds = exerciseIdsByBlockId.get(blockId) ?? [];
 
           for (const exerciseId of blockExerciseIds) {
             const exercise = exercisesById.get(exerciseId);
@@ -219,10 +219,10 @@ async function getWeeklyPlan() {
 
         return {
           sessionType: "lifting",
-          sessionName: session.session_name,
-          timing: session.timing,
-          gym: session.gym,
-          summary: `${sessionBlocks.length} blocks${
+          sessionName: workout.workout_name,
+          timing: workout.timing,
+          gym: workout.gym,
+          summary: `${workoutBlockIds.length} blocks${
             focusGroups.size > 0 ? ` · ${[...focusGroups].join(" / ")}` : ""
           }`,
         };
@@ -264,7 +264,7 @@ export default async function PlanPage() {
           {weeklyPlan.planName}
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Seven day cards, read-only, with every session in week order.
+          Seven day cards, read-only, with every workout in week order.
         </p>
       </div>
 

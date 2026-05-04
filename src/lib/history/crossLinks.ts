@@ -2,10 +2,10 @@ export function exerciseProgressHref(exerciseId: string): string {
   return `/history/exercises/${exerciseId}`;
 }
 
-export function sessionDetailHref(completionId: string): string {
-  return `/history/sessions/${completionId}`;
+export function workoutDetailHref(completionId: string): string {
+  return `/history/workouts/${completionId}`;
 }
 
-export function allSessionsHref(): string {
-  return "/history/sessions";
+export function allWorkoutsHref(): string {
+  return "/history/workouts";
 }

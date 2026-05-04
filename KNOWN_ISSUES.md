@@ -103,3 +103,19 @@ via `WHERE set_log_id IS NOT NULL` filters; legacy rows simply
 don't appear in PR Timeline and don't contribute to All Sessions
 PR counts. No production fix required. Backfill candidate logged
 in FUTURE_WORK.md.
+
+## Slice 7a — Library Tab + Workouts Rename
+
+### 🟡 Medium — TS-level session\_\* identifiers half-renamed
+
+~25 references across 11 files (logger components, plan day route,
+page-level prop types, queue discriminated union kinds) still use
+`session_id` / `session_name` / `session_type` / `session_completion_*`
+as in-memory JS field and prop names. The DB layer is fully renamed
+to `workout_*` and runtime is unaffected — these are cognitive-friction
+mismatches, not functional risk. Mechanical cleanup deferred to Slice
+7a.5, a focused TS-rename PR with no schema or behavioral changes.
+Bundling the rename into 7a's Phase 4B review would have diluted
+attention from the Calves block_type collision (the methodologically
+important issue) and added rename-introduced-bug risk to a slice
+already touching ~55 files.

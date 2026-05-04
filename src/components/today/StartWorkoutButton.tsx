@@ -6,13 +6,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
 type StartWorkoutButtonProps = {
-  sessionId: string;
+  workoutId: string;
 };
 
-export function StartWorkoutButton({ sessionId }: StartWorkoutButtonProps) {
+export function StartWorkoutButton({ workoutId }: StartWorkoutButtonProps) {
   return (
     <Link
-      href={`/log/${sessionId}`}
+      href={`/log/${workoutId}`}
       onClick={(event) => {
         event.stopPropagation();
       }}

@@ -1,19 +1,19 @@
-import type { AllSessionsRow as AllSessionsRowData } from "@/lib/history/projections";
-import { SessionLink } from "@/components/shared/SessionLink";
+import type { AllWorkoutsRow as AllWorkoutsRowData } from "@/lib/history/projections";
+import { WorkoutLink } from "@/components/shared/WorkoutLink";
 import { SessionStateBadge } from "@/app/(app)/history/_components/SessionStateBadge";
 
-type AllSessionsRowProps = {
-  row: AllSessionsRowData;
+type AllWorkoutsRowProps = {
+  row: AllWorkoutsRowData;
 };
 
-function formatSessionSummary(row: AllSessionsRowData): string {
+function formatWorkoutSummary(row: AllWorkoutsRowData): string {
   return `${row.blocks_completed_count} of ${row.blocks_total_count} blocks`;
 }
 
-export function AllSessionsRow({ row }: AllSessionsRowProps) {
+export function AllWorkoutsRow({ row }: AllWorkoutsRowProps) {
   return (
     <li>
-      <SessionLink
+      <WorkoutLink
         completionId={row.completion_id}
         className="block rounded-xl border border-border/70 bg-background/60 px-4 py-4 transition-colors hover:border-accent/40"
       >
@@ -26,12 +26,12 @@ export function AllSessionsRow({ row }: AllSessionsRowProps) {
                   : "truncate text-base font-semibold text-foreground"
               }
             >
-              {row.session_display_name}
+              {row.workout_display_name}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <SessionStateBadge state={row.state} />
               <span className="text-sm text-muted-foreground">
-                {formatSessionSummary(row)}
+                {formatWorkoutSummary(row)}
               </span>
               {row.pr_count > 0 ? (
                 <span className="text-sm text-accent">
@@ -41,7 +41,7 @@ export function AllSessionsRow({ row }: AllSessionsRowProps) {
             </div>
           </div>
         </div>
-      </SessionLink>
+      </WorkoutLink>
     </li>
   );
 }

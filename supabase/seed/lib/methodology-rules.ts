@@ -12,13 +12,13 @@ import type {
   BlockType,
   DayOfWeek,
   ParsedBlock,
-  ParsedCardioSession,
+  ParsedCardioActivity,
   ParsedDaySpec,
   ParsedExerciseSpec,
   ParsedHistoricalPR,
   ParsedNutritionTargets,
-  ParsedRecoverySession,
-  ParsedSessionSpec,
+  ParsedRecoveryActivity,
+  ParsedRecoveryWorkout,
   ParsedWeeklyDay,
   ParsedWeeklySchedule,
   PullSubBank,
@@ -49,6 +49,8 @@ const dayEnumToLabel: Record<DayOfWeek, string> = {
 };
 
 const dayOrder: DayOfWeek[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const cardioBlockName = "Cardio";
+const recoveryBlockName = "Recovery";
 
 const historicalPrExerciseNames = new Set([
   "Barbell Bench Press",
@@ -57,30 +59,31 @@ const historicalPrExerciseNames = new Set([
 ]);
 
 const exerciseNameMap: Record<string, string> = {
-  "BB RDL": "BB Romanian Deadlift",
-  "BW Pull Ups": "Bodyweight Pull Ups",
+  "3-Point DB Row": "3-Point Single Arm DB Row",
   "Barbell Shrug": "Barbell Shrug",
+  "BB RDL": "BB Romanian Deadlift",
+  "BB/DB Shrug": "BB/DB Shrug",
+  "Bent Over BB Row": "Bent Over Barbell Row",
+  "BW Pull Ups": "Bodyweight Pull Ups",
+  "Cable Pushdown": "Cable Pushdown",
+  "Cable Rope Face Pulls": "Cable Rope Face Pulls",
+  "Cable Wood Chopper": "Cable Wood Chopper",
   "Cable/Machine Pullover": "Cable/Machine Pullover",
   "DB RDL": "DB Romanian Deadlift",
   "DB Shrug": "DB Shrug",
+  "Heel Elevated BB Back Squat": "Heel Elevated BB Back Squat",
   "Military Press": "Military Press",
   "Seated DB Press": "Seated DB Shoulder Press",
   "Seated OHP BB": "Seated Overhead BB Press",
-  "3-Point DB Row": "3-Point Single Arm DB Row",
-  "Bent Over BB Row": "Bent Over Barbell Row",
-  "Cable Rope Face Pulls": "Cable Rope Face Pulls",
-  "Cable Pushdown": "Cable Pushdown",
-  "Cable Wood Chopper": "Cable Wood Chopper",
-  "Heel Elevated BB Back Squat": "Heel Elevated BB Back Squat",
+  "Single Arm Cable Lateral Raise": "Single Arm Cable Lateral Raise",
+  "Single Arm Cable Pushdown": "Single Arm Cable Pushdown",
+  "Single Arm Chest Supported Row": "Single Arm Chest Supported Row",
   "Single Leg ATG Split Squat": "ATG Split Squat",
   "Single Leg BB Squat": "Single Leg BB Squat",
-  "Single Arm Chest Supported Row": "Single Arm Chest Supported Row",
-  "Single Arm Cable Pushdown": "Single Arm Cable Pushdown",
-  "Single Arm Cable Lateral Raise": "Single Arm Cable Lateral Raise",
 };
 
-function inferTiming(sessionLabel: string): Timing {
-  const normalized = sessionLabel.toLowerCase();
+function inferTiming(workoutLabel: string): Timing {
+  const normalized = workoutLabel.toLowerCase();
 
   if (normalized.includes("(am)")) {
     return "am";
@@ -185,8 +188,7 @@ function extractExerciseNotesMap(trainingLogMd: string) {
         continue;
       }
 
-      const canonicalName = toCanonicalExerciseName(rawName);
-      notesByExercise.set(canonicalName, rawNotes);
+      notesByExercise.set(toCanonicalExerciseName(rawName), rawNotes);
     }
   }
 
@@ -247,19 +249,17 @@ function buildRunningDescription(sectionContent: string) {
     );
   }
 
-  if (paragraphs.length === 0) {
-    return summarizeMarkdownLines(lines);
-  }
-
-  return paragraphs.join(" ");
+  return paragraphs.length > 0
+    ? paragraphs.join(" ")
+    : summarizeMarkdownLines(lines);
 }
 
 function describeBasketballSession() {
   return "Pickup game or league play at game pace.";
 }
 
-function dedupeTags(tags: string[]) {
-  return [...new Set(tags)];
+function dedupeTags(values: string[]) {
+  return [...new Set(values)];
 }
 
 function inferChestRule(blockContext: string) {
@@ -291,11 +291,11 @@ function inferBlockRepRange(blockContext: string, typeValue: string) {
 }
 
 function inferBlockType(
-  sessionName: string,
+  workoutName: string,
   blockName: string,
   displayOrder: number,
 ): BlockType {
-  if (sessionName === "Lower ATG" && displayOrder <= 8) {
+  if (workoutName === "Lower ATG" && displayOrder <= 8) {
     return "mobility";
   }
 
@@ -320,19 +320,19 @@ function inferFocusMuscleGroups(blocks: ParsedBlock[]) {
   return [...focusGroups];
 }
 
-function findSectionBySessionName(
+function findSectionByWorkoutName(
   sections: Map<string, string>,
-  sessionName: string,
+  workoutName: string,
 ) {
-  const normalizedSessionName = sessionName.toLowerCase();
+  const normalizedWorkoutName = workoutName.toLowerCase();
 
   for (const [title, section] of sections) {
-    if (title.toLowerCase().includes(normalizedSessionName)) {
+    if (title.toLowerCase().includes(normalizedWorkoutName)) {
       return section;
     }
   }
 
-  throw new Error(`Could not find a section for session "${sessionName}".`);
+  throw new Error(`Could not find a section for workout "${workoutName}".`);
 }
 
 function parseDelimitedExercises(value: string) {
@@ -413,12 +413,11 @@ function parseExerciseBank(
   const repRange = inferBlockRepRange(blockName, typeValue);
 
   return uniqueExerciseNames.map<ParsedExerciseSpec>((exerciseName, index) => {
-    const notes = notesByExercise.get(exerciseName) ?? "";
     const pullSubBank = inferPullSubBank(blockName, exerciseName);
 
     return {
       name: exerciseName,
-      notes,
+      notes: notesByExercise.get(exerciseName) ?? "",
       prescribedMin: repRange.prescribedMin,
       prescribedMax: repRange.prescribedMax,
       muscleGroups: inferMuscleGroupsForExercise(
@@ -433,11 +432,11 @@ function parseExerciseBank(
   });
 }
 
-function ensureSectionTable(sectionContent: string, sessionName: string) {
+function ensureSectionTable(sectionContent: string, workoutName: string) {
   const [table] = extractTables(sectionContent);
 
   if (!table) {
-    throw new Error(`Missing exercise table for session "${sessionName}".`);
+    throw new Error(`Missing exercise table for workout "${workoutName}".`);
   }
 
   return table;
@@ -491,29 +490,28 @@ export function parseWeeklySchedule(
         dayLabel,
         isRestDay: true,
         gym: null,
-        sessionEntries: [],
+        workoutEntries: [],
         recoveryLabels: addOnsValue ? [addOnsValue] : [],
       };
     }
 
-    const sessionEntries = sessionValue
+    const workoutEntries = sessionValue
       .split("→")
       .map((entry) => entry.trim())
       .filter(Boolean)
       .map((entry) => {
-        const sessionName = normalizeWhitespace(
+        const workoutName = normalizeWhitespace(
           entry.replace(/\((AM|PM)\)/gi, ""),
         );
-        const lowerSessionName = sessionName.toLowerCase();
-        const sessionType =
-          lowerSessionName.includes("run") ||
-          lowerSessionName.includes("basketball")
-            ? "cardio"
-            : "lifting";
+        const lowerWorkoutName = workoutName.toLowerCase();
 
         return {
-          sessionName,
-          sessionType,
+          workoutName,
+          workoutType:
+            lowerWorkoutName.includes("run") ||
+            lowerWorkoutName.includes("basketball")
+              ? "cardio"
+              : "lifting",
           timing: inferTiming(entry),
         } as const;
       });
@@ -523,7 +521,7 @@ export function parseWeeklySchedule(
       dayLabel,
       isRestDay: false,
       gym: gymValue,
-      sessionEntries,
+      workoutEntries,
       recoveryLabels: addOnsValue ? [addOnsValue] : [],
     };
   });
@@ -531,13 +529,14 @@ export function parseWeeklySchedule(
   return { days };
 }
 
-export function parseSessionBlocks(
+export function parseWorkoutBlocks(
   currentPlanMd: string,
-  sessionName: string,
+  workoutName: string,
+  notesByExercise: Map<string, string>,
 ): ParsedBlock[] {
   const sections = extractSections(currentPlanMd, 2);
-  const sectionContent = findSectionBySessionName(sections, sessionName);
-  const table = ensureSectionTable(sectionContent, sessionName);
+  const sectionContent = findSectionByWorkoutName(sections, workoutName);
+  const table = ensureSectionTable(sectionContent, workoutName);
   const blockIndex = table.headers.findIndex((header) => header === "Block");
   const primaryIndex = table.headers.findIndex(
     (header) => header === "Primary Exercises",
@@ -546,7 +545,6 @@ export function parseSessionBlocks(
     (header) => header === "Secondary Exercises",
   );
   const typeIndex = table.headers.findIndex((header) => header === "Type");
-  const notesByExercise = new Map<string, string>();
 
   if (
     [blockIndex, primaryIndex, secondaryIndex, typeIndex].some(
@@ -554,7 +552,7 @@ export function parseSessionBlocks(
     )
   ) {
     throw new Error(
-      `Session "${sessionName}" table is missing required columns.`,
+      `Workout "${workoutName}" table is missing required columns.`,
     );
   }
 
@@ -605,11 +603,10 @@ export function parseSessionBlocks(
   return mergedRows.map((row, index) => {
     const normalizedBlockName =
       row.blockName === "Lateral Raise Burnout"
-        ? "Lateral Raise"
+        ? "Shoulder Burnout"
         : row.blockName;
-
     const exercises =
-      row.blockName === "Lateral Raise Burnout"
+      normalizedBlockName === "Shoulder Burnout"
         ? parseExerciseBank(
             "Lateral Raise",
             row.typeValue,
@@ -627,7 +624,7 @@ export function parseSessionBlocks(
 
     return {
       blockName: normalizedBlockName,
-      blockType: inferBlockType(sessionName, normalizedBlockName, index + 1),
+      blockType: inferBlockType(workoutName, normalizedBlockName, index + 1),
       displayOrder: index + 1,
       exercises,
     };
@@ -642,9 +639,13 @@ export function inferMuscleGroupsForExercise(
   const normalizedBlock = blockContext.toLowerCase();
   let tags: string[] = [];
 
-  if (/upper chest|mid chest|lower chest/.test(normalizedBlock)) {
+  if (
+    /upper chest|mid chest|bench press focus|lower chest/.test(normalizedBlock)
+  ) {
     tags = ["chest"];
-  } else if (/shoulder press|lateral raise/.test(normalizedBlock)) {
+  } else if (
+    /shoulder press|lateral raise|shoulder burnout/.test(normalizedBlock)
+  ) {
     tags = ["shoulders"];
   } else if (/vertical pull|horizontal pull/.test(normalizedBlock)) {
     tags = ["back"];
@@ -707,9 +708,9 @@ export function inferMuscleGroupsForExercise(
   return dedupeTags(tags);
 }
 
-export function parseRunningSessions(
+export function parseCardioActivities(
   currentPlanMd: string,
-): ParsedCardioSession[] {
+): ParsedCardioActivity[] {
   const runningSectionMatch = currentPlanMd.match(
     /## Running Sessions([\s\S]*?)## Warm-Up Protocols/,
   );
@@ -731,12 +732,13 @@ export function parseRunningSessions(
         content: contentLines.join("\n").trim(),
       };
     });
-  const sessions: ParsedCardioSession[] = [];
+
+  const activities: ParsedCardioActivity[] = [];
 
   for (const { title, content } of sections) {
     if (/Monday AM/i.test(title)) {
-      sessions.push({
-        sessionName: "Speed Run",
+      activities.push({
+        name: "Speed Run",
         timing: "am",
         cardioFormat: "speed_run",
         cardioDistance: "5×100m",
@@ -746,8 +748,8 @@ export function parseRunningSessions(
     }
 
     if (/Saturday AM/i.test(title)) {
-      sessions.push({
-        sessionName: "Endurance Run",
+      activities.push({
+        name: "Endurance Run",
         timing: "am",
         cardioFormat: "endurance_run",
         cardioDistance: "3 miles",
@@ -757,17 +759,39 @@ export function parseRunningSessions(
     }
   }
 
-  if (sessions.length !== 2) {
-    throw new Error("Expected to parse exactly two running sessions.");
+  activities.push({
+    name: "Basketball",
+    timing: "anytime",
+    cardioFormat: "basketball",
+    cardioDistance: null,
+    cardioTargetZone: "game_pace",
+    description: describeBasketballSession(),
+  });
+
+  const seen = new Map<string, ParsedCardioActivity>();
+
+  for (const activity of activities) {
+    const existing = seen.get(activity.name);
+
+    if (!existing) {
+      seen.set(activity.name, activity);
+      continue;
+    }
+
+    if (JSON.stringify(existing) !== JSON.stringify(activity)) {
+      throw new Error(
+        `Conflicting cardio activity definitions found for "${activity.name}".`,
+      );
+    }
   }
 
-  return sessions;
+  return [...seen.values()];
 }
 
 export function parseRecoveryActivities(
   currentPlanMd: string,
   planDecisionsMd: string,
-): ParsedRecoverySession[] {
+): ParsedRecoveryWorkout[] {
   const weeklySchedule = parseWeeklySchedule(currentPlanMd);
 
   if (
@@ -779,30 +803,180 @@ export function parseRecoveryActivities(
     );
   }
 
-  return weeklySchedule.days.flatMap((day) => {
-    return day.recoveryLabels.map((label) => {
+  return weeklySchedule.days.flatMap((day) =>
+    day.recoveryLabels.map((label) => {
       if (/hot yoga or sauna/i.test(label)) {
+        throw new Error(
+          `Recovery label "${label}" on ${day.dayLabel} must be rewritten to a single explicit activity.`,
+        );
+      }
+
+      if (/hot yoga/i.test(label)) {
         return {
           dayOfWeek: day.dayOfWeek,
-          sessionName: "Hot Yoga or Sauna",
+          workoutName: "Hot Yoga",
           timing: "pm" as const,
-          description: "Hot Yoga or Sauna (alternates with Sunday).",
+          description: "Hot yoga recovery session.",
         };
       }
 
       if (/sauna$/i.test(label)) {
         return {
           dayOfWeek: day.dayOfWeek,
-          sessionName: "Sauna",
+          workoutName: "Sauna",
           timing: "pm" as const,
-          description:
-            "Sauna after lifting as the guaranteed weekly sauna slot.",
+          description: "Sauna recovery session.",
         };
       }
 
       throw new Error(`Unsupported recovery label "${label}".`);
-    });
-  });
+    }),
+  );
+}
+
+export function parseRecoveryActivitiesCatalog(
+  recoveryWorkouts: ParsedRecoveryWorkout[],
+): ParsedRecoveryActivity[] {
+  const activitiesByName = new Map<string, ParsedRecoveryActivity>();
+
+  for (const workout of recoveryWorkouts) {
+    const nextActivity: ParsedRecoveryActivity = {
+      name: workout.workoutName,
+      description: workout.description,
+    };
+    const existing = activitiesByName.get(nextActivity.name);
+
+    if (!existing) {
+      activitiesByName.set(nextActivity.name, nextActivity);
+      continue;
+    }
+
+    if (JSON.stringify(existing) !== JSON.stringify(nextActivity)) {
+      throw new Error(
+        `Conflicting recovery activity definitions found for "${nextActivity.name}".`,
+      );
+    }
+  }
+
+  return [...activitiesByName.values()];
+}
+
+function validateDuplicateDefinitions<T>(
+  label: string,
+  rows: Array<{ name: string; definition: T }>,
+) {
+  const definitionsByName = new Map<string, string>();
+  const collisions = new Set<string>();
+
+  for (const row of rows) {
+    const serialized = JSON.stringify(row.definition);
+    const existing = definitionsByName.get(row.name);
+
+    if (!existing) {
+      definitionsByName.set(row.name, serialized);
+      continue;
+    }
+
+    if (existing !== serialized) {
+      collisions.add(row.name);
+    }
+  }
+
+  if (collisions.size > 0) {
+    const names = [...collisions].sort().join(", ");
+    throw new Error(
+      `Duplicate ${label} collisions detected for: ${names}. Fix the wiki block/activity names and re-run the seed.`,
+    );
+  }
+}
+
+export function parseLiftingBlocksGlobal(days: ParsedDaySpec[]): ParsedBlock[] {
+  const collisions = new Set<string>();
+  const uniqueBlocks = new Map<string, ParsedBlock>();
+
+  for (const day of days) {
+    for (const workout of day.workouts.filter(
+      (entry) => entry.workoutType === "lifting",
+    )) {
+      for (const block of workout.blocks) {
+        const existing = uniqueBlocks.get(block.blockName);
+
+        if (!existing) {
+          uniqueBlocks.set(block.blockName, {
+            ...block,
+            exercises: block.exercises.map((exercise) => ({
+              ...exercise,
+              muscleGroups: [...exercise.muscleGroups],
+            })),
+          });
+          continue;
+        }
+
+        if (existing.blockType !== block.blockType) {
+          collisions.add(block.blockName);
+          continue;
+        }
+
+        const exercisesByName = new Map(
+          existing.exercises.map(
+            (exercise) => [exercise.name, exercise] as const,
+          ),
+        );
+
+        for (const exercise of block.exercises) {
+          const existingExercise = exercisesByName.get(exercise.name);
+
+          if (!existingExercise) {
+            existing.exercises.push({
+              ...exercise,
+              displayOrder: existing.exercises.length,
+              muscleGroups: [...exercise.muscleGroups],
+            });
+            continue;
+          }
+
+          existingExercise.notes =
+            existingExercise.notes || exercise.notes
+              ? [existingExercise.notes, exercise.notes]
+                  .filter(Boolean)
+                  .join("\n")
+              : "";
+          existingExercise.prescribedMin = Math.min(
+            existingExercise.prescribedMin,
+            exercise.prescribedMin,
+          );
+          existingExercise.prescribedMax = Math.max(
+            existingExercise.prescribedMax,
+            exercise.prescribedMax,
+          );
+          existingExercise.muscleGroups = dedupeTags([
+            ...existingExercise.muscleGroups,
+            ...exercise.muscleGroups,
+          ]);
+          existingExercise.isCompound =
+            existingExercise.isCompound || exercise.isCompound;
+        }
+      }
+    }
+  }
+
+  if (collisions.size > 0) {
+    throw new Error(
+      `Duplicate lifting block name collisions detected for: ${[...collisions]
+        .sort()
+        .join(", ")}. Fix the wiki block/activity names and re-run the seed.`,
+    );
+  }
+
+  return [...uniqueBlocks.values()]
+    .map((block) => ({
+      ...block,
+      exercises: block.exercises.map((exercise, index) => ({
+        ...exercise,
+        displayOrder: index,
+      })),
+    }))
+    .sort((left, right) => left.blockName.localeCompare(right.blockName));
 }
 
 export function parseNutritionTargets(
@@ -910,33 +1084,13 @@ export function parseHistoricalPRs(
   return prs;
 }
 
-function buildCardioSessionMap(currentPlanMd: string) {
-  const runningSessions = parseRunningSessions(currentPlanMd);
-  const cardioSessions = new Map<string, ParsedCardioSession>();
-
-  for (const session of runningSessions) {
-    cardioSessions.set(session.sessionName, session);
-  }
-
-  cardioSessions.set("Basketball", {
-    sessionName: "Basketball",
-    timing: "anytime",
-    cardioFormat: "basketball",
-    cardioDistance: null,
-    cardioTargetZone: "game_pace",
-    description: describeBasketballSession(),
-  });
-
-  return cardioSessions;
-}
-
 function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
   const hardViolations: string[] = [];
   const softWarnings: string[] = [];
   const lastSeenDayByMuscleGroup = new Map<string, number>();
   const hardRecoveryGroups = new Set(["chest", "back", "legs"]);
-  let pushSessions = 0;
-  let pullSessions = 0;
+  let pushWorkouts = 0;
+  let pullWorkouts = 0;
   let restDayCount = 0;
   let guaranteedSaunaCount = 0;
 
@@ -945,54 +1099,50 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       restDayCount += 1;
     }
 
-    const recoveryNames = day.sessions
-      .filter((session) => session.sessionType === "recovery")
-      .map((session) => session.sessionName);
+    const recoveryNames = day.workouts
+      .filter((workout) => workout.workoutType === "recovery")
+      .map((workout) => workout.workoutName);
 
     if (recoveryNames.includes("Sauna")) {
       guaranteedSaunaCount += 1;
     }
 
-    if (
-      recoveryNames.some((name) => /^Hot Yoga$/i.test(name)) &&
-      recoveryNames.includes("Sauna")
-    ) {
+    if (recoveryNames.includes("Hot Yoga") && recoveryNames.includes("Sauna")) {
       hardViolations.push(
         `${day.dayLabel}: hot yoga and sauna cannot be scheduled on the same day.`,
       );
     }
 
-    const liftingSessions = day.sessions.filter(
-      (session) => session.sessionType === "lifting",
+    const liftingWorkouts = day.workouts.filter(
+      (workout) => workout.workoutType === "lifting",
     );
-    const dayFocusGroups = new Set<string>();
     const dayRecoveryGroups = new Set<string>();
     const dayCompoundGroups = new Set<string>();
 
-    for (const session of liftingSessions) {
-      const focusGroups = session.focusMuscleGroups;
-
+    for (const workout of liftingWorkouts) {
       if (
-        focusGroups.some((group) =>
+        workout.focusMuscleGroups.some((group) =>
           ["chest", "shoulders", "arms"].includes(group),
         )
       ) {
-        pushSessions += 1;
+        pushWorkouts += 1;
       }
 
-      if (focusGroups.some((group) => ["back", "arms"].includes(group))) {
-        pullSessions += 1;
+      if (
+        workout.focusMuscleGroups.some((group) =>
+          ["back", "arms"].includes(group),
+        )
+      ) {
+        pullWorkouts += 1;
       }
 
-      for (const block of session.blocks) {
+      for (const block of workout.blocks) {
         for (const exercise of block.exercises) {
           const highLevelGroups = getHighLevelMuscleGroups(
             exercise.muscleGroups,
           );
 
           for (const group of highLevelGroups) {
-            dayFocusGroups.add(group);
-
             if (
               block.blockType !== "mobility" &&
               hardRecoveryGroups.has(group)
@@ -1011,9 +1161,9 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
         }
       }
 
-      if (session.focusMuscleGroups.length === 0) {
+      if (workout.focusMuscleGroups.length === 0) {
         hardViolations.push(
-          `${day.dayLabel}: lifting session "${session.sessionName}" is missing inferred muscle groups.`,
+          `${day.dayLabel}: lifting workout "${workout.workoutName}" is missing inferred muscle groups.`,
         );
       }
     }
@@ -1036,12 +1186,12 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       lastSeenDayByMuscleGroup.set(group, index);
     }
 
-    const cardioIndices = day.sessions
-      .filter((session) => session.sessionType === "cardio")
-      .map((session) => session.displayOrder);
-    const liftingIndices = day.sessions
-      .filter((session) => session.sessionType === "lifting")
-      .map((session) => session.displayOrder);
+    const cardioIndices = day.workouts
+      .filter((workout) => workout.workoutType === "cardio")
+      .map((workout) => workout.displayOrder);
+    const liftingIndices = day.workouts
+      .filter((workout) => workout.workoutType === "lifting")
+      .map((workout) => workout.displayOrder);
 
     if (
       cardioIndices.length > 0 &&
@@ -1054,9 +1204,9 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
     }
 
     if (
-      day.sessions.filter((session) => session.sessionType !== "recovery")
+      day.workouts.filter((workout) => workout.workoutType !== "recovery")
         .length >= 2 &&
-      day.sessions.some((session) => session.sessionType === "recovery")
+      day.workouts.some((workout) => workout.workoutType === "recovery")
     ) {
       softWarnings.push(
         `${day.dayLabel}: recovery activity is scheduled on a multi-session day.`,
@@ -1076,9 +1226,9 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
     );
   }
 
-  if (Math.abs(pushSessions - pullSessions) > 1) {
+  if (Math.abs(pushWorkouts - pullWorkouts) > 1) {
     hardViolations.push(
-      "Push and pull session counts are out of weekly balance.",
+      "Push and pull workout counts are out of weekly balance.",
     );
   }
 
@@ -1090,27 +1240,32 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
 
 export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
   const weeklySchedule = parseWeeklySchedule(files.currentPlan);
-  const cardioSessions = buildCardioSessionMap(files.currentPlan);
-  const recoverySessions = parseRecoveryActivities(
+  const cardioActivities = parseCardioActivities(files.currentPlan);
+  const cardioByName = new Map(
+    cardioActivities.map((activity) => [activity.name, activity] as const),
+  );
+  const recoveryWorkouts = parseRecoveryActivities(
     files.currentPlan,
     files.planDecisions,
   );
-  const recoveryByDay = new Map<DayOfWeek, ParsedRecoverySession[]>();
+  const recoveryActivities = parseRecoveryActivitiesCatalog(recoveryWorkouts);
+  const recoveryByDay = new Map<DayOfWeek, ParsedRecoveryWorkout[]>();
 
-  for (const recoverySession of recoverySessions) {
-    const existing = recoveryByDay.get(recoverySession.dayOfWeek) ?? [];
-    existing.push(recoverySession);
-    recoveryByDay.set(recoverySession.dayOfWeek, existing);
+  for (const recoveryWorkout of recoveryWorkouts) {
+    const existing = recoveryByDay.get(recoveryWorkout.dayOfWeek) ?? [];
+    existing.push(recoveryWorkout);
+    recoveryByDay.set(recoveryWorkout.dayOfWeek, existing);
   }
 
   const exerciseNotesByName = extractExerciseNotesMap(files.trainingLog);
   const days = weeklySchedule.days.map<ParsedDaySpec>((weeklyDay) => {
-    const sessions: ParsedSessionSpec[] = weeklyDay.sessionEntries.map(
+    const workouts: ParsedDaySpec["workouts"] = weeklyDay.workoutEntries.map(
       (entry, index) => {
-        if (entry.sessionType === "lifting") {
-          const blocks = parseSessionBlocks(
+        if (entry.workoutType === "lifting") {
+          const blocks = parseWorkoutBlocks(
             files.currentPlan,
-            entry.sessionName,
+            entry.workoutName,
+            exerciseNotesByName,
           ).map((block) => ({
             ...block,
             exercises: block.exercises.map((exercise) => ({
@@ -1130,8 +1285,8 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
           }
 
           return {
-            sessionName: entry.sessionName,
-            sessionType: "lifting",
+            workoutName: entry.workoutName,
+            workoutType: "lifting" as const,
             timing: entry.timing,
             gym: weeklyDay.gym,
             description: null,
@@ -1140,29 +1295,45 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
             cardioDistance: null,
             cardioTargetZone: null,
             blocks,
+            blockRefs: blocks.map((block) => ({
+              blockName: block.blockName,
+              blockCategory: "lifting" as const,
+              displayOrder: block.displayOrder,
+              presetActivityName: null,
+              presetActivityType: null,
+            })),
             focusMuscleGroups: inferFocusMuscleGroups(blocks),
           };
         }
 
-        const cardio = cardioSessions.get(entry.sessionName);
+        const cardio = cardioByName.get(entry.workoutName);
 
         if (!cardio) {
           throw new Error(
-            `Missing parsed cardio details for "${entry.sessionName}".`,
+            `Missing parsed cardio details for "${entry.workoutName}".`,
           );
         }
 
         return {
-          sessionName: entry.sessionName,
-          sessionType: "cardio",
+          workoutName: entry.workoutName,
+          workoutType: "cardio" as const,
           timing: entry.timing,
-          gym: entry.sessionName === "Basketball" ? null : weeklyDay.gym,
+          gym: entry.workoutName === "Basketball" ? null : weeklyDay.gym,
           description: cardio.description,
           displayOrder: index + 1,
           cardioFormat: cardio.cardioFormat,
           cardioDistance: cardio.cardioDistance,
           cardioTargetZone: cardio.cardioTargetZone,
           blocks: [],
+          blockRefs: [
+            {
+              blockName: cardioBlockName,
+              blockCategory: "cardio" as const,
+              displayOrder: 1,
+              presetActivityName: cardio.name,
+              presetActivityType: "cardio" as const,
+            },
+          ],
           focusMuscleGroups: [],
         };
       },
@@ -1170,19 +1341,27 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
 
     const recoveryForDay = recoveryByDay.get(weeklyDay.dayOfWeek) ?? [];
 
-    for (const recovery of recoveryForDay) {
-      sessions.push({
-        sessionName: recovery.sessionName,
-        sessionType: "recovery",
-        timing: recovery.timing,
-        gym:
-          recovery.sessionName === "Hot Yoga or Sauna" ? null : weeklyDay.gym,
-        description: recovery.description,
-        displayOrder: sessions.length + 1,
+    for (const recoveryWorkout of recoveryForDay) {
+      workouts.push({
+        workoutName: recoveryWorkout.workoutName,
+        workoutType: "recovery",
+        timing: recoveryWorkout.timing,
+        gym: weeklyDay.gym,
+        description: recoveryWorkout.description,
+        displayOrder: workouts.length + 1,
         cardioFormat: null,
         cardioDistance: null,
         cardioTargetZone: null,
         blocks: [],
+        blockRefs: [
+          {
+            blockName: recoveryBlockName,
+            blockCategory: "recovery",
+            displayOrder: 1,
+            presetActivityName: recoveryWorkout.workoutName,
+            presetActivityType: "recovery",
+          },
+        ],
         focusMuscleGroups: [],
       });
     }
@@ -1191,7 +1370,7 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
       dayOfWeek: weeklyDay.dayOfWeek,
       dayLabel: weeklyDay.dayLabel,
       isRestDay: weeklyDay.isRestDay,
-      sessions,
+      workouts,
     };
   });
 
@@ -1203,21 +1382,30 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
     );
   }
 
+  const orderedDays = dayOrder.map((dayOfWeek) => {
+    const day = days.find((entry) => entry.dayOfWeek === dayOfWeek);
+
+    if (!day) {
+      throw new Error(
+        `Weekly schedule is missing ${dayEnumToLabel[dayOfWeek]}.`,
+      );
+    }
+
+    return day;
+  });
+
+  const liftingBlocks = parseLiftingBlocksGlobal(orderedDays);
+
   return {
     name: "Marcus base plan v1",
     overviewTitle: extractDocumentTitle(files.overview),
     masterPlanTitle: extractDocumentTitle(files.masterPlan),
-    days: dayOrder.map((dayOfWeek) => {
-      const day = days.find((entry) => entry.dayOfWeek === dayOfWeek);
-
-      if (!day) {
-        throw new Error(
-          `Weekly schedule is missing ${dayEnumToLabel[dayOfWeek]}.`,
-        );
-      }
-
-      return day;
-    }),
+    days: orderedDays,
+    liftingBlocks,
+    cardioActivities,
+    recoveryActivities,
+    cardioBlockName,
+    recoveryBlockName,
     nutritionTargets: parseNutritionTargets(files.nutrition),
     historicalPrs: parseHistoricalPRs(files.trainingLog),
     validation,

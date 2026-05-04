@@ -1,6 +1,6 @@
+import { formatWorkoutDisplayName } from "@/lib/history/displayName";
+import type { AllWorkoutsRow, PRTimelineRow } from "@/lib/history/projections";
 import { createClient } from "@/lib/supabase/server";
-import { formatSessionDisplayName } from "@/lib/history/displayName";
-import type { AllSessionsRow, PRTimelineRow } from "@/lib/history/projections";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -22,26 +22,26 @@ type ExerciseRow = {
 
 type SetLogRow = {
   set_log_id: string;
-  session_id: string;
+  workout_id: string;
 };
 
-type SessionCompletionRow = {
+type WorkoutCompletionRow = {
   completion_id: string;
-  session_id: string;
+  workout_id: string;
   started_at: string;
   completed_at: string | null;
   was_ended_early: boolean;
   completed_block_ids: string[];
 };
 
-type SessionRow = {
-  session_id: string;
-  session_name: string;
+type WorkoutRow = {
+  workout_id: string;
+  workout_name: string;
 };
 
-type BlockSessionRow = {
+type WorkoutBlockRow = {
   block_id: string;
-  session_id: string;
+  workout_id: string;
 };
 
 type PRCountRow = {
@@ -181,14 +181,14 @@ function mapExerciseRows(data: unknown): ExerciseRow[] {
 function mapSetLogRows(data: unknown): SetLogRow[] {
   return assertRecordArray(data, "set log").map((record) => ({
     set_log_id: getString(record, "set_log_id"),
-    session_id: getString(record, "session_id"),
+    workout_id: getString(record, "workout_id"),
   }));
 }
 
-function mapSessionCompletionRows(data: unknown): SessionCompletionRow[] {
-  return assertRecordArray(data, "session completion").map((record) => ({
+function mapWorkoutCompletionRows(data: unknown): WorkoutCompletionRow[] {
+  return assertRecordArray(data, "workout completion").map((record) => ({
     completion_id: getString(record, "completion_id"),
-    session_id: getString(record, "session_id"),
+    workout_id: getString(record, "workout_id"),
     started_at: getString(record, "started_at"),
     completed_at: getNullableString(record, "completed_at"),
     was_ended_early: getBoolean(record, "was_ended_early"),
@@ -196,22 +196,22 @@ function mapSessionCompletionRows(data: unknown): SessionCompletionRow[] {
   }));
 }
 
-function mapSessionRows(data: unknown): SessionRow[] {
-  return assertRecordArray(data, "session").map((record) => ({
-    session_id: getString(record, "session_id"),
-    session_name: getString(record, "session_name"),
+function mapWorkoutRows(data: unknown): WorkoutRow[] {
+  return assertRecordArray(data, "workout").map((record) => ({
+    workout_id: getString(record, "workout_id"),
+    workout_name: getString(record, "workout_name"),
   }));
 }
 
-function mapBlockSessionRows(data: unknown): BlockSessionRow[] {
-  return assertRecordArray(data, "block").map((record) => ({
+function mapWorkoutBlockRows(data: unknown): WorkoutBlockRow[] {
+  return assertRecordArray(data, "workout block").map((record) => ({
     block_id: getString(record, "block_id"),
-    session_id: getString(record, "session_id"),
+    workout_id: getString(record, "workout_id"),
   }));
 }
 
 function mapPRCountRows(data: unknown): PRCountRow[] {
-  return assertRecordArray(data, "session PR count").map((record) => ({
+  return assertRecordArray(data, "workout PR count").map((record) => ({
     set_log_id: getString(record, "set_log_id"),
     achieved_at: getString(record, "achieved_at"),
   }));
@@ -223,9 +223,9 @@ function buildExerciseMap(exercises: ExerciseRow[]): Map<string, ExerciseRow> {
   );
 }
 
-function buildSessionMap(sessions: SessionRow[]): Map<string, SessionRow> {
+function buildWorkoutMap(workouts: WorkoutRow[]): Map<string, WorkoutRow> {
   return new Map(
-    sessions.map((session) => [session.session_id, session] as const),
+    workouts.map((workout) => [workout.workout_id, workout] as const),
   );
 }
 
@@ -233,18 +233,18 @@ function buildSetLogMap(setLogs: SetLogRow[]): Map<string, SetLogRow> {
   return new Map(setLogs.map((setLog) => [setLog.set_log_id, setLog] as const));
 }
 
-function buildSessionCompletionsBySession(
-  completions: SessionCompletionRow[],
-): Map<string, SessionCompletionRow[]> {
-  const completionsBySession = new Map<string, SessionCompletionRow[]>();
+function buildCompletionsByWorkout(
+  completions: WorkoutCompletionRow[],
+): Map<string, WorkoutCompletionRow[]> {
+  const completionsByWorkout = new Map<string, WorkoutCompletionRow[]>();
 
   for (const completion of completions) {
-    const existing = completionsBySession.get(completion.session_id) ?? [];
+    const existing = completionsByWorkout.get(completion.workout_id) ?? [];
     existing.push(completion);
-    completionsBySession.set(completion.session_id, existing);
+    completionsByWorkout.set(completion.workout_id, existing);
   }
 
-  for (const entries of completionsBySession.values()) {
+  for (const entries of completionsByWorkout.values()) {
     entries.sort(
       (left, right) =>
         new Date(right.started_at).getTime() -
@@ -252,13 +252,13 @@ function buildSessionCompletionsBySession(
     );
   }
 
-  return completionsBySession;
+  return completionsByWorkout;
 }
 
 function findMatchingCompletion(
-  completions: SessionCompletionRow[],
+  completions: WorkoutCompletionRow[],
   achievedAt: string,
-): SessionCompletionRow | null {
+): WorkoutCompletionRow | null {
   const achievedAtMs = new Date(achievedAt).getTime();
 
   for (const completion of completions) {
@@ -276,9 +276,9 @@ function findMatchingCompletion(
   return null;
 }
 
-function deriveSessionState(
-  completion: Pick<SessionCompletionRow, "completed_at" | "was_ended_early">,
-): AllSessionsRow["state"] {
+function deriveWorkoutState(
+  completion: Pick<WorkoutCompletionRow, "completed_at" | "was_ended_early">,
+): AllWorkoutsRow["state"] {
   if (
     completion.completed_at !== null &&
     completion.was_ended_early === false
@@ -293,39 +293,39 @@ function deriveSessionState(
   return "in_progress";
 }
 
-function countBlocksBySession(blocks: BlockSessionRow[]): Map<string, number> {
+function countBlocksByWorkout(blocks: WorkoutBlockRow[]): Map<string, number> {
   const totals = new Map<string, number>();
 
   for (const block of blocks) {
-    totals.set(block.session_id, (totals.get(block.session_id) ?? 0) + 1);
+    totals.set(block.workout_id, (totals.get(block.workout_id) ?? 0) + 1);
   }
 
   return totals;
 }
 
 function countPrsByCompletion(
-  completions: SessionCompletionRow[],
-  sessionIdBySetLogId: Map<string, string>,
+  completions: WorkoutCompletionRow[],
+  workoutIdBySetLogId: Map<string, string>,
   prs: PRCountRow[],
 ): Map<string, number> {
-  const prsBySessionId = new Map<string, string[]>();
+  const prsByWorkoutId = new Map<string, string[]>();
 
   for (const pr of prs) {
-    const sessionId = sessionIdBySetLogId.get(pr.set_log_id);
+    const workoutId = workoutIdBySetLogId.get(pr.set_log_id);
 
-    if (!sessionId) {
+    if (!workoutId) {
       continue;
     }
 
-    const existing = prsBySessionId.get(sessionId) ?? [];
+    const existing = prsByWorkoutId.get(workoutId) ?? [];
     existing.push(pr.achieved_at);
-    prsBySessionId.set(sessionId, existing);
+    prsByWorkoutId.set(workoutId, existing);
   }
 
   const counts = new Map<string, number>();
 
   for (const completion of completions) {
-    const achievedAtValues = prsBySessionId.get(completion.session_id) ?? [];
+    const achievedAtValues = prsByWorkoutId.get(completion.workout_id) ?? [];
     const startedAtMs = new Date(completion.started_at).getTime();
     const completedAtMs =
       completion.completed_at === null
@@ -390,7 +390,7 @@ export async function getPRTimeline(opts: {
       .in("exercise_id", exerciseIds),
     supabase
       .from("set_logs")
-      .select("set_log_id, session_id")
+      .select("set_log_id, workout_id")
       .in("set_log_id", setLogIds),
   ]);
 
@@ -410,45 +410,45 @@ export async function getPRTimeline(opts: {
   const setLogs = mapSetLogRows(setLogData ?? []);
   const exerciseMap = buildExerciseMap(exercises);
   const setLogMap = buildSetLogMap(setLogs);
-  const sessionIds = uniqueStrings(setLogs.map((row) => row.session_id));
+  const workoutIds = uniqueStrings(setLogs.map((row) => row.workout_id));
 
-  if (sessionIds.length === 0) {
+  if (workoutIds.length === 0) {
     return [];
   }
 
   const [
     { data: completionData, error: completionError },
-    { data: sessionData, error: sessionError },
+    { data: workoutData, error: workoutError },
   ] = await Promise.all([
     supabase
-      .from("session_completions")
+      .from("workout_completions")
       .select(
-        "completion_id, session_id, started_at, completed_at, was_ended_early, completed_block_ids",
+        "completion_id, workout_id, started_at, completed_at, was_ended_early, completed_block_ids",
       )
-      .in("session_id", sessionIds)
+      .in("workout_id", workoutIds)
       .order("started_at", { ascending: false }),
     supabase
-      .from("sessions")
-      .select("session_id, session_name")
-      .in("session_id", sessionIds),
+      .from("workouts")
+      .select("workout_id, workout_name")
+      .in("workout_id", workoutIds),
   ]);
 
   if (completionError) {
     throw new Error(
-      `Failed to load session completions for PR timeline: ${completionError.message}`,
+      `Failed to load workout completions for PR timeline: ${completionError.message}`,
     );
   }
 
-  if (sessionError) {
+  if (workoutError) {
     throw new Error(
-      `Failed to load sessions for PR timeline: ${sessionError.message}`,
+      `Failed to load workouts for PR timeline: ${workoutError.message}`,
     );
   }
 
-  const completions = mapSessionCompletionRows(completionData ?? []);
-  const sessions = mapSessionRows(sessionData ?? []);
-  const completionsBySession = buildSessionCompletionsBySession(completions);
-  const sessionMap = buildSessionMap(sessions);
+  const completions = mapWorkoutCompletionRows(completionData ?? []);
+  const workouts = mapWorkoutRows(workoutData ?? []);
+  const completionsByWorkout = buildCompletionsByWorkout(completions);
+  const workoutMap = buildWorkoutMap(workouts);
 
   return prRows.flatMap<PRTimelineRow>((prRow) => {
     const exercise = exerciseMap.get(prRow.exercise_id);
@@ -459,14 +459,14 @@ export async function getPRTimeline(opts: {
     }
 
     const matchingCompletion = findMatchingCompletion(
-      completionsBySession.get(setLog.session_id) ?? [],
+      completionsByWorkout.get(setLog.workout_id) ?? [],
       prRow.achieved_at,
     );
-    const session = matchingCompletion
-      ? sessionMap.get(matchingCompletion.session_id)
+    const workout = matchingCompletion
+      ? workoutMap.get(matchingCompletion.workout_id)
       : null;
 
-    if (!matchingCompletion || !session) {
+    if (!matchingCompletion || !workout) {
       return [];
     }
 
@@ -482,8 +482,8 @@ export async function getPRTimeline(opts: {
         is_bodyweight: exercise.is_bodyweight,
         set_log_id: prRow.set_log_id,
         completion_id: matchingCompletion.completion_id,
-        session_display_name: formatSessionDisplayName(
-          session.session_name,
+        workout_display_name: formatWorkoutDisplayName(
+          workout.workout_name,
           matchingCompletion.started_at,
         ),
       },
@@ -491,69 +491,71 @@ export async function getPRTimeline(opts: {
   });
 }
 
-export async function getAllSessions(): Promise<AllSessionsRow[]> {
+export async function getAllWorkouts(): Promise<AllWorkoutsRow[]> {
   const supabase = await createClient();
   const { data: completionData, error: completionError } = await supabase
-    .from("session_completions")
+    .from("workout_completions")
     .select(
-      "completion_id, session_id, started_at, completed_at, was_ended_early, completed_block_ids",
+      "completion_id, workout_id, started_at, completed_at, was_ended_early, completed_block_ids",
     )
     .order("started_at", { ascending: false });
 
   if (completionError) {
-    throw new Error(`Failed to load all sessions: ${completionError.message}`);
+    throw new Error(`Failed to load all workouts: ${completionError.message}`);
   }
 
-  const completions = mapSessionCompletionRows(completionData ?? []);
+  const completions = mapWorkoutCompletionRows(completionData ?? []);
 
   if (completions.length === 0) {
     return [];
   }
 
-  const sessionIds = uniqueStrings(
-    completions.map((completion) => completion.session_id),
+  const workoutIds = uniqueStrings(
+    completions.map((completion) => completion.workout_id),
   );
 
   const [
-    { data: sessionData, error: sessionError },
+    { data: workoutData, error: workoutError },
     { data: blockData, error: blockError },
     { data: setLogData, error: setLogError },
   ] = await Promise.all([
     supabase
-      .from("sessions")
-      .select("session_id, session_name")
-      .in("session_id", sessionIds),
+      .from("workouts")
+      .select("workout_id, workout_name")
+      .in("workout_id", workoutIds),
     supabase
-      .from("blocks")
-      .select("block_id, session_id")
-      .in("session_id", sessionIds),
+      .from("workout_blocks")
+      .select("block_id, workout_id")
+      .in("workout_id", workoutIds),
     supabase
       .from("set_logs")
-      .select("set_log_id, session_id")
-      .in("session_id", sessionIds),
+      .select("set_log_id, workout_id")
+      .in("workout_id", workoutIds),
   ]);
 
-  if (sessionError) {
-    throw new Error(`Failed to load sessions list: ${sessionError.message}`);
+  if (workoutError) {
+    throw new Error(`Failed to load workouts list: ${workoutError.message}`);
   }
 
   if (blockError) {
-    throw new Error(`Failed to load block counts: ${blockError.message}`);
+    throw new Error(
+      `Failed to load workout block counts: ${blockError.message}`,
+    );
   }
 
   if (setLogError) {
     throw new Error(
-      `Failed to load set logs for sessions list: ${setLogError.message}`,
+      `Failed to load set logs for workouts list: ${setLogError.message}`,
     );
   }
 
-  const sessions = mapSessionRows(sessionData ?? []);
-  const blocks = mapBlockSessionRows(blockData ?? []);
+  const workouts = mapWorkoutRows(workoutData ?? []);
+  const workoutBlocks = mapWorkoutBlockRows(blockData ?? []);
   const setLogs = mapSetLogRows(setLogData ?? []);
-  const sessionMap = buildSessionMap(sessions);
-  const blockCounts = countBlocksBySession(blocks);
-  const sessionIdBySetLogId = new Map(
-    setLogs.map((setLog) => [setLog.set_log_id, setLog.session_id] as const),
+  const workoutMap = buildWorkoutMap(workouts);
+  const blockCounts = countBlocksByWorkout(workoutBlocks);
+  const workoutIdBySetLogId = new Map(
+    setLogs.map((setLog) => [setLog.set_log_id, setLog.workout_id] as const),
   );
 
   let prCountsByCompletion = new Map<string, number>();
@@ -567,33 +569,33 @@ export async function getAllSessions(): Promise<AllSessionsRow[]> {
       .in("set_log_id", setLogIds);
 
     if (prError) {
-      throw new Error(`Failed to load session PR counts: ${prError.message}`);
+      throw new Error(`Failed to load workout PR counts: ${prError.message}`);
     }
 
     prCountsByCompletion = countPrsByCompletion(
       completions,
-      sessionIdBySetLogId,
+      workoutIdBySetLogId,
       mapPRCountRows(prData ?? []),
     );
   }
 
-  return completions.map<AllSessionsRow>((completion) => {
-    const session = sessionMap.get(completion.session_id);
+  return completions.map<AllWorkoutsRow>((completion) => {
+    const workout = workoutMap.get(completion.workout_id);
 
-    if (!session) {
-      throw new Error("Missing session row for session completion.");
+    if (!workout) {
+      throw new Error("Missing workout row for workout completion.");
     }
 
     return {
       completion_id: completion.completion_id,
-      session_display_name: formatSessionDisplayName(
-        session.session_name,
+      workout_display_name: formatWorkoutDisplayName(
+        workout.workout_name,
         completion.started_at,
       ),
       started_at: completion.started_at,
-      state: deriveSessionState(completion),
+      state: deriveWorkoutState(completion),
       blocks_completed_count: completion.completed_block_ids.length,
-      blocks_total_count: blockCounts.get(completion.session_id) ?? 0,
+      blocks_total_count: blockCounts.get(completion.workout_id) ?? 0,
       pr_count: prCountsByCompletion.get(completion.completion_id) ?? 0,
     };
   });

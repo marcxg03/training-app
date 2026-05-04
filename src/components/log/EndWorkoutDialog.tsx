@@ -13,15 +13,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type EndSessionDialogProps = {
+type EndWorkoutDialogProps = {
   disabled?: boolean;
   onConfirm: () => Promise<void>;
 };
 
-export function EndSessionDialog({
+export function EndWorkoutDialog({
   disabled = false,
   onConfirm,
-}: EndSessionDialogProps) {
+}: EndWorkoutDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,7 +36,7 @@ export function EndSessionDialog({
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Could not end the session right now.";
+          : "Could not end the workout right now.";
 
       setError(message);
       setIsSubmitting(false);
@@ -62,12 +62,12 @@ export function EndSessionDialog({
           disabled={disabled}
           className="text-sm font-medium text-accent transition hover:text-accent/80 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          End session early
+          End workout early
         </button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>End session now?</DialogTitle>
+          <DialogTitle>End workout now?</DialogTitle>
           <DialogDescription>
             Any incomplete blocks will be marked as skipped.
           </DialogDescription>
@@ -83,7 +83,7 @@ export function EndSessionDialog({
             Keep logging
           </Button>
           <Button type="button" onClick={handleConfirm} disabled={isSubmitting}>
-            {isSubmitting ? "Ending..." : "End session"}
+            {isSubmitting ? "Ending..." : "End workout"}
           </Button>
         </DialogFooter>
       </DialogContent>

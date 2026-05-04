@@ -1,22 +1,22 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { sessionDetailHref } from "@/lib/history/crossLinks";
+import { workoutDetailHref } from "@/lib/history/crossLinks";
 import { cn } from "@/lib/utils/cn";
 
-type SessionLinkProps = {
+type WorkoutLinkProps = {
   completionId: string;
   children: ReactNode;
   className?: string;
 };
 
-export function SessionLink({
+export function WorkoutLink({
   completionId,
   children,
   className,
-}: SessionLinkProps) {
+}: WorkoutLinkProps) {
   return (
-    <Link href={sessionDetailHref(completionId)} className={cn(className)}>
+    <Link href={workoutDetailHref(completionId)} className={cn(className)}>
       {children}
     </Link>
   );

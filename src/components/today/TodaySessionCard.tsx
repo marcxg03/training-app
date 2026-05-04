@@ -14,21 +14,21 @@ export function TodaySessionCard({ session }: TodaySessionCardProps) {
     <Card className="bg-card/80 transition-colors hover:border-accent/60">
       <CardContent className="p-0">
         <Link
-          href={`/today/session/${session.sessionId}`}
+          href={`/today/workout/${session.workoutId}`}
           className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <SessionSummaryRow
-            sessionType={session.sessionType}
-            sessionName={session.sessionName}
+            sessionType={session.workoutType}
+            sessionName={session.workoutName}
             timing={session.timing}
             gym={session.gym}
             summary={session.summary}
           />
         </Link>
       </CardContent>
-      {session.sessionType === "lifting" ? (
+      {session.workoutType === "lifting" ? (
         <CardFooter className="px-4 pb-4 pt-0">
-          <StartWorkoutButton sessionId={session.sessionId} />
+          <StartWorkoutButton workoutId={session.workoutId} />
         </CardFooter>
       ) : null}
     </Card>

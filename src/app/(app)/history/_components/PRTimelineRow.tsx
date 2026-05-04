@@ -1,7 +1,7 @@
 import { formatWeight } from "@/lib/units";
 import type { PRTimelineRow as PRTimelineRowData } from "@/lib/history/projections";
 import { ExerciseLink } from "@/components/shared/ExerciseLink";
-import { SessionLink } from "@/components/shared/SessionLink";
+import { WorkoutLink } from "@/components/shared/WorkoutLink";
 import { PRTypeBadge } from "@/app/(app)/history/_components/PRTypeBadge";
 
 type PRTimelineRowProps = {
@@ -33,12 +33,12 @@ export function PRTimelineRow({ row }: PRTimelineRowProps) {
               {formatPrValue(row)}
             </span>
           </div>
-          <SessionLink
+          <WorkoutLink
             completionId={row.completion_id}
             className="mt-3 inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-accent"
           >
-            {row.session_display_name}
-          </SessionLink>
+            {row.workout_display_name}
+          </WorkoutLink>
         </div>
       </div>
     </li>

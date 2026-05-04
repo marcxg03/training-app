@@ -1,11 +1,11 @@
 import type { JSX } from "react";
 
-import { AllSessionsRow } from "@/app/(app)/history/_components/AllSessionsRow";
+import { AllWorkoutsRow } from "@/app/(app)/history/_components/AllWorkoutsRow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAllSessions } from "@/lib/history/queries";
+import { getAllWorkouts } from "@/lib/history/queries";
 
-export default async function AllSessionsPage(): Promise<JSX.Element> {
-  const rows = await getAllSessions();
+export default async function AllWorkoutsPage(): Promise<JSX.Element> {
+  const rows = await getAllWorkouts();
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -14,24 +14,24 @@ export default async function AllSessionsPage(): Promise<JSX.Element> {
           History
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
-          All Sessions
+          All Workouts
         </h1>
       </div>
 
       <Card className="bg-card/80">
         <CardHeader className="space-y-2">
           <CardTitle className="text-xl tracking-tight text-foreground">
-            Session Log
+            Workout Log
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Every tracked session completion, newest first.
+            Every tracked workout completion, newest first.
           </p>
         </CardHeader>
         <CardContent>
           {rows.length > 0 ? (
             <ul className="space-y-3">
               {rows.map((row) => (
-                <AllSessionsRow key={row.completion_id} row={row} />
+                <AllWorkoutsRow key={row.completion_id} row={row} />
               ))}
             </ul>
           ) : (

@@ -2,9 +2,9 @@ import type { Enums } from "@/lib/supabase/types";
 import { TodaySessionCard } from "@/components/today/TodaySessionCard";
 
 export type TodaySessionListItem = {
-  sessionId: string;
-  sessionType: Enums<"session_type_enum">;
-  sessionName: string;
+  workoutId: string;
+  workoutType: Enums<"session_type_enum">;
+  workoutName: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
   displayOrder: number;
@@ -37,7 +37,7 @@ export function TodaySessionList({ sessions }: TodaySessionListProps) {
   return (
     <div className="space-y-4">
       {sortedSessions.map((session) => (
-        <TodaySessionCard key={session.sessionId} session={session} />
+        <TodaySessionCard key={session.workoutId} session={session} />
       ))}
     </div>
   );

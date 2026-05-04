@@ -15,7 +15,6 @@ export type LoggerSetLog = Pick<
   Tables<"set_logs">,
   | "set_log_id"
   | "user_id"
-  | "session_id"
   | "block_id"
   | "exercise_id"
   | "set_index"
@@ -28,28 +27,30 @@ export type LoggerSetLog = Pick<
   | "logged_at"
 > & {
   prTypes: Enums<"pr_type_enum">[];
+  session_id: string;
 };
 
-export type LoggerBlock = Pick<
-  Tables<"blocks">,
-  "block_id" | "block_name" | "block_type" | "display_order"
-> & {
+export type LoggerBlock = {
+  block_id: string;
+  block_name: string;
+  block_type: NonNullable<Tables<"blocks">["block_type"]>;
+  display_order: number;
   exercises: LoggerExercise[];
   setLogs: LoggerSetLog[];
 };
 
-export type LoggerSession = Pick<
-  Tables<"sessions">,
-  "session_id" | "session_name" | "session_type"
-> & {
+export type LoggerSession = {
+  session_id: string;
+  session_name: string;
+  session_type: Enums<"session_type_enum">;
   dayOfWeek: Enums<"day_of_week_enum">;
 };
 
-export type SessionCompletionRecord = Tables<"session_completions">;
+export type SessionCompletionRecord = Tables<"workout_completions">;
 
 type SessionCompletionStore = {
   create: (
-    payload: TablesInsert<"session_completions">,
+    payload: TablesInsert<"workout_completions">,
   ) => Promise<SessionCompletionRecord>;
   findLatestForToday: (args: {
     sessionId: string;
@@ -77,7 +78,7 @@ export async function getOrCreateSessionCompletion(
 
   return store.create({
     user_id: userId,
-    session_id: sessionId,
+    workout_id: sessionId,
     started_at: nowIso,
     completed_block_ids: [],
     was_ended_early: false,

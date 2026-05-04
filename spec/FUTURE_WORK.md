@@ -297,6 +297,28 @@ gap and documents the ~5-10 untraceable rows as expected. Option
 but their set context is genuinely lost. Defer until History tab
 analytics surface the gap as user-visible.
 
+### Schema cleanup — cosmetic carryovers from Slice 7a workouts rename
+
+🟢 Low — surfaced May 4, 2026 during Slice 7a Phase 4B. Two
+cosmetic items survived the `sessions → workouts` cascade rename and
+are bundled here for a future one-shot cleanup landing (likely
+alongside Slice 7a.5's TS-level rename PR):
+
+- `session_type_enum` enum type name. The column was renamed to
+  `workout_type` but the underlying Postgres enum type is still
+  named `session_type_enum` (`src/lib/supabase/types.ts:758,894`).
+  Cosmetic only; doesn't affect queries. Fix:
+  `ALTER TYPE session_type_enum RENAME TO workout_type_enum`
+  paired with `supabase gen types`.
+- FK constraint name carryovers. Postgres FK constraints from
+  migrations 005-006 still carry the old names
+  (`block_exercises_block_id_fkey`, `block_exercises_exercise_id_fkey`,
+  `set_logs_session_id_fkey`, `session_completions_session_id_fkey`).
+  Constraint names aren't user-facing; cosmetic only.
+
+Both can be bundled with Slice 7a.5's TS-rename PR for one
+mechanical cleanup landing — keeps the noise consolidated.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state
@@ -395,3 +417,29 @@ shell pipelines (`>`, `|`, `$()`) should be locally installed
 tool's first-run install path can pollute its own output stream,
 redirection breaks. Local installation is the discipline-preserving
 fix.
+
+### Pre-slice wiki-grep should enumerate all same-name collisions, not the mentally-cataloged subset
+
+Surfaced May 4, 2026 during Slice 7a Phase 4B. The pre-Slice-7a
+wiki-edit pass renamed three known same-name-across-workouts
+collisions (Mid Chest → Bench Press Focus, Lateral Raise →
+Shoulder Burnout, Hot Yoga/Sauna split) but missed `Calves`,
+which appears in both Tuesday Lower Compound (`failure` protocol)
+and Saturday Lower ATG (`mobility` protocol — block 8 of the ATG
+mobility flow). The collision was caught post-seed when Codex
+hard-coded a parser override forcing `block_name = "Calves"` to
+`failure`, silently flipping Saturday's methodology classification.
+Resolved by renaming Saturday's "Calves" → "ATG Calves" in the
+wiki and reverting the parser override.
+
+Workflow addition candidate: pre-slice wiki-rewrite instructions
+that introduce a new uniqueness constraint should require an
+explicit grep pass enumerating ALL same-name occurrences across
+workouts, not just the ones the spec author has mentally
+catalogued. Concrete check for slice docs that introduce
+catalog-style UNIQUE constraints:
+`grep -E '^\| [0-9]+ \| ' wiki/current-plan.md | sort -t'|' -k3 | uniq -c -f2`
+or equivalent — surfaces every block-name + exercise-name that
+repeats across the wiki. Catches the "I forgot Calves was in two
+workouts" failure mode by mechanical enumeration rather than
+recall.

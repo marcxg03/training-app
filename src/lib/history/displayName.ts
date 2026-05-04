@@ -9,8 +9,8 @@ const priorYearFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
-export function formatSessionDisplayName(
-  sessionName: string,
+export function formatWorkoutDisplayName(
+  workoutName: string,
   startedAt: Date | string,
 ): string {
   const date = startedAt instanceof Date ? startedAt : new Date(startedAt);
@@ -19,5 +19,5 @@ export function formatSessionDisplayName(
       ? currentYearFormatter
       : priorYearFormatter;
 
-  return `${sessionName} · ${formatter.format(date)}`;
+  return `${workoutName} · ${formatter.format(date)}`;
 }

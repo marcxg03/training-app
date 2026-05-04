@@ -1,12 +1,11 @@
-import type { QueryData } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
-import { SessionSummary } from "@/components/log/SessionSummary";
+import { WorkoutSummary } from "@/components/log/WorkoutSummary";
 import { createClient } from "@/lib/supabase/server";
 
 type SummaryPageProps = {
   params: Promise<{
-    session_id: string;
+    workout_id: string;
   }>;
   searchParams: Promise<{
     completion_id?: string;
@@ -23,26 +22,26 @@ function toArray<T>(value: T | T[] | null | undefined) {
 
 function getCompletionQuery(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  sessionId: string,
+  workoutId: string,
   userId: string,
   completionId?: string,
 ) {
   const query = supabase
-    .from("session_completions")
+    .from("workout_completions")
     .select(
       `
         completion_id,
-        session_id,
+        workout_id,
         started_at,
         completed_at,
         was_ended_early,
-        sessions!inner (
-          session_id,
-          session_name
+        workouts!inner (
+          workout_id,
+          workout_name
         )
       `,
     )
-    .eq("session_id", sessionId)
+    .eq("workout_id", workoutId)
     .eq("user_id", userId);
 
   if (completionId) {
@@ -54,7 +53,7 @@ function getCompletionQuery(
 
 function getSetLogsQuery(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  sessionId: string,
+  workoutId: string,
   startedAt: string,
   completedAt: string,
 ) {
@@ -71,7 +70,7 @@ function getSetLogsQuery(
         )
       `,
     )
-    .eq("session_id", sessionId)
+    .eq("workout_id", workoutId)
     .gte("logged_at", startedAt)
     .lte("logged_at", completedAt);
 }
@@ -96,11 +95,11 @@ function getPrHistoryQuery(
     .in("set_log_id", setLogIds);
 }
 
-export default async function SessionSummaryPage({
+export default async function WorkoutSummaryPage({
   params,
   searchParams,
 }: SummaryPageProps) {
-  const { session_id: sessionId } = await params;
+  const { workout_id: workoutId } = await params;
   const { completion_id: completionId } = await searchParams;
   const supabase = await createClient();
   const {
@@ -113,17 +112,15 @@ export default async function SessionSummaryPage({
 
   const completionQuery = getCompletionQuery(
     supabase,
-    sessionId,
+    workoutId,
     user.id,
     completionId,
   );
-  type CompletionRecord = QueryData<typeof completionQuery>;
-
   const { data: completion, error: completionError } = await completionQuery;
 
   if (completionError) {
     throw new Error(
-      `Failed to load session completion: ${completionError.message}`,
+      `Failed to load workout completion: ${completionError.message}`,
     );
   }
 
@@ -131,16 +128,15 @@ export default async function SessionSummaryPage({
     redirect("/today");
   }
 
-  const sessionRecord: CompletionRecord = completion;
-  const sessionRow = toArray(sessionRecord.sessions)[0];
+  const workoutRow = toArray(completion.workouts)[0];
 
-  if (!sessionRow) {
+  if (!workoutRow) {
     redirect("/today");
   }
 
   const setLogsQuery = getSetLogsQuery(
     supabase,
-    sessionId,
+    workoutId,
     completion.started_at,
     completion.completed_at,
   );
@@ -180,7 +176,7 @@ export default async function SessionSummaryPage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <SessionSummary
+      <WorkoutSummary
         completedAt={completion.completed_at}
         prs={(prHistory.data ?? []).map((pr) => {
           const exercise = toArray(pr.exercises)[0];
@@ -197,7 +193,7 @@ export default async function SessionSummaryPage({
             weightKg: pr.weight_kg,
           };
         })}
-        sessionName={sessionRow.session_name}
+        workoutName={workoutRow.workout_name}
         setLogs={mappedSetLogs}
         wasEndedEarly={completion.was_ended_early}
       />

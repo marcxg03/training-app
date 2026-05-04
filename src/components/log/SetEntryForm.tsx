@@ -99,7 +99,7 @@ export function SetEntryForm({
     const insertPayload: SetLogInsertPayload = {
       set_log_id: setLogId,
       user_id: userId,
-      session_id: sessionId,
+      workout_id: sessionId,
       block_id: blockId,
       exercise_id: exercise.exercise_id,
       set_index: setIndex,
@@ -152,6 +152,7 @@ export function SetEntryForm({
 
         onSaved({
           ...insertPayload,
+          session_id: insertPayload.workout_id,
           weight_kg: insertPayload.weight_kg ?? null,
           notes: insertPayload.notes ?? null,
           is_to_failure: insertPayload.is_to_failure ?? false,
@@ -224,6 +225,7 @@ export function SetEntryForm({
 
     onSaved({
       ...insertedSetLog,
+      session_id: insertedSetLog.workout_id,
       prTypes,
     });
     router.refresh();
@@ -259,7 +261,7 @@ export function SetEntryForm({
 
         <label className="space-y-2">
           <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            Reps
+            REPS
           </span>
           <input
             type="number"
@@ -273,9 +275,21 @@ export function SetEntryForm({
         </label>
       </div>
 
+      {showFailureCheckbox ? (
+        <label className="flex items-center gap-3 rounded-lg border border-border/70 px-3 py-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={toFailure}
+            onChange={(event) => setToFailure(event.target.checked)}
+            className="h-4 w-4 rounded border-border text-accent focus:ring-accent"
+          />
+          Mark this set as to failure
+        </label>
+      ) : null}
+
       <label className="space-y-2">
         <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          Notes (optional)
+          NOTES
         </span>
         <textarea
           value={notes}
@@ -283,18 +297,6 @@ export function SetEntryForm({
           className={textareaClassName}
         />
       </label>
-
-      {showFailureCheckbox ? (
-        <label className="flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3 text-sm text-foreground">
-          <input
-            type="checkbox"
-            checked={toFailure}
-            onChange={(event) => setToFailure(event.target.checked)}
-            className="h-4 w-4 accent-[rgb(var(--accent))]"
-          />
-          To failure
-        </label>
-      ) : null}
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 

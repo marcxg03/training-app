@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import type { Enums, Tables } from "@/lib/supabase/types";
+import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,7 +25,6 @@ type SessionDetail = {
     blockId: string;
     blockName: string;
     blockType: Enums<"block_type_enum">;
-    displayOrder: number;
     exercises: Array<{
       exerciseId: string;
       name: string;
@@ -61,7 +60,16 @@ const timingOrder: Record<Enums<"timing_enum">, number> = {
   pm: 2,
 };
 
-function sortSessions(left: Tables<"sessions">, right: Tables<"sessions">) {
+function sortWorkouts(
+  left: {
+    timing: Enums<"timing_enum">;
+    display_order: number;
+  },
+  right: {
+    timing: Enums<"timing_enum">;
+    display_order: number;
+  },
+) {
   const timingDelta = timingOrder[left.timing] - timingOrder[right.timing];
 
   if (timingDelta !== 0) {
@@ -102,114 +110,136 @@ async function getDayPlan(day: Enums<"day_of_week_enum">) {
     return null;
   }
 
-  const { data: sessions, error: sessionsError } = await supabase
-    .from("sessions")
+  const { data: workouts, error: workoutsError } = await supabase
+    .from("workouts")
     .select("*")
     .eq("schedule_id", schedule.schedule_id);
 
-  if (sessionsError) {
-    throw new Error(`Failed to load sessions: ${sessionsError.message}`);
+  if (workoutsError) {
+    throw new Error(`Failed to load workouts: ${workoutsError.message}`);
   }
 
-  const sortedSessions = [...sessions].sort(sortSessions);
-  const liftingSessions = sortedSessions.filter(
-    (session) => session.session_type === "lifting",
-  );
-  const liftingSessionIds = liftingSessions.map(
-    (session) => session.session_id,
-  );
-
-  const { data: blocks, error: blocksError } = liftingSessionIds.length
+  const sortedWorkouts = [...workouts].sort(sortWorkouts);
+  const workoutIds = sortedWorkouts.map((workout) => workout.workout_id);
+  const { data: workoutBlocks, error: workoutBlocksError } = workoutIds.length
     ? await supabase
-        .from("blocks")
-        .select("*")
-        .in("session_id", liftingSessionIds)
+        .from("workout_blocks")
+        .select(
+          `
+            workout_id,
+            display_order,
+            preset_activity_id,
+            preset_activity_type,
+            blocks!inner (
+              block_id,
+              block_name,
+              block_type
+            )
+          `,
+        )
+        .in("workout_id", workoutIds)
         .order("display_order")
     : { data: [], error: null };
 
-  if (blocksError) {
-    throw new Error(`Failed to load blocks: ${blocksError.message}`);
+  if (workoutBlocksError) {
+    throw new Error(
+      `Failed to load workout blocks: ${workoutBlocksError.message}`,
+    );
   }
 
-  const blockIds = (blocks ?? []).map((block) => block.block_id);
-  const { data: blockExercises, error: blockExercisesError } = blockIds.length
+  const liftingBlocks = (workoutBlocks ?? []).flatMap((row) =>
+    (Array.isArray(row.blocks) ? row.blocks : [row.blocks]).flatMap((block) =>
+      block && block.block_type
+        ? [
+            {
+              workoutId: row.workout_id,
+              blockId: block.block_id,
+              blockName: block.block_name,
+              blockType: block.block_type,
+              displayOrder: row.display_order,
+            },
+          ]
+        : [],
+    ),
+  );
+  const blockIds = liftingBlocks.map((block) => block.blockId);
+  const { data: liftingItems, error: liftingItemsError } = blockIds.length
     ? await supabase
-        .from("block_exercises")
-        .select("*")
+        .from("block_lifting_items")
+        .select(
+          `
+            block_id,
+            display_order,
+            exercises!inner (
+              exercise_id,
+              name,
+              notes,
+              muscle_groups
+            )
+          `,
+        )
         .in("block_id", blockIds)
         .order("display_order")
     : { data: [], error: null };
 
-  if (blockExercisesError) {
+  if (liftingItemsError) {
     throw new Error(
-      `Failed to load block exercise rows: ${blockExercisesError.message}`,
+      `Failed to load lifting bank items: ${liftingItemsError.message}`,
     );
   }
 
-  const exerciseIds = (blockExercises ?? []).map((row) => row.exercise_id);
-  const { data: exercises, error: exercisesError } = exerciseIds.length
-    ? await supabase
-        .from("exercises")
-        .select("*")
-        .in("exercise_id", exerciseIds)
-    : { data: [], error: null };
-
-  if (exercisesError) {
-    throw new Error(`Failed to load exercises: ${exercisesError.message}`);
-  }
-
-  const exercisesById = new Map(
-    (exercises ?? []).map((exercise) => [exercise.exercise_id, exercise]),
-  );
-  const blockExercisesByBlockId = new Map<
+  const exercisesByBlockId = new Map<
     string,
-    Tables<"block_exercises">[]
+    SessionDetail["blocks"][number]["exercises"]
   >();
 
-  for (const row of blockExercises ?? []) {
-    const list = blockExercisesByBlockId.get(row.block_id) ?? [];
-    list.push(row);
-    blockExercisesByBlockId.set(row.block_id, list);
-  }
+  for (const item of liftingItems ?? []) {
+    const list = exercisesByBlockId.get(item.block_id) ?? [];
+    const exerciseRows = Array.isArray(item.exercises)
+      ? item.exercises
+      : [item.exercises];
 
-  const blocksBySessionId = new Map<string, SessionDetail["blocks"]>();
+    for (const exercise of exerciseRows) {
+      if (!exercise) {
+        continue;
+      }
 
-  for (const block of blocks ?? []) {
-    const linkedExercises = (blockExercisesByBlockId.get(block.block_id) ?? [])
-      .map((row) => exercisesById.get(row.exercise_id))
-      .filter((exercise): exercise is Tables<"exercises"> => Boolean(exercise))
-      .map((exercise) => ({
+      list.push({
         exerciseId: exercise.exercise_id,
         name: exercise.name,
         notes: exercise.notes,
         muscleGroups: exercise.muscle_groups,
-      }));
-    const list = blocksBySessionId.get(block.session_id) ?? [];
+      });
+    }
 
-    list.push({
-      blockId: block.block_id,
-      blockName: block.block_name,
-      blockType: block.block_type,
-      displayOrder: block.display_order,
-      exercises: linkedExercises,
-    });
-    blocksBySessionId.set(block.session_id, list);
+    exercisesByBlockId.set(item.block_id, list);
   }
 
-  const sessionDetails: SessionDetail[] = sortedSessions.map((session) => ({
-    sessionId: session.session_id,
-    sessionType: session.session_type,
-    sessionName: session.session_name,
-    timing: session.timing,
-    gym: session.gym,
-    description: session.description,
-    cardioDistance: session.cardio_distance,
-    cardioTargetZone: session.cardio_target_zone,
-    displayOrder: session.display_order,
-    blocks:
-      blocksBySessionId
-        .get(session.session_id)
-        ?.sort((left, right) => left.displayOrder - right.displayOrder) ?? [],
+  const blocksByWorkoutId = new Map<string, SessionDetail["blocks"]>();
+
+  for (const block of liftingBlocks) {
+    const list = blocksByWorkoutId.get(block.workoutId) ?? [];
+
+    list.push({
+      blockId: block.blockId,
+      blockName: block.blockName,
+      blockType: block.blockType,
+      exercises: exercisesByBlockId.get(block.blockId) ?? [],
+    });
+    blocksByWorkoutId.set(block.workoutId, list);
+  }
+
+  const sessionDetails: SessionDetail[] = sortedWorkouts.map((workout) => ({
+    sessionId: workout.workout_id,
+    sessionType: workout.workout_type,
+    sessionName: workout.workout_name,
+    timing: workout.timing,
+    gym: workout.gym,
+    description: workout.description,
+    cardioDistance: workout.cardio_distance,
+    cardioTargetZone: workout.cardio_target_zone,
+    displayOrder: workout.display_order,
+    blocks: blocksByWorkoutId.get(workout.workout_id) ?? [],
   }));
 
   return {
@@ -252,7 +282,7 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
             {dayPlan.isRestDay
               ? "Rest day with optional recovery work."
-              : "All sessions are read-only here, including cardio and recovery."}
+              : "All workouts are read-only here, including cardio and recovery."}
           </p>
         </div>
       </div>

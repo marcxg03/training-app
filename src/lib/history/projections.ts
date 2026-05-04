@@ -9,12 +9,12 @@ export type PRTimelineRow = {
   is_bodyweight: boolean;
   set_log_id: string;
   completion_id: string;
-  session_display_name: string;
+  workout_display_name: string;
 };
 
-export type AllSessionsRow = {
+export type AllWorkoutsRow = {
   completion_id: string;
-  session_display_name: string;
+  workout_display_name: string;
   started_at: string;
   state: "complete" | "in_progress" | "ended_early";
   blocks_completed_count: number;

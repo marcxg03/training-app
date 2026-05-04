@@ -632,3 +632,141 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
   `pnpm format:check` ✓ (Slice 6.1 files only).
 - No new dependencies. Recharts deferred to Slice 6.2.
 - No schema/RLS/migration changes.
+
+## Slice 7a — Library Tab + Workouts Rename (2026-05-04)
+
+### What was built
+
+- **Schema cascade rename: `sessions` → `workouts`.** Migration 013
+  renames the table and three columns (`session_id` → `workout_id`,
+  `session_name` → `workout_name`, `session_type` → `workout_type`),
+  cascades through `set_logs.session_id`, renames `session_completions`
+  → `workout_completions`, and renames `block_exercises` →
+  `block_lifting_items`. Opens with a Step 0 test-data wipe (Slices
+  4-6 verification data) so the subsequent UNIQUE-index step commits
+  cleanly. Slice 2's three seeded historical PRs (`set_log_id IS NULL`)
+  are preserved.
+- **Blocks promoted to a global per-user catalog.** Migration 013 drops
+  `blocks.session_id`, adds `blocks.owner_user_id`, adds
+  `block_category_enum` (`lifting` / `cardio` / `recovery`), makes
+  `block_type` nullable for cardio/recovery, adds CHECK constraint
+  `blocks_lifting_has_type`, and adds
+  `UNIQUE (owner_user_id, block_name)`.
+- **`workout_blocks` junction table** (migration 014) wires workouts
+  to blocks with `display_order` + polymorphic
+  `(preset_activity_id, preset_activity_type)` for cardio/recovery
+  preset wiring.
+- **Cardio + recovery catalogs** (migration 015): `cardio_activities`,
+  `recovery_activities`, `block_cardio_items`, `block_recovery_items`,
+  and a polymorphic `activity_completions` table (schema-only in 7a;
+  UI defers to a future slice).
+- **Comprehensive RLS extension** (migration 016): blocks +
+  block_lifting_items policies recreated with direct
+  `auth.uid() = owner_user_id` scoping (was FK-chain through sessions);
+  4-policy patterns added on all five new tables; `workout_blocks` uses
+  FK chain through `workouts → daily_schedules → training_plans`.
+- **Library tab as 6th bottom-nav surface** (Today / Plan / Library /
+  History / Nutrition / Settings). Labels resized 11px → 10px to fit
+  six tabs at 375px viewport. `Library` lucide icon. `startsWith`
+  match preserved so `/library/lifting/blocks/[id]` keeps the tab
+  highlighted.
+- **Library sub-tab IA** with URL-segment routing:
+  `/library` redirects to `/library/lifting`. Three sub-tabs
+  (`/library/lifting`, `/library/cardio`, `/library/recovery`) render
+  as Server Components; each fetches only its own data. `LibraryTabs`
+  is the slice's only Client Component (uses shadcn `Tabs` primitive
+  for the sub-tab navigator, derives active sub-tab from
+  `usePathname()`).
+- **Lifting sub-tab**: lists user's lifting blocks alphabetically as
+  `BlockListCard`s (block name, block_type badge, exercise count).
+  Tap → `/library/lifting/blocks/[block_id]` block detail page (block
+  header + exercise bank in `display_order` with prescribed range,
+  muscle-group caption, bodyweight tag, per-exercise notes).
+- **Cardio sub-tab**: single cardio block always-expanded inline; lists
+  cardio activities (name, format badge, distance, target zone). No
+  drill-in.
+- **Recovery sub-tab**: single recovery block always-expanded inline;
+  lists recovery activities (name + description). No drill-in.
+- **`BlockLink` cross-link component** (`src/components/shared/`)
+  extends the F6 contract from Slice 6.1's `ExerciseLink` /
+  `SessionLink` (renamed to `WorkoutLink` here). Single source of href
+  truth in `src/lib/library/crossLinks.ts` (`blockDetailHref`,
+  `liftingHref`, `cardioHref`, `recoveryHref`).
+- **Wiki rewrite** (`supabase/seed/wiki/current-plan.md`): four block-
+  name uniqueness edits to satisfy the new global UNIQUE constraint —
+  Mid Chest → Bench Press Focus, Lateral Raise → Shoulder Burnout,
+  Hot Yoga/Sauna split into Saturday Sauna + Sunday Hot Yoga, and
+  Saturday Lower ATG's Calves → ATG Calves. Cross-workout reuses
+  (`Vertical Pull` etc.) intentionally retained — the catalog model
+  working as designed.
+- **Seed parser rewrite** (`supabase/seed/lib/methodology-rules.ts`,
+  `seed-from-wiki.ts`, `lib/types.ts`): new `parseLiftingBlocksGlobal`
+  helper deduplicates by `(owner_user_id, block_name)` into the global
+  catalog; `workout_blocks` rows wire workouts to blocks; new
+  `parseCardioActivities` and `parseRecoveryActivitiesCatalog` helpers
+  populate the activity tables; `workout_blocks.preset_activity_id`
+  populated for cardio + recovery workouts (NULL for lifting). Re-seed
+  remains idempotent (Inserted 0 / Updated 0 / Deleted 0 on second
+  run).
+- **Rename-adaptation pass across existing surfaces**: Today, Plan,
+  Logger, History, and Sync layer all updated to reference renamed
+  DB columns. `today/session/[session_id]` → `today/workout/[workout_id]`,
+  `log/[session_id]` → `log/[workout_id]`. `SessionSummary` →
+  `WorkoutSummary`, `EndSessionDialog` → `EndWorkoutDialog`,
+  `SessionLink` → `WorkoutLink`, `getAllSessions` → `getAllWorkouts`.
+
+### Deviations from the slice spec
+
+- **TS-level `session_*` identifiers half-renamed.** ~25 references
+  across 11 files (logger components, plan day route, page-level prop
+  types, sync queue discriminated-union kinds) still use `session_id` /
+  `session_name` / `session_type` / `session_completion_*` as in-memory
+  JS field and prop names. DB layer is fully renamed and runtime is
+  unaffected. Edge Case 17 said the quality-review pass should rewrite
+  these; bundling the mechanical rename into 7a was deemed riskier
+  than helpful (would have diluted attention from the Calves issue and
+  added rename-introduced-bug risk to a slice already touching ~55
+  files). Deferred to Slice 7a.5 — a focused mechanical-rename PR
+  with no schema or behavioral changes. Logged 🟡 in KNOWN_ISSUES.md.
+
+### Bugs caught and fixed during the build
+
+- **Calves block_type collision.** Codex's first-pass parser hit a
+  same-name + different-block_type collision on "Calves" (Tuesday
+  Lower Compound = `failure`; Saturday Lower ATG block 8 = `mobility`
+  per Slice 2 spec). Resolved at first pass by hard-coding an override
+  forcing all "Calves" to `failure`, silently flipping Saturday's
+  classification. Caught in Phase 4B. Fix: renamed Saturday's "Calves"
+  → "ATG Calves" in the wiki (mirroring the Phase 0 rename pattern
+  for Mid Chest / Lateral Raise) and reverted the parser override.
+  Restored Slice 2's mobility classification. Verified end-to-end via
+  re-seed: `ATG Calves` → `mobility`, `Calves` → `failure`.
+- **Migration 013 UNIQUE-index conflict (caught pre-Codex).** The
+  initial spec applied `UNIQUE (owner_user_id, block_name)` against a
+  populated blocks table with cross-workout name duplicates. Would
+  have failed with 23505. Pre-hardened with a Step 0 test-data wipe
+  before Codex generation (committed at 9ce6839, documented in
+  DECISIONS.md).
+- **Migration 014 in-place RLS dependency.** Old policies on `blocks`
+  and `block_lifting_items` referenced `session_id` via FK chain
+  through sessions; once 013 renamed `session_id` → `workout_id`,
+  those policies became orphaned. 014 correctly drops them before
+  `ALTER TABLE blocks DROP COLUMN session_id`; 016 recreates them
+  with direct `auth.uid() = owner_user_id` scoping.
+
+### Verification
+
+- Phase 5 manual tests T25 + T26 (cross-link contract enforcement):
+  pass. `next/link` imports confined to `BlockLink.tsx`,
+  `WorkoutLink.tsx`, `ExerciseLink.tsx`, and `LibraryTabs.tsx`. Zero
+  hardcoded `/library/...` paths anywhere outside `crossLinks.ts` +
+  `BlockLink.tsx`. `crossLinks.ts` is the single source of href
+  truth.
+- `pnpm typecheck` ✓, `pnpm lint` ✓, `pnpm format:check` ✓.
+- Re-seed idempotent (Inserted 0 / Updated 0 / Deleted 0 on second
+  run).
+- Migrations 001-012 untouched (immutability rule held). All schema
+  work in 013-016.
+- `phase-5b-drafts/`, `workflow-v3.md`, `setup-guide-v2.md` added to
+  `.prettierignore` (Marcus-owned drafts, not version-controlled
+  deliverables).

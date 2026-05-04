@@ -12,34 +12,89 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
-      block_exercises: {
+      activity_completions: {
+        Row: {
+          activity_id: string;
+          activity_type: string;
+          completed_at: string | null;
+          completion_id: string;
+          duration_minutes: number | null;
+          notes: string | null;
+          perceived_intensity: string | null;
+          started_at: string;
+          user_id: string;
+          workout_id: string;
+        };
+        Insert: {
+          activity_id: string;
+          activity_type: string;
+          completed_at?: string | null;
+          completion_id?: string;
+          duration_minutes?: number | null;
+          notes?: string | null;
+          perceived_intensity?: string | null;
+          started_at: string;
+          user_id: string;
+          workout_id: string;
+        };
+        Update: {
+          activity_id?: string;
+          activity_type?: string;
+          completed_at?: string | null;
+          completion_id?: string;
+          duration_minutes?: number | null;
+          notes?: string | null;
+          perceived_intensity?: string | null;
+          started_at?: string;
+          user_id?: string;
+          workout_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_completions_workout_id_fkey";
+            columns: ["workout_id"];
+            isOneToOne: false;
+            referencedRelation: "workouts";
+            referencedColumns: ["workout_id"];
+          },
+        ];
+      };
+      block_cardio_items: {
+        Row: {
+          activity_id: string;
+          block_id: string;
+          display_order: number;
+        };
+        Insert: {
+          activity_id: string;
+          block_id: string;
+          display_order?: number;
+        };
+        Update: {
+          activity_id?: string;
+          block_id?: string;
+          display_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "block_cardio_items_activity_id_fkey";
+            columns: ["activity_id"];
+            isOneToOne: false;
+            referencedRelation: "cardio_activities";
+            referencedColumns: ["activity_id"];
+          },
+          {
+            foreignKeyName: "block_cardio_items_block_id_fkey";
+            columns: ["block_id"];
+            isOneToOne: false;
+            referencedRelation: "blocks";
+            referencedColumns: ["block_id"];
+          },
+        ];
+      };
+      block_lifting_items: {
         Row: {
           block_id: string;
           display_order: number;
@@ -72,37 +127,101 @@ export type Database = {
           },
         ];
       };
-      blocks: {
+      block_recovery_items: {
         Row: {
+          activity_id: string;
           block_id: string;
-          block_name: string;
-          block_type: Database["public"]["Enums"]["block_type_enum"];
           display_order: number;
-          session_id: string;
         };
         Insert: {
-          block_id?: string;
-          block_name: string;
-          block_type?: Database["public"]["Enums"]["block_type_enum"];
-          display_order: number;
-          session_id: string;
+          activity_id: string;
+          block_id: string;
+          display_order?: number;
         };
         Update: {
+          activity_id?: string;
           block_id?: string;
-          block_name?: string;
-          block_type?: Database["public"]["Enums"]["block_type_enum"];
           display_order?: number;
-          session_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "blocks_session_id_fkey";
-            columns: ["session_id"];
+            foreignKeyName: "block_recovery_items_activity_id_fkey";
+            columns: ["activity_id"];
             isOneToOne: false;
-            referencedRelation: "sessions";
-            referencedColumns: ["session_id"];
+            referencedRelation: "recovery_activities";
+            referencedColumns: ["activity_id"];
+          },
+          {
+            foreignKeyName: "block_recovery_items_block_id_fkey";
+            columns: ["block_id"];
+            isOneToOne: false;
+            referencedRelation: "blocks";
+            referencedColumns: ["block_id"];
           },
         ];
+      };
+      blocks: {
+        Row: {
+          block_category: Database["public"]["Enums"]["block_category_enum"];
+          block_id: string;
+          block_name: string;
+          block_type: Database["public"]["Enums"]["block_type_enum"] | null;
+          display_order: number;
+          owner_user_id: string;
+        };
+        Insert: {
+          block_category: Database["public"]["Enums"]["block_category_enum"];
+          block_id?: string;
+          block_name: string;
+          block_type?: Database["public"]["Enums"]["block_type_enum"] | null;
+          display_order: number;
+          owner_user_id: string;
+        };
+        Update: {
+          block_category?: Database["public"]["Enums"]["block_category_enum"];
+          block_id?: string;
+          block_name?: string;
+          block_type?: Database["public"]["Enums"]["block_type_enum"] | null;
+          display_order?: number;
+          owner_user_id?: string;
+        };
+        Relationships: [];
+      };
+      cardio_activities: {
+        Row: {
+          activity_id: string;
+          cardio_distance: string | null;
+          cardio_format: Database["public"]["Enums"]["cardio_format_enum"];
+          cardio_target_zone: Database["public"]["Enums"]["cardio_target_zone_enum"];
+          created_at: string;
+          description: string | null;
+          name: string;
+          owner_user_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          activity_id?: string;
+          cardio_distance?: string | null;
+          cardio_format: Database["public"]["Enums"]["cardio_format_enum"];
+          cardio_target_zone: Database["public"]["Enums"]["cardio_target_zone_enum"];
+          created_at?: string;
+          description?: string | null;
+          name: string;
+          owner_user_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          activity_id?: string;
+          cardio_distance?: string | null;
+          cardio_format?: Database["public"]["Enums"]["cardio_format_enum"];
+          cardio_target_zone?: Database["public"]["Enums"]["cardio_target_zone_enum"];
+          created_at?: string;
+          description?: string | null;
+          name?: string;
+          owner_user_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       daily_schedules: {
         Row: {
@@ -361,105 +480,32 @@ export type Database = {
         };
         Relationships: [];
       };
-      session_completions: {
+      recovery_activities: {
         Row: {
-          completed_at: string | null;
-          completed_block_ids: string[];
-          completion_id: string;
-          session_id: string;
-          started_at: string;
-          user_id: string;
-          was_ended_early: boolean;
-        };
-        Insert: {
-          completed_at?: string | null;
-          completed_block_ids?: string[];
-          completion_id?: string;
-          session_id: string;
-          started_at?: string;
-          user_id: string;
-          was_ended_early?: boolean;
-        };
-        Update: {
-          completed_at?: string | null;
-          completed_block_ids?: string[];
-          completion_id?: string;
-          session_id?: string;
-          started_at?: string;
-          user_id?: string;
-          was_ended_early?: boolean;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "session_completions_session_id_fkey";
-            columns: ["session_id"];
-            isOneToOne: false;
-            referencedRelation: "sessions";
-            referencedColumns: ["session_id"];
-          },
-        ];
-      };
-      sessions: {
-        Row: {
-          cardio_distance: string | null;
-          cardio_format:
-            | Database["public"]["Enums"]["cardio_format_enum"]
-            | null;
-          cardio_target_zone:
-            | Database["public"]["Enums"]["cardio_target_zone_enum"]
-            | null;
+          activity_id: string;
+          created_at: string;
           description: string | null;
-          display_order: number;
-          gym: string | null;
-          schedule_id: string;
-          session_id: string;
-          session_name: string;
-          session_type: Database["public"]["Enums"]["session_type_enum"];
-          timing: Database["public"]["Enums"]["timing_enum"];
+          name: string;
+          owner_user_id: string;
+          updated_at: string;
         };
         Insert: {
-          cardio_distance?: string | null;
-          cardio_format?:
-            | Database["public"]["Enums"]["cardio_format_enum"]
-            | null;
-          cardio_target_zone?:
-            | Database["public"]["Enums"]["cardio_target_zone_enum"]
-            | null;
+          activity_id?: string;
+          created_at?: string;
           description?: string | null;
-          display_order: number;
-          gym?: string | null;
-          schedule_id: string;
-          session_id?: string;
-          session_name: string;
-          session_type: Database["public"]["Enums"]["session_type_enum"];
-          timing?: Database["public"]["Enums"]["timing_enum"];
+          name: string;
+          owner_user_id: string;
+          updated_at?: string;
         };
         Update: {
-          cardio_distance?: string | null;
-          cardio_format?:
-            | Database["public"]["Enums"]["cardio_format_enum"]
-            | null;
-          cardio_target_zone?:
-            | Database["public"]["Enums"]["cardio_target_zone_enum"]
-            | null;
+          activity_id?: string;
+          created_at?: string;
           description?: string | null;
-          display_order?: number;
-          gym?: string | null;
-          schedule_id?: string;
-          session_id?: string;
-          session_name?: string;
-          session_type?: Database["public"]["Enums"]["session_type_enum"];
-          timing?: Database["public"]["Enums"]["timing_enum"];
+          name?: string;
+          owner_user_id?: string;
+          updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "sessions_schedule_id_fkey";
-            columns: ["schedule_id"];
-            isOneToOne: false;
-            referencedRelation: "daily_schedules";
-            referencedColumns: ["schedule_id"];
-          },
-        ];
+        Relationships: [];
       };
       set_logs: {
         Row: {
@@ -471,11 +517,11 @@ export type Database = {
           prescribed_max: number;
           prescribed_min: number;
           reps: number;
-          session_id: string;
           set_index: number;
           set_log_id: string;
           user_id: string;
           weight_kg: number | null;
+          workout_id: string;
         };
         Insert: {
           block_id: string;
@@ -486,11 +532,11 @@ export type Database = {
           prescribed_max: number;
           prescribed_min: number;
           reps: number;
-          session_id: string;
           set_index: number;
           set_log_id?: string;
           user_id: string;
           weight_kg?: number | null;
+          workout_id: string;
         };
         Update: {
           block_id?: string;
@@ -501,11 +547,11 @@ export type Database = {
           prescribed_max?: number;
           prescribed_min?: number;
           reps?: number;
-          session_id?: string;
           set_index?: number;
           set_log_id?: string;
           user_id?: string;
           weight_kg?: number | null;
+          workout_id?: string;
         };
         Relationships: [
           {
@@ -524,10 +570,10 @@ export type Database = {
           },
           {
             foreignKeyName: "set_logs_session_id_fkey";
-            columns: ["session_id"];
+            columns: ["workout_id"];
             isOneToOne: false;
-            referencedRelation: "sessions";
-            referencedColumns: ["session_id"];
+            referencedRelation: "workouts";
+            referencedColumns: ["workout_id"];
           },
         ];
       };
@@ -555,6 +601,145 @@ export type Database = {
         };
         Relationships: [];
       };
+      workout_blocks: {
+        Row: {
+          block_id: string;
+          display_order: number;
+          preset_activity_id: string | null;
+          preset_activity_type: string | null;
+          workout_id: string;
+        };
+        Insert: {
+          block_id: string;
+          display_order: number;
+          preset_activity_id?: string | null;
+          preset_activity_type?: string | null;
+          workout_id: string;
+        };
+        Update: {
+          block_id?: string;
+          display_order?: number;
+          preset_activity_id?: string | null;
+          preset_activity_type?: string | null;
+          workout_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workout_blocks_block_id_fkey";
+            columns: ["block_id"];
+            isOneToOne: false;
+            referencedRelation: "blocks";
+            referencedColumns: ["block_id"];
+          },
+          {
+            foreignKeyName: "workout_blocks_workout_id_fkey";
+            columns: ["workout_id"];
+            isOneToOne: false;
+            referencedRelation: "workouts";
+            referencedColumns: ["workout_id"];
+          },
+        ];
+      };
+      workout_completions: {
+        Row: {
+          completed_at: string | null;
+          completed_block_ids: string[];
+          completion_id: string;
+          started_at: string;
+          user_id: string;
+          was_ended_early: boolean;
+          workout_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          completed_block_ids?: string[];
+          completion_id?: string;
+          started_at?: string;
+          user_id: string;
+          was_ended_early?: boolean;
+          workout_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          completed_block_ids?: string[];
+          completion_id?: string;
+          started_at?: string;
+          user_id?: string;
+          was_ended_early?: boolean;
+          workout_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "session_completions_session_id_fkey";
+            columns: ["workout_id"];
+            isOneToOne: false;
+            referencedRelation: "workouts";
+            referencedColumns: ["workout_id"];
+          },
+        ];
+      };
+      workouts: {
+        Row: {
+          cardio_distance: string | null;
+          cardio_format:
+            | Database["public"]["Enums"]["cardio_format_enum"]
+            | null;
+          cardio_target_zone:
+            | Database["public"]["Enums"]["cardio_target_zone_enum"]
+            | null;
+          description: string | null;
+          display_order: number;
+          gym: string | null;
+          schedule_id: string;
+          timing: Database["public"]["Enums"]["timing_enum"];
+          workout_id: string;
+          workout_name: string;
+          workout_type: Database["public"]["Enums"]["session_type_enum"];
+        };
+        Insert: {
+          cardio_distance?: string | null;
+          cardio_format?:
+            | Database["public"]["Enums"]["cardio_format_enum"]
+            | null;
+          cardio_target_zone?:
+            | Database["public"]["Enums"]["cardio_target_zone_enum"]
+            | null;
+          description?: string | null;
+          display_order: number;
+          gym?: string | null;
+          schedule_id: string;
+          timing?: Database["public"]["Enums"]["timing_enum"];
+          workout_id?: string;
+          workout_name: string;
+          workout_type: Database["public"]["Enums"]["session_type_enum"];
+        };
+        Update: {
+          cardio_distance?: string | null;
+          cardio_format?:
+            | Database["public"]["Enums"]["cardio_format_enum"]
+            | null;
+          cardio_target_zone?:
+            | Database["public"]["Enums"]["cardio_target_zone_enum"]
+            | null;
+          description?: string | null;
+          display_order?: number;
+          gym?: string | null;
+          schedule_id?: string;
+          timing?: Database["public"]["Enums"]["timing_enum"];
+          workout_id?: string;
+          workout_name?: string;
+          workout_type?: Database["public"]["Enums"]["session_type_enum"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sessions_schedule_id_fkey";
+            columns: ["schedule_id"];
+            isOneToOne: false;
+            referencedRelation: "daily_schedules";
+            referencedColumns: ["schedule_id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -563,6 +748,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
+      block_category_enum: "lifting" | "cardio" | "recovery";
       block_type_enum: "failure" | "mobility" | "corrective";
       cardio_format_enum: "speed_run" | "endurance_run" | "basketball";
       cardio_target_zone_enum: "sprint" | "zone_2" | "anaerobic" | "game_pace";
@@ -699,11 +885,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
+      block_category_enum: ["lifting", "cardio", "recovery"],
       block_type_enum: ["failure", "mobility", "corrective"],
       cardio_format_enum: ["speed_run", "endurance_run", "basketball"],
       cardio_target_zone_enum: ["sprint", "zone_2", "anaerobic", "game_pace"],

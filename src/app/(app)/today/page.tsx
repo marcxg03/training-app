@@ -1,5 +1,3 @@
-import type { QueryData } from "@supabase/supabase-js";
-
 import type { Enums } from "@/lib/supabase/types";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import {
@@ -16,10 +14,10 @@ const timingOrder: Record<Enums<"timing_enum">, number> = {
   pm: 2,
 };
 
-type TodaySessionRow = {
-  session_id: string;
-  session_type: Enums<"session_type_enum">;
-  session_name: string;
+type TodayWorkoutRow = {
+  workout_id: string;
+  workout_type: Enums<"session_type_enum">;
+  workout_name: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
   description: string | null;
@@ -28,15 +26,11 @@ type TodaySessionRow = {
   display_order: number;
 };
 
-function sortSessions(left: TodaySessionRow, right: TodaySessionRow) {
-  const timingDelta = timingOrder[left.timing] - timingOrder[right.timing];
-
-  if (timingDelta !== 0) {
-    return timingDelta;
-  }
-
-  return left.display_order - right.display_order;
-}
+type WorkoutPresetRow = {
+  workout_id: string;
+  preset_activity_id: string | null;
+  preset_activity_type: "cardio" | "recovery" | null;
+};
 
 function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
   if (!zone) {
@@ -48,97 +42,180 @@ function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function buildSessionSummary(session: TodaySessionRow) {
-  if (session.session_type === "cardio") {
+function sortWorkouts(left: TodayWorkoutRow, right: TodayWorkoutRow) {
+  const timingDelta = timingOrder[left.timing] - timingOrder[right.timing];
+
+  if (timingDelta !== 0) {
+    return timingDelta;
+  }
+
+  return left.display_order - right.display_order;
+}
+
+function buildWorkoutSummary(
+  workout: TodayWorkoutRow,
+  presetLabel: string | null,
+) {
+  if (workout.workout_type === "cardio") {
     const parts = [
-      session.cardio_distance,
-      formatCardioZone(session.cardio_target_zone),
+      presetLabel,
+      workout.cardio_distance,
+      formatCardioZone(workout.cardio_target_zone),
     ].filter(Boolean);
 
     if (parts.length > 0) {
       return parts.join(" · ");
     }
 
-    return session.description ?? "Cardio session.";
+    return workout.description ?? "Cardio workout.";
   }
 
-  if (session.session_type === "recovery") {
-    return session.description ?? "Recovery session.";
+  if (workout.workout_type === "recovery") {
+    return presetLabel ?? workout.description ?? "Recovery workout.";
   }
 
   return (
-    session.description ??
-    "Open session detail to view blocks and exercise bank."
+    workout.description ??
+    "Open workout detail to view blocks and exercise bank."
+  );
+}
+
+async function getPresetActivityNames(presets: WorkoutPresetRow[]) {
+  const supabase = await createClient();
+  const cardioIds = presets
+    .filter(
+      (
+        preset,
+      ): preset is WorkoutPresetRow & {
+        preset_activity_id: string;
+        preset_activity_type: "cardio";
+      } =>
+        preset.preset_activity_id !== null &&
+        preset.preset_activity_type === "cardio",
+    )
+    .map((preset) => preset.preset_activity_id);
+  const recoveryIds = presets
+    .filter(
+      (
+        preset,
+      ): preset is WorkoutPresetRow & {
+        preset_activity_id: string;
+        preset_activity_type: "recovery";
+      } =>
+        preset.preset_activity_id !== null &&
+        preset.preset_activity_type === "recovery",
+    )
+    .map((preset) => preset.preset_activity_id);
+
+  const [
+    { data: cardioActivities, error: cardioError },
+    { data: recoveryActivities, error: recoveryError },
+  ] = await Promise.all([
+    cardioIds.length
+      ? supabase
+          .from("cardio_activities")
+          .select("activity_id, name")
+          .in("activity_id", cardioIds)
+      : Promise.resolve({ data: [], error: null }),
+    recoveryIds.length
+      ? supabase
+          .from("recovery_activities")
+          .select("activity_id, name")
+          .in("activity_id", recoveryIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (cardioError) {
+    throw new Error(
+      `Failed to load cardio presets for today: ${cardioError.message}`,
+    );
+  }
+
+  if (recoveryError) {
+    throw new Error(
+      `Failed to load recovery presets for today: ${recoveryError.message}`,
+    );
+  }
+
+  return new Map(
+    [...cardioActivities, ...recoveryActivities].map((activity) => [
+      activity.activity_id,
+      activity.name,
+    ]),
   );
 }
 
 async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
   const supabase = await createClient();
-  const query = supabase
+  const { data: schedule, error: scheduleError } = await supabase
     .from("daily_schedules")
-    .select(
-      `
-        schedule_id,
-        day_of_week,
-        is_rest_day,
-        sessions (
-          session_id,
-          session_type,
-          session_name,
-          timing,
-          gym,
-          description,
-          cardio_distance,
-          cardio_target_zone,
-          display_order
-        ),
-        training_plans!inner (
-          plan_id,
-          is_active
-        )
-      `,
-    )
+    .select("schedule_id, is_rest_day, training_plans!inner(is_active)")
     .eq("day_of_week", dayOfWeek)
     .eq("training_plans.is_active", true)
     .maybeSingle();
 
-  type TodayScheduleRecord = QueryData<typeof query>;
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(`Failed to load today's schedule: ${error.message}`);
+  if (scheduleError) {
+    throw new Error(
+      `Failed to load today's schedule: ${scheduleError.message}`,
+    );
   }
 
-  if (!data) {
+  if (!schedule) {
     return null;
   }
 
-  const schedule: TodayScheduleRecord = data;
-  const sessions = (schedule.sessions ?? [])
-    .map<TodaySessionRow>((session) => ({
-      session_id: session.session_id,
-      session_type: session.session_type,
-      session_name: session.session_name,
-      timing: session.timing,
-      gym: session.gym,
-      description: session.description,
-      cardio_distance: session.cardio_distance,
-      cardio_target_zone: session.cardio_target_zone,
-      display_order: session.display_order,
-    }))
-    .sort(sortSessions);
+  const { data: workouts, error: workoutsError } = await supabase
+    .from("workouts")
+    .select(
+      "workout_id, workout_type, workout_name, timing, gym, description, cardio_distance, cardio_target_zone, display_order",
+    )
+    .eq("schedule_id", schedule.schedule_id);
+
+  if (workoutsError) {
+    throw new Error(
+      `Failed to load today's workouts: ${workoutsError.message}`,
+    );
+  }
+
+  const sortedWorkouts = [...workouts].sort(sortWorkouts);
+  const workoutIds = sortedWorkouts.map((workout) => workout.workout_id);
+  const { data: presets, error: presetsError } = workoutIds.length
+    ? await supabase
+        .from("workout_blocks")
+        .select("workout_id, preset_activity_id, preset_activity_type")
+        .in("workout_id", workoutIds)
+        .not("preset_activity_id", "is", null)
+    : { data: [], error: null };
+
+  if (presetsError) {
+    throw new Error(
+      `Failed to load workout presets for today: ${presetsError.message}`,
+    );
+  }
+
+  const presetNames = await getPresetActivityNames(presets ?? []);
+  const presetByWorkoutId = new Map(
+    (presets ?? []).map((preset) => [
+      preset.workout_id,
+      preset.preset_activity_id
+        ? (presetNames.get(preset.preset_activity_id) ?? null)
+        : null,
+    ]),
+  );
 
   return {
     isRestDay: schedule.is_rest_day,
-    sessions: sessions.map<TodaySessionListItem>((session) => ({
-      sessionId: session.session_id,
-      sessionType: session.session_type,
-      sessionName: session.session_name,
-      timing: session.timing,
-      gym: session.gym,
-      displayOrder: session.display_order,
-      summary: buildSessionSummary(session),
+    sessions: sortedWorkouts.map<TodaySessionListItem>((workout) => ({
+      workoutId: workout.workout_id,
+      workoutType: workout.workout_type,
+      workoutName: workout.workout_name,
+      timing: workout.timing,
+      gym: workout.gym,
+      displayOrder: workout.display_order,
+      summary: buildWorkoutSummary(
+        workout,
+        presetByWorkoutId.get(workout.workout_id) ?? null,
+      ),
     })),
   };
 }

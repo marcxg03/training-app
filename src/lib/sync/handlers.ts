@@ -4,10 +4,10 @@ import { isRetryable } from "@/lib/sync/classify";
 import type {
   QueueRow,
   QueueRowKind,
-  SessionCompletionBlockCompletePayload,
-  SessionCompletionEndPayload,
-  SessionCompletionStartPayload,
   SetLogInsertPayload,
+  WorkoutCompletionBlockCompletePayload,
+  WorkoutCompletionEndPayload,
+  WorkoutCompletionStartPayload,
 } from "@/lib/sync/queue";
 
 export type HandlerResult = {
@@ -63,12 +63,12 @@ async function handleSetLogInsert(
   return toFailureResult(error, status);
 }
 
-async function handleSessionCompletionStart(
-  row: Extract<QueueRow, { kind: "session_completion_start" }>,
+async function handleWorkoutCompletionStart(
+  row: Extract<QueueRow, { kind: "workout_completion_start" }>,
 ) {
   const supabase = createClient();
   const { error, status } = await supabase
-    .from("session_completions")
+    .from("workout_completions")
     .insert(row.payload);
 
   if (!error || isConflictError(status, error)) {
@@ -82,8 +82,8 @@ async function handleSessionCompletionStart(
   return toFailureResult(error, status);
 }
 
-async function handleSessionCompletionBlockComplete(
-  row: Extract<QueueRow, { kind: "session_completion_block_complete" }>,
+async function handleWorkoutCompletionBlockComplete(
+  row: Extract<QueueRow, { kind: "workout_completion_block_complete" }>,
 ) {
   const supabase = createClient();
   const {
@@ -91,7 +91,7 @@ async function handleSessionCompletionBlockComplete(
     error: loadError,
     status: loadStatus,
   } = await supabase
-    .from("session_completions")
+    .from("workout_completions")
     .select("completed_block_ids")
     .eq("completion_id", row.payload.completion_id)
     .maybeSingle();
@@ -104,7 +104,7 @@ async function handleSessionCompletionBlockComplete(
     return {
       ok: false,
       retryable: false,
-      errorMessage: "Session completion not found.",
+      errorMessage: "Workout completion not found.",
     } satisfies HandlerResult;
   }
 
@@ -117,7 +117,7 @@ async function handleSessionCompletionBlockComplete(
   }
 
   const { error: updateError, status: updateStatus } = await supabase
-    .from("session_completions")
+    .from("workout_completions")
     .update({
       completed_block_ids: [
         ...existingCompletion.completed_block_ids,
@@ -137,12 +137,12 @@ async function handleSessionCompletionBlockComplete(
   return toFailureResult(updateError, updateStatus);
 }
 
-async function handleSessionCompletionEnd(
-  row: Extract<QueueRow, { kind: "session_completion_end" }>,
+async function handleWorkoutCompletionEnd(
+  row: Extract<QueueRow, { kind: "workout_completion_end" }>,
 ) {
   const supabase = createClient();
   const { error, status } = await supabase
-    .from("session_completions")
+    .from("workout_completions")
     .update({
       completed_at: row.payload.completed_at,
       completed_block_ids: row.payload.completed_block_ids,
@@ -165,9 +165,9 @@ export const handlers: {
   [K in QueueRowKind]: QueueHandler<K>;
 } = {
   set_log_insert: handleSetLogInsert,
-  session_completion_start: handleSessionCompletionStart,
-  session_completion_block_complete: handleSessionCompletionBlockComplete,
-  session_completion_end: handleSessionCompletionEnd,
+  workout_completion_start: handleWorkoutCompletionStart,
+  workout_completion_block_complete: handleWorkoutCompletionBlockComplete,
+  workout_completion_end: handleWorkoutCompletionEnd,
 };
 
 export async function runPrDetectionForSetLog(setLog: SetLogInsertPayload) {
@@ -238,7 +238,7 @@ export async function runPrDetectionForSetLog(setLog: SetLogInsertPayload) {
 
 export type QueuePayloads = {
   set_log_insert: SetLogInsertPayload;
-  session_completion_block_complete: SessionCompletionBlockCompletePayload;
-  session_completion_end: SessionCompletionEndPayload;
-  session_completion_start: SessionCompletionStartPayload;
+  workout_completion_block_complete: WorkoutCompletionBlockCompletePayload;
+  workout_completion_end: WorkoutCompletionEndPayload;
+  workout_completion_start: WorkoutCompletionStartPayload;
 };

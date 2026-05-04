@@ -48,14 +48,14 @@ function describeQueueRow(row: StoredQueueRow) {
   switch (knownRow.kind) {
     case "set_log_insert":
       return `Set ${knownRow.payload.set_index} saved`;
-    case "session_completion_start":
-      return "Session started";
-    case "session_completion_block_complete":
+    case "workout_completion_start":
+      return "Workout started";
+    case "workout_completion_block_complete":
       return "Block marked done";
-    case "session_completion_end":
+    case "workout_completion_end":
       return knownRow.payload.was_ended_early
-        ? "Session ended early"
-        : "Session completed";
+        ? "Workout ended early"
+        : "Workout completed";
     default:
       return "Queued write";
   }

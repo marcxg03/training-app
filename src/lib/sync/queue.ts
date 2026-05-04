@@ -6,9 +6,9 @@ export const MAX_QUEUE_ERROR_LENGTH = 200;
 
 export const queueRowKinds = [
   "set_log_insert",
-  "session_completion_start",
-  "session_completion_block_complete",
-  "session_completion_end",
+  "workout_completion_start",
+  "workout_completion_block_complete",
+  "workout_completion_end",
 ] as const;
 
 export type QueueRowKind = (typeof queueRowKinds)[number];
@@ -23,31 +23,31 @@ export type SetLogInsertPayload = Pick<
   | "prescribed_max"
   | "prescribed_min"
   | "reps"
-  | "session_id"
   | "set_index"
   | "set_log_id"
   | "user_id"
   | "weight_kg"
+  | "workout_id"
 >;
 
-export type SessionCompletionStartPayload = Pick<
-  Tables<"session_completions">,
+export type WorkoutCompletionStartPayload = Pick<
+  Tables<"workout_completions">,
   | "completed_at"
   | "completed_block_ids"
   | "completion_id"
-  | "session_id"
   | "started_at"
   | "user_id"
   | "was_ended_early"
+  | "workout_id"
 >;
 
-export type SessionCompletionBlockCompletePayload = {
+export type WorkoutCompletionBlockCompletePayload = {
   block_id: string;
   completion_id: string;
 };
 
-export type SessionCompletionEndPayload = Pick<
-  Tables<"session_completions">,
+export type WorkoutCompletionEndPayload = Pick<
+  Tables<"workout_completions">,
   "completed_block_ids" | "completion_id" | "was_ended_early"
 > & {
   completed_at: string;
@@ -65,15 +65,14 @@ type QueueRowBase<K extends string, P> = {
 
 export type QueueRow =
   | QueueRowBase<"set_log_insert", SetLogInsertPayload>
-  | QueueRowBase<"session_completion_start", SessionCompletionStartPayload>
+  | QueueRowBase<"workout_completion_start", WorkoutCompletionStartPayload>
   | QueueRowBase<
-      "session_completion_block_complete",
-      SessionCompletionBlockCompletePayload
+      "workout_completion_block_complete",
+      WorkoutCompletionBlockCompletePayload
     >
-  | QueueRowBase<"session_completion_end", SessionCompletionEndPayload>;
+  | QueueRowBase<"workout_completion_end", WorkoutCompletionEndPayload>;
 
 export type UnknownQueueRow = QueueRowBase<string, unknown>;
-
 export type StoredQueueRow = QueueRow | UnknownQueueRow;
 
 export type QueueChangeDetail = {
@@ -111,6 +110,57 @@ function isStoredQueueRow(value: unknown): value is StoredQueueRow {
       value.last_attempt_at === null) &&
     (typeof value.last_error === "string" || value.last_error === null)
   );
+}
+
+function normalizeStoredQueueRow(row: StoredQueueRow): StoredQueueRow {
+  if (!isQueueRecord(row.payload)) {
+    return row;
+  }
+
+  const payload = row.payload as Record<string, unknown>;
+
+  if (row.kind === "session_completion_start") {
+    return {
+      ...row,
+      kind: "workout_completion_start",
+      payload: {
+        ...payload,
+        workout_id:
+          typeof payload.workout_id === "string"
+            ? payload.workout_id
+            : payload.session_id,
+      },
+    } as StoredQueueRow;
+  }
+
+  if (row.kind === "session_completion_block_complete") {
+    return {
+      ...row,
+      kind: "workout_completion_block_complete",
+    } as StoredQueueRow;
+  }
+
+  if (row.kind === "session_completion_end") {
+    return {
+      ...row,
+      kind: "workout_completion_end",
+    } as StoredQueueRow;
+  }
+
+  if (row.kind === "set_log_insert" && typeof payload.session_id === "string") {
+    return {
+      ...row,
+      payload: {
+        ...payload,
+        workout_id:
+          typeof payload.workout_id === "string"
+            ? payload.workout_id
+            : payload.session_id,
+      },
+    } as StoredQueueRow;
+  }
+
+  return row;
 }
 
 export function isKnownQueueKind(kind: string): kind is QueueRowKind {
@@ -176,7 +226,13 @@ export function loadQueue(userId: string) {
         continue;
       }
 
-      rows.push(parsedValue);
+      const normalizedValue = normalizeStoredQueueRow(parsedValue);
+
+      if (JSON.stringify(parsedValue) !== JSON.stringify(normalizedValue)) {
+        window.localStorage.setItem(key, JSON.stringify(normalizedValue));
+      }
+
+      rows.push(normalizedValue);
     } catch (error) {
       console.warn("Failed to parse queue row", key, error);
     }
@@ -212,7 +268,7 @@ export function updateAttempt(
     }
 
     const nextRow: StoredQueueRow = {
-      ...parsedValue,
+      ...normalizeStoredQueueRow(parsedValue),
       attempts: parsedValue.attempts + 1,
       last_attempt_at: new Date().toISOString(),
       last_error: error ? error.slice(0, MAX_QUEUE_ERROR_LENGTH) : null,

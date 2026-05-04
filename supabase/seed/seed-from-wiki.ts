@@ -11,28 +11,28 @@ import type {
 } from "../../src/lib/supabase/types";
 import { wikiPaths } from "../../src/lib/utils/wiki-paths";
 import { parsePlanFromWiki } from "./lib/methodology-rules";
+import { bodyweightExerciseNames } from "./lib/bodyweight-exercises";
 import { createSupabaseAdminClient } from "./lib/supabase-admin";
 import type {
   DayOfWeek,
   ParsedBlock,
   ParsedDaySpec,
   ParsedExerciseSpec,
-  ParsedSessionSpec,
+  ParsedWorkoutSpec,
   TrainingPlanSpec,
   WikiFiles,
 } from "./lib/types";
-import { bodyweightExerciseNames } from "./lib/bodyweight-exercises";
 
 type AdminClient = SupabaseClient<Database>;
 type TrainingPlanRow = Tables<"training_plans">;
 type ScheduleRow = Tables<"daily_schedules">;
-type SessionRow = Tables<"sessions">;
+type WorkoutRow = Tables<"workouts">;
 type BlockRow = Tables<"blocks">;
 type ExerciseRow = Tables<"exercises">;
-type BlockExerciseRow = Tables<"block_exercises">;
+type BlockLiftingItemRow = Tables<"block_lifting_items">;
+type CardioActivityRow = Tables<"cardio_activities">;
+type RecoveryActivityRow = Tables<"recovery_activities">;
 type NutritionTargetsRow = Tables<"nutrition_targets">;
-type PlanTemplateRow = Tables<"plan_templates">;
-type PRHistoryRow = Tables<"pr_history">;
 
 type SeedSummary = {
   inserted: number;
@@ -66,7 +66,7 @@ function stableStringify(value: unknown): string {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, nestedValue]) => nestedValue !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b));
+      .sort(([left], [right]) => left.localeCompare(right));
 
     return `{${entries
       .map(
@@ -278,9 +278,7 @@ async function syncSchedules(
 
     const { data: updatedSchedule, error: updateError } = await supabase
       .from("daily_schedules")
-      .update({
-        is_rest_day: desired.is_rest_day,
-      })
+      .update({ is_rest_day: desired.is_rest_day })
       .eq("schedule_id", existing.schedule_id)
       .select("*")
       .single();
@@ -298,31 +296,33 @@ async function syncSchedules(
   return scheduleByDay;
 }
 
-async function syncSessions(
+async function syncWorkouts(
   supabase: AdminClient,
   days: ParsedDaySpec[],
   schedules: Map<DayOfWeek, ScheduleRow>,
 ) {
   const scheduleIds = [...schedules.values()].map((row) => row.schedule_id);
-  const { data, error } = await supabase
-    .from("sessions")
-    .select("*")
-    .in("schedule_id", scheduleIds)
-    .order("display_order");
+  const { data, error } = scheduleIds.length
+    ? await supabase
+        .from("workouts")
+        .select("*")
+        .in("schedule_id", scheduleIds)
+        .order("display_order")
+    : { data: [], error: null };
 
   if (error) {
-    throw new Error(`Failed to load sessions: ${error.message}`);
+    throw new Error(`Failed to load workouts: ${error.message}`);
   }
 
-  const existingBySchedule = new Map<string, SessionRow[]>();
+  const existingBySchedule = new Map<string, WorkoutRow[]>();
 
-  for (const row of data) {
+  for (const row of data ?? []) {
     const list = existingBySchedule.get(row.schedule_id) ?? [];
     list.push(row);
     existingBySchedule.set(row.schedule_id, list);
   }
 
-  const sessionByKey = new Map<string, SessionRow>();
+  const workoutByKey = new Map<string, WorkoutRow>();
 
   for (const day of days) {
     const schedule = schedules.get(day.dayOfWeek);
@@ -333,48 +333,48 @@ async function syncSessions(
 
     const existingRows = existingBySchedule.get(schedule.schedule_id) ?? [];
 
-    for (const session of day.sessions) {
+    for (const workout of day.workouts) {
       const existing = existingRows.find(
-        (row) => row.display_order === session.displayOrder,
+        (row) => row.display_order === workout.displayOrder,
       );
       const desired = {
         schedule_id: schedule.schedule_id,
-        session_type: session.sessionType,
-        session_name: session.sessionName,
-        timing: session.timing,
-        gym: session.gym,
-        description: session.description,
-        display_order: session.displayOrder,
-        cardio_format: session.cardioFormat,
-        cardio_distance: session.cardioDistance,
-        cardio_target_zone: session.cardioTargetZone,
+        workout_type: workout.workoutType,
+        workout_name: workout.workoutName,
+        timing: workout.timing,
+        gym: workout.gym,
+        description: workout.description,
+        display_order: workout.displayOrder,
+        cardio_format: workout.cardioFormat,
+        cardio_distance: workout.cardioDistance,
+        cardio_target_zone: workout.cardioTargetZone,
       } as const;
 
       if (!existing) {
-        const { data: insertedSession, error: insertError } = await supabase
-          .from("sessions")
+        const { data: insertedWorkout, error: insertError } = await supabase
+          .from("workouts")
           .insert(desired)
           .select("*")
           .single();
 
         if (insertError) {
           throw new Error(
-            `Failed to insert session "${session.sessionName}": ${insertError.message}`,
+            `Failed to insert workout "${workout.workoutName}": ${insertError.message}`,
           );
         }
 
         countChange("inserted");
-        sessionByKey.set(
-          `${day.dayOfWeek}:${session.displayOrder}`,
-          insertedSession,
+        workoutByKey.set(
+          `${day.dayOfWeek}:${workout.displayOrder}`,
+          insertedWorkout,
         );
         continue;
       }
 
       const comparableExisting = {
         schedule_id: existing.schedule_id,
-        session_type: existing.session_type,
-        session_name: existing.session_name,
+        workout_type: existing.workout_type,
+        workout_name: existing.workout_name,
         timing: existing.timing,
         gym: existing.gym,
         description: existing.description,
@@ -386,32 +386,32 @@ async function syncSessions(
 
       if (equalRows(comparableExisting, desired)) {
         countChange("unchanged");
-        sessionByKey.set(`${day.dayOfWeek}:${session.displayOrder}`, existing);
+        workoutByKey.set(`${day.dayOfWeek}:${workout.displayOrder}`, existing);
         continue;
       }
 
-      const { data: updatedSession, error: updateError } = await supabase
-        .from("sessions")
+      const { data: updatedWorkout, error: updateError } = await supabase
+        .from("workouts")
         .update(desired)
-        .eq("session_id", existing.session_id)
+        .eq("workout_id", existing.workout_id)
         .select("*")
         .single();
 
       if (updateError) {
         throw new Error(
-          `Failed to update session "${session.sessionName}": ${updateError.message}`,
+          `Failed to update workout "${workout.workoutName}": ${updateError.message}`,
         );
       }
 
       countChange("updated");
-      sessionByKey.set(
-        `${day.dayOfWeek}:${session.displayOrder}`,
-        updatedSession,
+      workoutByKey.set(
+        `${day.dayOfWeek}:${workout.displayOrder}`,
+        updatedWorkout,
       );
     }
 
     const desiredOrders = new Set(
-      day.sessions.map((session) => session.displayOrder),
+      day.workouts.map((workout) => workout.displayOrder),
     );
     const staleRows = existingRows.filter(
       (row) => !desiredOrders.has(row.display_order),
@@ -419,13 +419,13 @@ async function syncSessions(
 
     for (const staleRow of staleRows) {
       const { error: deleteError } = await supabase
-        .from("sessions")
+        .from("workouts")
         .delete()
-        .eq("session_id", staleRow.session_id);
+        .eq("workout_id", staleRow.workout_id);
 
       if (deleteError) {
         throw new Error(
-          `Failed to delete stale session "${staleRow.session_name}": ${deleteError.message}`,
+          `Failed to delete stale workout "${staleRow.workout_name}": ${deleteError.message}`,
         );
       }
 
@@ -433,197 +433,40 @@ async function syncSessions(
     }
   }
 
-  return sessionByKey;
+  return workoutByKey;
 }
 
-async function syncBlocks(
-  supabase: AdminClient,
-  days: ParsedDaySpec[],
-  sessions: Map<string, SessionRow>,
-) {
-  const liftingSessionIds = [...sessions.values()]
-    .filter((row) => row.session_type === "lifting")
-    .map((row) => row.session_id);
-
-  const { data, error } = liftingSessionIds.length
-    ? await supabase
-        .from("blocks")
-        .select("*")
-        .in("session_id", liftingSessionIds)
-        .order("display_order")
-    : { data: [], error: null };
-
-  if (error) {
-    throw new Error(`Failed to load blocks: ${error.message}`);
-  }
-
-  const existingBySession = new Map<string, BlockRow[]>();
-
-  for (const row of data ?? []) {
-    const list = existingBySession.get(row.session_id) ?? [];
-    list.push(row);
-    existingBySession.set(row.session_id, list);
-  }
-
-  const blockByKey = new Map<string, BlockRow>();
-
-  for (const day of days) {
-    for (const session of day.sessions.filter(
-      (entry) => entry.sessionType === "lifting",
-    )) {
-      const sessionRow = sessions.get(
-        `${day.dayOfWeek}:${session.displayOrder}`,
-      );
-
-      if (!sessionRow) {
-        throw new Error(
-          `Missing session row for ${day.dayLabel} ${session.sessionName}.`,
-        );
-      }
-
-      const existingRows = existingBySession.get(sessionRow.session_id) ?? [];
-
-      for (const block of session.blocks) {
-        const existing = existingRows.find(
-          (row) => row.display_order === block.displayOrder,
-        );
-        const desired = {
-          session_id: sessionRow.session_id,
-          block_name: block.blockName,
-          block_type: block.blockType,
-          display_order: block.displayOrder,
-        } as const;
-
-        if (!existing) {
-          const { data: insertedBlock, error: insertError } = await supabase
-            .from("blocks")
-            .insert(desired)
-            .select("*")
-            .single();
-
-          if (insertError) {
-            throw new Error(
-              `Failed to insert block "${block.blockName}": ${insertError.message}`,
-            );
-          }
-
-          countChange("inserted");
-          blockByKey.set(
-            `${sessionRow.session_id}:${block.displayOrder}`,
-            insertedBlock,
-          );
-          continue;
-        }
-
-        const comparableExisting = {
-          session_id: existing.session_id,
-          block_name: existing.block_name,
-          block_type: existing.block_type,
-          display_order: existing.display_order,
-        };
-
-        if (equalRows(comparableExisting, desired)) {
-          countChange("unchanged");
-          blockByKey.set(
-            `${sessionRow.session_id}:${block.displayOrder}`,
-            existing,
-          );
-          continue;
-        }
-
-        const { data: updatedBlock, error: updateError } = await supabase
-          .from("blocks")
-          .update(desired)
-          .eq("block_id", existing.block_id)
-          .select("*")
-          .single();
-
-        if (updateError) {
-          throw new Error(
-            `Failed to update block "${block.blockName}": ${updateError.message}`,
-          );
-        }
-
-        countChange("updated");
-        blockByKey.set(
-          `${sessionRow.session_id}:${block.displayOrder}`,
-          updatedBlock,
-        );
-      }
-
-      const desiredOrders = new Set(
-        session.blocks.map((block) => block.displayOrder),
-      );
-      const staleRows = existingRows.filter(
-        (row) => !desiredOrders.has(row.display_order),
-      );
-
-      for (const staleRow of staleRows) {
-        const { error: deleteError } = await supabase
-          .from("blocks")
-          .delete()
-          .eq("block_id", staleRow.block_id);
-
-        if (deleteError) {
-          throw new Error(
-            `Failed to delete stale block "${staleRow.block_name}": ${deleteError.message}`,
-          );
-        }
-
-        countChange("deleted");
-      }
-    }
-  }
-
-  return blockByKey;
-}
-
-function collectExercises(days: ParsedDaySpec[]) {
+function collectExercises(liftingBlocks: ParsedBlock[]) {
   const exercisesByName = new Map<string, ParsedExerciseSpec>();
 
-  for (const day of days) {
-    for (const session of day.sessions) {
-      for (const block of session.blocks) {
-        for (const exercise of block.exercises) {
-          const existing = exercisesByName.get(exercise.name);
+  for (const block of liftingBlocks) {
+    for (const exercise of block.exercises) {
+      const existing = exercisesByName.get(exercise.name);
 
-          if (existing) {
-            summary.exercisesDeduped += 1;
-            const mergedNotes =
-              exercise.notes &&
-              existing.notes &&
-              exercise.notes !== existing.notes
-                ? `${existing.notes}\n${exercise.notes}`
-                : existing.notes || exercise.notes;
-
-            exercisesByName.set(exercise.name, {
-              ...existing,
-              notes: mergedNotes.trim(),
-              prescribedMin: Math.min(
-                existing.prescribedMin,
-                exercise.prescribedMin,
-              ),
-              prescribedMax: Math.max(
-                existing.prescribedMax,
-                exercise.prescribedMax,
-              ),
-              muscleGroups: [
-                ...new Set([
-                  ...existing.muscleGroups,
-                  ...exercise.muscleGroups,
-                ]),
-              ],
-              isCompound: existing.isCompound || exercise.isCompound,
-            });
-            continue;
-          }
-
-          exercisesByName.set(exercise.name, {
-            ...exercise,
-            muscleGroups: [...exercise.muscleGroups],
-          });
-        }
+      if (!existing) {
+        exercisesByName.set(exercise.name, {
+          ...exercise,
+          muscleGroups: [...exercise.muscleGroups],
+        });
+        continue;
       }
+
+      summary.exercisesDeduped += 1;
+      const mergedNotes =
+        exercise.notes && existing.notes && exercise.notes !== existing.notes
+          ? `${existing.notes}\n${exercise.notes}`
+          : existing.notes || exercise.notes;
+
+      exercisesByName.set(exercise.name, {
+        ...existing,
+        notes: mergedNotes.trim(),
+        prescribedMin: Math.min(existing.prescribedMin, exercise.prescribedMin),
+        prescribedMax: Math.max(existing.prescribedMax, exercise.prescribedMax),
+        muscleGroups: [
+          ...new Set([...existing.muscleGroups, ...exercise.muscleGroups]),
+        ],
+        isCompound: existing.isCompound || exercise.isCompound,
+      });
     }
   }
 
@@ -635,10 +478,9 @@ function collectExercises(days: ParsedDaySpec[]) {
 async function syncExercises(
   supabase: AdminClient,
   userId: string,
-  days: ParsedDaySpec[],
+  plan: TrainingPlanSpec,
 ) {
-  const desiredExercises = collectExercises(days);
-
+  const desiredExercises = collectExercises(plan.liftingBlocks);
   const { data: existingRows, error: loadError } = await supabase
     .from("exercises")
     .select("*")
@@ -649,7 +491,6 @@ async function syncExercises(
   }
 
   const existingByName = new Map(existingRows.map((row) => [row.name, row]));
-
   const upsertPayload: TablesInsert<"exercises">[] = [];
 
   for (const exercise of desiredExercises) {
@@ -701,6 +542,10 @@ async function syncExercises(
     }
   }
 
+  if (desiredExercises.length === 0) {
+    return new Map<string, ExerciseRow>();
+  }
+
   const { data: refreshedRows, error: refreshError } = await supabase
     .from("exercises")
     .select("*")
@@ -714,7 +559,7 @@ async function syncExercises(
     throw new Error(`Failed to refresh exercises: ${refreshError.message}`);
   }
 
-  return new Map(refreshedRows.map((row) => [row.name, row]));
+  return new Map(refreshedRows.map((row) => [row.name, row] as const));
 }
 
 async function syncBodyweightExerciseFlags(
@@ -763,11 +608,17 @@ async function syncBodyweightExerciseFlags(
     countChange("updated");
   }
 
+  const allNames = [...exercisesByName.keys()];
+
+  if (allNames.length === 0) {
+    return new Map<string, ExerciseRow>();
+  }
+
   const { data: refreshedRows, error: refreshError } = await supabase
     .from("exercises")
     .select("*")
     .eq("user_id", userId)
-    .in("name", [...exercisesByName.keys()]);
+    .in("name", allNames);
 
   if (refreshError) {
     throw new Error(
@@ -775,15 +626,140 @@ async function syncBodyweightExerciseFlags(
     );
   }
 
-  return new Map(refreshedRows.map((row) => [row.name, row]));
+  return new Map(refreshedRows.map((row) => [row.name, row] as const));
 }
 
-function getDesiredBlockExerciseRows(
+async function syncGlobalBlocks(
+  supabase: AdminClient,
+  userId: string,
+  plan: TrainingPlanSpec,
+) {
+  const desiredBlocks: TablesInsert<"blocks">[] = [
+    ...plan.liftingBlocks.map((block) => ({
+      owner_user_id: userId,
+      block_name: block.blockName,
+      block_type: block.blockType,
+      display_order: 0,
+      block_category: "lifting" as const,
+    })),
+    {
+      owner_user_id: userId,
+      block_name: plan.cardioBlockName,
+      block_type: null,
+      display_order: 0,
+      block_category: "cardio" as const,
+    },
+    {
+      owner_user_id: userId,
+      block_name: plan.recoveryBlockName,
+      block_type: null,
+      display_order: 0,
+      block_category: "recovery" as const,
+    },
+  ];
+
+  const { data: existingRows, error: loadError } = await supabase
+    .from("blocks")
+    .select("*")
+    .eq("owner_user_id", userId);
+
+  if (loadError) {
+    throw new Error(`Failed to load blocks: ${loadError.message}`);
+  }
+
+  const existingByName = new Map(
+    existingRows.map((row) => [row.block_name, row]),
+  );
+  const blockByName = new Map<string, BlockRow>();
+
+  for (const desired of desiredBlocks) {
+    const existing = existingByName.get(desired.block_name);
+
+    if (!existing) {
+      const { data: insertedRow, error: insertError } = await supabase
+        .from("blocks")
+        .insert(desired)
+        .select("*")
+        .single();
+
+      if (insertError) {
+        throw new Error(
+          `Failed to insert block "${desired.block_name}": ${insertError.message}`,
+        );
+      }
+
+      countChange("inserted");
+      blockByName.set(insertedRow.block_name, insertedRow);
+      continue;
+    }
+
+    const comparableExisting = {
+      owner_user_id: existing.owner_user_id,
+      block_name: existing.block_name,
+      block_type: existing.block_type,
+      display_order: existing.display_order,
+      block_category: existing.block_category,
+    };
+    const comparableDesired = {
+      owner_user_id: desired.owner_user_id,
+      block_name: desired.block_name,
+      block_type: desired.block_type,
+      display_order: desired.display_order,
+      block_category: desired.block_category,
+    };
+
+    if (equalRows(comparableExisting, comparableDesired)) {
+      countChange("unchanged");
+      blockByName.set(existing.block_name, existing);
+      continue;
+    }
+
+    const { data: updatedRow, error: updateError } = await supabase
+      .from("blocks")
+      .update(comparableDesired)
+      .eq("block_id", existing.block_id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update block "${desired.block_name}": ${updateError.message}`,
+      );
+    }
+
+    countChange("updated");
+    blockByName.set(updatedRow.block_name, updatedRow);
+  }
+
+  const desiredNames = new Set(desiredBlocks.map((row) => row.block_name));
+  const staleRows = existingRows.filter(
+    (row) => !desiredNames.has(row.block_name),
+  );
+
+  for (const staleRow of staleRows) {
+    const { error: deleteError } = await supabase
+      .from("blocks")
+      .delete()
+      .eq("block_id", staleRow.block_id);
+
+    if (deleteError) {
+      throw new Error(
+        `Failed to delete stale block "${staleRow.block_name}": ${deleteError.message}`,
+      );
+    }
+
+    countChange("deleted");
+  }
+
+  return blockByName;
+}
+
+function getDesiredBlockLiftingItems(
   block: ParsedBlock,
   blockRow: BlockRow,
   exercisesByName: Map<string, ExerciseRow>,
 ) {
-  return block.exercises.map((exercise, index) => {
+  return block.exercises.map((exercise) => {
     const exerciseRow = exercisesByName.get(exercise.name);
 
     if (!exerciseRow) {
@@ -793,105 +769,543 @@ function getDesiredBlockExerciseRows(
     return {
       block_id: blockRow.block_id,
       exercise_id: exerciseRow.exercise_id,
-      display_order: index,
+      display_order: exercise.displayOrder,
     };
   });
 }
 
-async function syncBlockExercises(
+async function syncBlockLiftingItems(
   supabase: AdminClient,
-  days: ParsedDaySpec[],
-  sessions: Map<string, SessionRow>,
-  blocks: Map<string, BlockRow>,
+  plan: TrainingPlanSpec,
+  blocksByName: Map<string, BlockRow>,
   exercisesByName: Map<string, ExerciseRow>,
 ) {
-  const blockIds = [...blocks.values()].map((row) => row.block_id);
-  const { data, error } = blockIds.length
+  const liftingBlockIds = plan.liftingBlocks
+    .map((block) => blocksByName.get(block.blockName)?.block_id)
+    .filter((value): value is string => Boolean(value));
+
+  const { data, error } = liftingBlockIds.length
     ? await supabase
-        .from("block_exercises")
+        .from("block_lifting_items")
         .select("*")
-        .in("block_id", blockIds)
+        .in("block_id", liftingBlockIds)
         .order("display_order")
     : { data: [], error: null };
 
   if (error) {
-    throw new Error(`Failed to load block exercise rows: ${error.message}`);
+    throw new Error(`Failed to load block lifting items: ${error.message}`);
   }
 
-  const existingByBlock = new Map<string, BlockExerciseRow[]>();
+  const existingByBlockId = new Map<string, BlockLiftingItemRow[]>();
 
   for (const row of data ?? []) {
-    const list = existingByBlock.get(row.block_id) ?? [];
+    const list = existingByBlockId.get(row.block_id) ?? [];
     list.push(row);
-    existingByBlock.set(row.block_id, list);
+    existingByBlockId.set(row.block_id, list);
   }
 
-  for (const day of days) {
-    for (const session of day.sessions.filter(
-      (entry) => entry.sessionType === "lifting",
-    )) {
-      const sessionRow = sessions.get(
-        `${day.dayOfWeek}:${session.displayOrder}`,
-      );
+  for (const block of plan.liftingBlocks) {
+    const blockRow = blocksByName.get(block.blockName);
 
-      if (!sessionRow) {
+    if (!blockRow) {
+      throw new Error(`Missing block row for "${block.blockName}".`);
+    }
+
+    const desiredRows = getDesiredBlockLiftingItems(
+      block,
+      blockRow,
+      exercisesByName,
+    );
+    const existingRows = existingByBlockId.get(blockRow.block_id) ?? [];
+
+    if (
+      equalRows(
+        existingRows.map((row) => ({
+          block_id: row.block_id,
+          exercise_id: row.exercise_id,
+          display_order: row.display_order,
+        })),
+        desiredRows,
+      )
+    ) {
+      countChange("unchanged");
+      continue;
+    }
+
+    if (existingRows.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("block_lifting_items")
+        .delete()
+        .eq("block_id", blockRow.block_id);
+
+      if (deleteError) {
         throw new Error(
-          `Missing session row for ${day.dayLabel} ${session.sessionName}.`,
+          `Failed to delete lifting items for "${block.blockName}": ${deleteError.message}`,
         );
       }
 
-      for (const block of session.blocks) {
-        const blockRow = blocks.get(
-          `${sessionRow.session_id}:${block.displayOrder}`,
+      countChange("deleted");
+    }
+
+    const { error: insertError } = await supabase
+      .from("block_lifting_items")
+      .insert(desiredRows);
+
+    if (insertError) {
+      throw new Error(
+        `Failed to insert lifting items for "${block.blockName}": ${insertError.message}`,
+      );
+    }
+
+    countChange("inserted");
+  }
+}
+
+async function syncCardioActivities(
+  supabase: AdminClient,
+  userId: string,
+  plan: TrainingPlanSpec,
+) {
+  const desiredActivities = plan.cardioActivities.map((activity) => ({
+    owner_user_id: userId,
+    name: activity.name,
+    cardio_format: activity.cardioFormat,
+    cardio_distance: activity.cardioDistance,
+    cardio_target_zone: activity.cardioTargetZone,
+    description: activity.description,
+  }));
+
+  const { data: existingRows, error: loadError } = await supabase
+    .from("cardio_activities")
+    .select("*")
+    .eq("owner_user_id", userId);
+
+  if (loadError) {
+    throw new Error(`Failed to load cardio activities: ${loadError.message}`);
+  }
+
+  const existingByName = new Map(existingRows.map((row) => [row.name, row]));
+  const activityByName = new Map<string, CardioActivityRow>();
+
+  for (const desired of desiredActivities) {
+    const existing = existingByName.get(desired.name);
+
+    if (!existing) {
+      const { data: insertedRow, error: insertError } = await supabase
+        .from("cardio_activities")
+        .insert(desired)
+        .select("*")
+        .single();
+
+      if (insertError) {
+        throw new Error(
+          `Failed to insert cardio activity "${desired.name}": ${insertError.message}`,
         );
+      }
+
+      countChange("inserted");
+      activityByName.set(insertedRow.name, insertedRow);
+      continue;
+    }
+
+    const comparableExisting = {
+      owner_user_id: existing.owner_user_id,
+      name: existing.name,
+      cardio_format: existing.cardio_format,
+      cardio_distance: existing.cardio_distance,
+      cardio_target_zone: existing.cardio_target_zone,
+      description: existing.description,
+    };
+
+    if (equalRows(comparableExisting, desired)) {
+      countChange("unchanged");
+      activityByName.set(existing.name, existing);
+      continue;
+    }
+
+    const { data: updatedRow, error: updateError } = await supabase
+      .from("cardio_activities")
+      .update(desired)
+      .eq("activity_id", existing.activity_id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update cardio activity "${desired.name}": ${updateError.message}`,
+      );
+    }
+
+    countChange("updated");
+    activityByName.set(updatedRow.name, updatedRow);
+  }
+
+  const desiredNames = new Set(desiredActivities.map((row) => row.name));
+  const staleRows = existingRows.filter((row) => !desiredNames.has(row.name));
+
+  for (const staleRow of staleRows) {
+    const { error: deleteError } = await supabase
+      .from("cardio_activities")
+      .delete()
+      .eq("activity_id", staleRow.activity_id);
+
+    if (deleteError) {
+      throw new Error(
+        `Failed to delete stale cardio activity "${staleRow.name}": ${deleteError.message}`,
+      );
+    }
+
+    countChange("deleted");
+  }
+
+  return activityByName;
+}
+
+async function syncRecoveryActivities(
+  supabase: AdminClient,
+  userId: string,
+  plan: TrainingPlanSpec,
+) {
+  const desiredActivities = plan.recoveryActivities.map((activity) => ({
+    owner_user_id: userId,
+    name: activity.name,
+    description: activity.description,
+  }));
+
+  const { data: existingRows, error: loadError } = await supabase
+    .from("recovery_activities")
+    .select("*")
+    .eq("owner_user_id", userId);
+
+  if (loadError) {
+    throw new Error(`Failed to load recovery activities: ${loadError.message}`);
+  }
+
+  const existingByName = new Map(existingRows.map((row) => [row.name, row]));
+  const activityByName = new Map<string, RecoveryActivityRow>();
+
+  for (const desired of desiredActivities) {
+    const existing = existingByName.get(desired.name);
+
+    if (!existing) {
+      const { data: insertedRow, error: insertError } = await supabase
+        .from("recovery_activities")
+        .insert(desired)
+        .select("*")
+        .single();
+
+      if (insertError) {
+        throw new Error(
+          `Failed to insert recovery activity "${desired.name}": ${insertError.message}`,
+        );
+      }
+
+      countChange("inserted");
+      activityByName.set(insertedRow.name, insertedRow);
+      continue;
+    }
+
+    const comparableExisting = {
+      owner_user_id: existing.owner_user_id,
+      name: existing.name,
+      description: existing.description,
+    };
+
+    if (equalRows(comparableExisting, desired)) {
+      countChange("unchanged");
+      activityByName.set(existing.name, existing);
+      continue;
+    }
+
+    const { data: updatedRow, error: updateError } = await supabase
+      .from("recovery_activities")
+      .update(desired)
+      .eq("activity_id", existing.activity_id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw new Error(
+        `Failed to update recovery activity "${desired.name}": ${updateError.message}`,
+      );
+    }
+
+    countChange("updated");
+    activityByName.set(updatedRow.name, updatedRow);
+  }
+
+  const desiredNames = new Set(desiredActivities.map((row) => row.name));
+  const staleRows = existingRows.filter((row) => !desiredNames.has(row.name));
+
+  for (const staleRow of staleRows) {
+    const { error: deleteError } = await supabase
+      .from("recovery_activities")
+      .delete()
+      .eq("activity_id", staleRow.activity_id);
+
+    if (deleteError) {
+      throw new Error(
+        `Failed to delete stale recovery activity "${staleRow.name}": ${deleteError.message}`,
+      );
+    }
+
+    countChange("deleted");
+  }
+
+  return activityByName;
+}
+
+async function syncBlockCardioItems(
+  supabase: AdminClient,
+  cardioBlock: BlockRow,
+  cardioActivities: CardioActivityRow[],
+) {
+  const desiredRows = cardioActivities.map((activity, index) => ({
+    block_id: cardioBlock.block_id,
+    activity_id: activity.activity_id,
+    display_order: index,
+  }));
+  const { data: existingRows, error: loadError } = await supabase
+    .from("block_cardio_items")
+    .select("*")
+    .eq("block_id", cardioBlock.block_id)
+    .order("display_order");
+
+  if (loadError) {
+    throw new Error(`Failed to load block cardio items: ${loadError.message}`);
+  }
+
+  if (
+    equalRows(
+      existingRows.map((row) => ({
+        block_id: row.block_id,
+        activity_id: row.activity_id,
+        display_order: row.display_order,
+      })),
+      desiredRows,
+    )
+  ) {
+    countChange("unchanged");
+    return;
+  }
+
+  if (existingRows.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("block_cardio_items")
+      .delete()
+      .eq("block_id", cardioBlock.block_id);
+
+    if (deleteError) {
+      throw new Error(
+        `Failed to delete cardio items for "${cardioBlock.block_name}": ${deleteError.message}`,
+      );
+    }
+
+    countChange("deleted");
+  }
+
+  if (desiredRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from("block_cardio_items")
+      .insert(desiredRows);
+
+    if (insertError) {
+      throw new Error(
+        `Failed to insert cardio items for "${cardioBlock.block_name}": ${insertError.message}`,
+      );
+    }
+
+    countChange("inserted");
+  }
+}
+
+async function syncBlockRecoveryItems(
+  supabase: AdminClient,
+  recoveryBlock: BlockRow,
+  recoveryActivities: RecoveryActivityRow[],
+) {
+  const desiredRows = recoveryActivities.map((activity, index) => ({
+    block_id: recoveryBlock.block_id,
+    activity_id: activity.activity_id,
+    display_order: index,
+  }));
+  const { data: existingRows, error: loadError } = await supabase
+    .from("block_recovery_items")
+    .select("*")
+    .eq("block_id", recoveryBlock.block_id)
+    .order("display_order");
+
+  if (loadError) {
+    throw new Error(
+      `Failed to load block recovery items: ${loadError.message}`,
+    );
+  }
+
+  if (
+    equalRows(
+      existingRows.map((row) => ({
+        block_id: row.block_id,
+        activity_id: row.activity_id,
+        display_order: row.display_order,
+      })),
+      desiredRows,
+    )
+  ) {
+    countChange("unchanged");
+    return;
+  }
+
+  if (existingRows.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("block_recovery_items")
+      .delete()
+      .eq("block_id", recoveryBlock.block_id);
+
+    if (deleteError) {
+      throw new Error(
+        `Failed to delete recovery items for "${recoveryBlock.block_name}": ${deleteError.message}`,
+      );
+    }
+
+    countChange("deleted");
+  }
+
+  if (desiredRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from("block_recovery_items")
+      .insert(desiredRows);
+
+    if (insertError) {
+      throw new Error(
+        `Failed to insert recovery items for "${recoveryBlock.block_name}": ${insertError.message}`,
+      );
+    }
+
+    countChange("inserted");
+  }
+}
+
+async function syncWorkoutBlocks(
+  supabase: AdminClient,
+  plan: TrainingPlanSpec,
+  workouts: Map<string, WorkoutRow>,
+  blocksByName: Map<string, BlockRow>,
+  cardioActivitiesByName: Map<string, CardioActivityRow>,
+  recoveryActivitiesByName: Map<string, RecoveryActivityRow>,
+) {
+  const workoutIds = [...workouts.values()].map((row) => row.workout_id);
+  const { data, error } = workoutIds.length
+    ? await supabase
+        .from("workout_blocks")
+        .select("*")
+        .in("workout_id", workoutIds)
+        .order("display_order")
+    : { data: [], error: null };
+
+  if (error) {
+    throw new Error(`Failed to load workout_blocks rows: ${error.message}`);
+  }
+
+  const existingByWorkoutId = new Map<string, Tables<"workout_blocks">[]>();
+
+  for (const row of data ?? []) {
+    const list = existingByWorkoutId.get(row.workout_id) ?? [];
+    list.push(row);
+    existingByWorkoutId.set(row.workout_id, list);
+  }
+
+  for (const day of plan.days) {
+    for (const workout of day.workouts) {
+      const workoutRow = workouts.get(
+        `${day.dayOfWeek}:${workout.displayOrder}`,
+      );
+
+      if (!workoutRow) {
+        throw new Error(`Missing workout row for "${workout.workoutName}".`);
+      }
+
+      const desiredRows = workout.blockRefs.map((blockRef) => {
+        const blockRow = blocksByName.get(blockRef.blockName);
 
         if (!blockRow) {
-          throw new Error(`Missing block row for "${block.blockName}".`);
+          throw new Error(`Missing block row for "${blockRef.blockName}".`);
         }
 
-        const desiredRows = getDesiredBlockExerciseRows(
-          block,
-          blockRow,
-          exercisesByName,
-        );
-        const existingRows = existingByBlock.get(blockRow.block_id) ?? [];
+        let presetActivityId: string | null = null;
 
         if (
-          equalRows(
-            existingRows.map((row) => ({
-              block_id: row.block_id,
-              exercise_id: row.exercise_id,
-              display_order: row.display_order,
-            })),
-            desiredRows,
-          )
+          blockRef.presetActivityName &&
+          blockRef.presetActivityType === "cardio"
         ) {
-          countChange("unchanged");
-          continue;
+          presetActivityId =
+            cardioActivitiesByName.get(blockRef.presetActivityName)
+              ?.activity_id ?? null;
         }
 
-        if (existingRows.length > 0) {
-          const { error: deleteError } = await supabase
-            .from("block_exercises")
-            .delete()
-            .eq("block_id", blockRow.block_id);
-
-          if (deleteError) {
-            throw new Error(
-              `Failed to delete block exercise rows for "${block.blockName}": ${deleteError.message}`,
-            );
-          }
-
-          countChange("deleted");
+        if (
+          blockRef.presetActivityName &&
+          blockRef.presetActivityType === "recovery"
+        ) {
+          presetActivityId =
+            recoveryActivitiesByName.get(blockRef.presetActivityName)
+              ?.activity_id ?? null;
         }
 
+        if (blockRef.presetActivityName && !presetActivityId) {
+          throw new Error(
+            `Missing preset activity row for "${blockRef.presetActivityName}".`,
+          );
+        }
+
+        return {
+          workout_id: workoutRow.workout_id,
+          block_id: blockRow.block_id,
+          display_order: blockRef.displayOrder,
+          preset_activity_id: presetActivityId,
+          preset_activity_type: blockRef.presetActivityType,
+        };
+      });
+      const existingRows = existingByWorkoutId.get(workoutRow.workout_id) ?? [];
+
+      if (
+        equalRows(
+          existingRows.map((row) => ({
+            workout_id: row.workout_id,
+            block_id: row.block_id,
+            display_order: row.display_order,
+            preset_activity_id: row.preset_activity_id,
+            preset_activity_type: row.preset_activity_type,
+          })),
+          desiredRows,
+        )
+      ) {
+        countChange("unchanged");
+        continue;
+      }
+
+      if (existingRows.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("workout_blocks")
+          .delete()
+          .eq("workout_id", workoutRow.workout_id);
+
+        if (deleteError) {
+          throw new Error(
+            `Failed to delete workout block rows for "${workout.workoutName}": ${deleteError.message}`,
+          );
+        }
+
+        countChange("deleted");
+      }
+
+      if (desiredRows.length > 0) {
         const { error: insertError } = await supabase
-          .from("block_exercises")
+          .from("workout_blocks")
           .insert(desiredRows);
 
         if (insertError) {
           throw new Error(
-            `Failed to insert block exercise rows for "${block.blockName}": ${insertError.message}`,
+            `Failed to insert workout block rows for "${workout.workoutName}": ${insertError.message}`,
           );
         }
 
@@ -1131,21 +1545,63 @@ async function main() {
     trainingPlan.plan_id,
     plan.days,
   );
-  const sessions = await syncSessions(supabase, plan.days, schedules);
-  const blocks = await syncBlocks(supabase, plan.days, sessions);
-  const exercisesByName = await syncExercises(supabase, userId, plan.days);
+  const workouts = await syncWorkouts(supabase, plan.days, schedules);
+  const exercisesByName = await syncExercises(supabase, userId, plan);
   const exercisesWithBodyweightFlags = await syncBodyweightExerciseFlags(
     supabase,
     userId,
     exercisesByName,
   );
+  const blocksByName = await syncGlobalBlocks(supabase, userId, plan);
 
-  await syncBlockExercises(
+  await syncBlockLiftingItems(
     supabase,
-    plan.days,
-    sessions,
-    blocks,
+    plan,
+    blocksByName,
     exercisesWithBodyweightFlags,
+  );
+
+  const cardioActivitiesByName = await syncCardioActivities(
+    supabase,
+    userId,
+    plan,
+  );
+  const recoveryActivitiesByName = await syncRecoveryActivities(
+    supabase,
+    userId,
+    plan,
+  );
+
+  const cardioBlock = blocksByName.get(plan.cardioBlockName);
+  const recoveryBlock = blocksByName.get(plan.recoveryBlockName);
+
+  if (!cardioBlock || !recoveryBlock) {
+    throw new Error("Missing required cardio or recovery block rows.");
+  }
+
+  await syncBlockCardioItems(
+    supabase,
+    cardioBlock,
+    plan.cardioActivities
+      .map((activity) => cardioActivitiesByName.get(activity.name))
+      .filter((value): value is CardioActivityRow => Boolean(value)),
+  );
+
+  await syncBlockRecoveryItems(
+    supabase,
+    recoveryBlock,
+    plan.recoveryActivities
+      .map((activity) => recoveryActivitiesByName.get(activity.name))
+      .filter((value): value is RecoveryActivityRow => Boolean(value)),
+  );
+
+  await syncWorkoutBlocks(
+    supabase,
+    plan,
+    workouts,
+    blocksByName,
+    cardioActivitiesByName,
+    recoveryActivitiesByName,
   );
   await syncNutritionTargets(supabase, userId, plan);
   await syncPlanTemplate(supabase, userId, plan);

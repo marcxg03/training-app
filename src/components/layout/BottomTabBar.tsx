@@ -7,6 +7,7 @@ import {
   BarChart3,
   Calendar,
   Home,
+  Library,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -22,6 +23,7 @@ type TabDefinition = {
 const tabs: TabDefinition[] = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/plan", label: "Plan", icon: Calendar },
+  { href: "/library", label: "Library", icon: Library },
   { href: "/history", label: "History", icon: BarChart3 },
   { href: "/nutrition", label: "Nutrition", icon: Apple },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -35,7 +37,7 @@ export function BottomTabBar() {
       aria-label="Bottom navigation"
       className="safe-pb fixed inset-x-0 bottom-0 border-t border-border bg-background/95 backdrop-blur"
     >
-      <div className="mx-auto grid max-w-3xl grid-cols-5">
+      <div className="mx-auto grid max-w-3xl grid-cols-6">
         {tabs.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
@@ -44,7 +46,7 @@ export function BottomTabBar() {
               key={href}
               href={href}
               className={cn(
-                "flex min-h-11 flex-col items-center justify-center gap-1 border-t-2 px-2 py-3 text-xs font-medium text-muted-foreground transition-colors",
+                "flex min-h-11 flex-col items-center justify-center gap-1 border-t-2 px-1 py-3 text-[10px] font-medium text-muted-foreground transition-colors",
                 isActive
                   ? "border-accent text-accent"
                   : "border-transparent hover:text-foreground",

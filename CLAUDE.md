@@ -115,6 +115,23 @@ If the user tries to declare a slice verified when one of these is
 clearly not met, flag the gap before running the post-slice
 sequence.
 
+ Workflow prompting: after completing any phase output (readiness report, spec
+  section, reflection draft, or any other deliverable), always close with:                         
+  1. What was just completed (one line)
+  2. What the next step is and which agent it goes to                                              
+  3. The verbatim trigger phrase Marcus should use to start that next step,
+     if one exists (see trigger phrases below)                                                     
+  
+  Do not wait for Marcus to ask what comes next. Lead through the workflow.                        
+                                                            
+  Verbatim trigger phrases (reference only — do not run these yourself):
+  - "Starting design for Slice N" → you (Cowork) — pre-slice readiness check
+  - "Slice N verified — run the post-slice sequence" → Claude Code                                 
+  - "Slice N complete, draft Phase 5b reflection" → you (Cowork)
+  - "Log Slice N to the build-log." → wiki agent (second brain)                                    
+                                                                                                   
+  This is also now in the template for all future projects.
+
 ## Schema discipline
 Before writing any code that reads from or writes to the database:
 1. Read the actual current schema from /supabase/migrations/

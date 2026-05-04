@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 
-export type SessionSummaryProps = {
+export type WorkoutSummaryProps = {
   completedAt: string;
   prs: Array<{
     exerciseName: string;
@@ -15,7 +15,7 @@ export type SessionSummaryProps = {
     reps: number;
     weightKg: number;
   }>;
-  sessionName: string;
+  workoutName: string;
   statusMessage?: string;
   setLogs: Array<{
     exerciseName: string;
@@ -38,14 +38,14 @@ function formatPrType(prType: Enums<"pr_type_enum">) {
   return prType === "weight" ? "Type A" : "Type B";
 }
 
-export function SessionSummary({
+export function WorkoutSummary({
   completedAt,
   prs,
-  sessionName,
+  workoutName,
   statusMessage,
   setLogs,
   wasEndedEarly,
-}: SessionSummaryProps) {
+}: WorkoutSummaryProps) {
   const totalReps = setLogs.reduce((sum, setLog) => sum + setLog.reps, 0);
   const totalVolume = setLogs.reduce((sum, setLog) => {
     if (setLog.isBodyweight || setLog.weightKg === null) {
@@ -59,9 +59,9 @@ export function SessionSummary({
     <Card className="bg-card/80">
       <CardHeader className="space-y-3">
         <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-          Session Complete
+          Workout Complete
         </p>
-        <CardTitle className="text-3xl tracking-tight">{sessionName}</CardTitle>
+        <CardTitle className="text-3xl tracking-tight">{workoutName}</CardTitle>
         <div className="space-y-1 text-sm text-muted-foreground">
           <p>{formatCompletionDate(completedAt)}</p>
           {wasEndedEarly ? <p>Ended early</p> : <p>All blocks complete</p>}
@@ -103,7 +103,7 @@ export function SessionSummary({
 
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            PRs This Session
+            PRs This Workout
           </p>
           {prs.length > 0 ? (
             <ul className="space-y-3">
@@ -130,7 +130,7 @@ export function SessionSummary({
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No PRs were recorded for this session.
+              No PRs were recorded for this workout.
             </p>
           )}
         </div>

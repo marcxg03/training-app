@@ -20,7 +20,7 @@ export default async function PRTimelinePage({
   const rows = await getPRTimeline({ showAll });
   const emptyCopy = showAll
     ? "No PRs yet."
-    : "No PRs in the last 90 days. Tap Show all to see your full history, or All Sessions to browse past sessions.";
+    : "No PRs in the last 90 days. Tap Show all to see your full history, or All Workouts to browse past sessions.";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

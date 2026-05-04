@@ -610,3 +610,179 @@ the same on every render. Deterministic ordering is the property
 that matters; semantic tie-breaking would require a richer column
 (e.g., `created_at` as a microsecond-precision timestamp), which
 would itself need to be added. Cheap, additive, idempotent.
+
+## Slice 7a — Library Tab + Workouts Rename
+
+### Step 0 test-data wipe to satisfy the new global-blocks UNIQUE constraint
+
+**Context:** Migration 013 promotes `blocks` to a global per-user
+catalog with `UNIQUE (owner_user_id, block_name)`. The pre-Slice-7a
+DB had ~25 blocks rows (one per session × block, including
+cross-workout duplicates like Vertical Pull, Chest, Calves) plus
+Slice 4-6 verification data in `set_logs`, `pr_history`,
+`session_completions`, and `block_exercises`. Applying the UNIQUE
+constraint against this populated table would fail with a 23505
+unique-violation error.
+
+**Decision:** Open migration 013 with a Step 0 wipe of Slice 4-6
+verification data:
+
+```
+DELETE FROM pr_history WHERE set_log_id IS NOT NULL;
+DELETE FROM set_logs;
+DELETE FROM session_completions;
+DELETE FROM block_exercises;
+DELETE FROM blocks;
+```
+
+Slice 2's three seeded historical PRs (`set_log_id IS NULL`) are
+preserved by the partial DELETE on `pr_history`.
+`daily_schedules`, `training_plans`, `exercises`, `profiles` are
+preserved. The post-wipe re-seed via the new parser repopulates
+blocks under the global catalog model.
+
+**Options considered:**
+
+- **Option A (chosen):** Step 0 wipe → renames → backfills →
+  UNIQUE INDEX. Empties the table before the constraint commits.
+- **Option B:** Run the rename + add the column without UNIQUE,
+  do the dedupe in SQL, then add the UNIQUE constraint. More
+  surgical but requires resolving every cross-workout name
+  collision in pure SQL — including encoding the
+  Calves-mobility-vs-failure resolution as a SQL CASE expression.
+  Brittle.
+- **Option C:** Keep the constraint but make it scoped per
+  `(owner_user_id, block_name, block_category)`. Sidesteps the
+  wipe but breaks the catalog model — the goal is one row per
+  `(owner, name)` so `workout_blocks` can wire it into multiple
+  workouts. Rejected.
+
+**Reasoning:** Slice 4-6 verification data is testing data, not
+production. Marcus is the only user. The seed pipeline is the
+authoritative source of repeatable state — re-running `pnpm seed`
+recreates the catalog cleanly. Slice 2's seeded historical PRs
+(`set_log_id IS NULL`) survive. The Step 0 wipe makes migration
+013 idempotent against any test DB state, not just the specific
+state at slice authorship time. Belt-and-suspenders ordering
+constraint added to the spec's Codex prompt: Step 0 first, then
+the rename cascade, then the backfill, then the UNIQUE INDEX.
+
+### Calves block_type collision: rename in wiki, not parser override
+
+**Context:** With migration 013's
+`UNIQUE (owner_user_id, block_name)` constraint, "Calves" appears
+in two workouts with different `block_type` semantics — Tuesday
+Lower Compound: `failure` (heavy isolation); Saturday Lower ATG:
+`mobility` (block 8 of the ATG mobility flow per Slice 2 spec).
+Codex's first-pass parser hit the same-name + different-block_type
+collision and resolved it by hard-coding an override forcing all
+"Calves" to `failure`, silently flipping Saturday's
+classification.
+
+**Decision:** Rename Saturday Lower ATG's "Calves" → "ATG Calves"
+in the wiki. Revert the parser override.
+
+**Options considered:**
+
+- **Path A (chosen):** Rename in wiki + revert override. Mirrors
+  the Phase 0 rename pattern already used for
+  Mid Chest → Bench Press Focus and
+  Lateral Raise → Shoulder Burnout. Single re-seed cycle.
+- **Path B:** Accept Codex's `failure` override.
+  Methodologically wrong for ATG-style mobility/end-of-flow calf
+  work. Hard-coded parser overrides are an anti-pattern: any
+  future block-name collision (a new "Tib Raises" block in a
+  different workout, etc.) would require another override. The
+  rename approach scales; the override doesn't.
+
+**Reasoning:** Slice 2 spec explicitly classified all 8 ATG
+blocks (1-8) as `mobility`. Block 8 is "Calves." The Codex
+override silently contradicted that. The clean fix is to
+disambiguate the catalog name so the two distinct
+methodological concepts get distinct catalog rows — same problem,
+same solution, as the Phase 0 wiki edits. Cheap fix: one wiki
+edit + one parser revert. Verified post-reseed: `ATG Calves` →
+`mobility`, `Calves` → `failure`.
+
+### Defer the TS-level `session_*` rename to Slice 7a.5
+
+**Context:** Slice 7a's DB layer cascade rename
+(`sessions` → `workouts`, `session_id` → `workout_id`, etc.) is
+fully applied at the database layer. ~25 in-memory JS field and
+prop names across 11 files (logger components, plan day route,
+page-level prop types, sync queue discriminated-union kinds)
+still use `session_id` / `session_name` / `session_type` /
+`session_completion_*`. Edge Case 17 in the slice spec said the
+quality-review pass MUST grep for any lingering `session_*`
+references and rewrite.
+
+**Decision:** Log the half-rename as 🟡 Medium in
+KNOWN_ISSUES.md and defer the TS-level cleanup to Slice 7a.5 — a
+focused mechanical-rename PR with no schema or behavioral
+changes.
+
+**Options considered:**
+
+- **(A) Fix in Slice 7a.** Mechanical sed-style rename across ~11
+  files inside the same Phase 4B review. Diluted attention from
+  the methodologically-important Calves issue and added
+  rename-introduced-bug risk to a slice already touching ~55
+  files.
+- **(B) (chosen) Defer to Slice 7a.5.** The principle behind Edge
+  Case 17 was preventing runtime bugs from missed renames. The
+  DB-layer correctness already prevents that — these are
+  cognitive-friction mismatches, not functional risk. Slice 4.5
+  established the corrective-half-slice pattern for cases like
+  this.
+
+**Reasoning:** The DB layer (which runtime depends on) is fully
+renamed and verified. The TS-layer mismatch is type/prop names
+only. A focused mechanical PR with no behavioral changes is
+easier to review than a 25-reference rewrite buried inside a
+55-file slice. The FUTURE_WORK
+"bypass-project-chat-for-corrective-slices" pattern from Slice
+4.5 applies here.
+
+### Bottom-nav grows from 5 to 6 tabs with 10px labels
+
+**Context:** Slice 7a adds the Library tab as the 6th bottom-nav
+surface. The existing `BottomTabBar` had 5 tabs at 11px labels
+sitting comfortably at 375px viewport (`grid-cols-5`,
+`text-[11px]`).
+
+**Decision:** Move to 6 tabs in order
+**Today / Plan / Library / History / Nutrition / Settings**.
+Resize labels from 11px → 10px. Keep `min-h-11` (44px touch
+target). Keep `startsWith` active-tab match so descendant routes
+(`/library/lifting/blocks/[id]`) keep Library highlighted.
+
+**Reasoning:** Library belongs in the high-frequency surface
+group (Today / Plan / History) because catalog browsing is
+ambient, not a deep-link flow. Tab ordering reflects daily-use
+frequency. 10px is the smallest readable size at 375px viewport
+that still fits all six labels without truncation; verified at
+the Slice 7a Phase 4B review. If user-testing reveals 10px is
+uncomfortable, the fallback is to abbreviate labels; a future
+polish slice can revisit.
+
+### `LibraryTabs` is the only Client Component in the slice
+
+**Context:** Slice 7a's read-only Library tab has three sub-tabs
+(Lifting / Cardio / Recovery) plus a block-detail page. The
+sub-tab navigator needs `usePathname()` to highlight the active
+sub-tab; everything else is static rendering of seeded data.
+
+**Decision:** Make `LibraryTabs.tsx` the only Client Component
+(`"use client"`). Render it as a header strip on every Library
+page. All three sub-tab pages, the block-detail page, and all
+seven `_components` are Server Components.
+
+**Reasoning:** Server Components by default per ARCHITECTURE.
+`usePathname()` is the only hook needed in the slice; isolating
+it to one file keeps the rest of the surface SSR-friendly. The
+shadcn `Tabs` primitive is used for visual consistency but the
+underlying navigation is plain `next/link` — no client state,
+no controlled component pattern. Active sub-tab is derived from
+URL on every render. This also means 7b's edit/add/delete
+affordances can be added as inline forms without re-architecting
+the read surface.

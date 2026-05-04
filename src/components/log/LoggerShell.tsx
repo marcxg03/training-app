@@ -22,13 +22,15 @@ import { enqueue } from "@/lib/sync/queue";
 import { setupDrainTriggers } from "@/lib/sync/triggers";
 import { cn } from "@/lib/utils/cn";
 import { BlockHeader } from "@/components/log/BlockHeader";
-import { EndSessionDialog } from "@/components/log/EndSessionDialog";
+import { EndWorkoutDialog } from "@/components/log/EndWorkoutDialog";
 import { ExercisePicker } from "@/components/log/ExercisePicker";
 import { FailureProtocol } from "@/components/log/FailureProtocol";
 import { FreeFormProtocol } from "@/components/log/FreeFormProtocol";
 import { QueueIndicator } from "@/components/log/QueueIndicator";
-import type { SessionSummaryProps } from "@/components/log/SessionSummary";
-import { SessionSummary } from "@/components/log/SessionSummary";
+import {
+  WorkoutSummary,
+  type WorkoutSummaryProps,
+} from "@/components/log/WorkoutSummary";
 import { SetLogRow } from "@/components/log/SetLogRow";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -77,10 +79,10 @@ function getQueueErrorMessage(error: unknown) {
 function buildLocalSummary(
   blocks: LoggerBlock[],
   completedAt: string,
-  sessionName: string,
+  workoutName: string,
   statusMessage: string,
   wasEndedEarly: boolean,
-): SessionSummaryProps {
+): WorkoutSummaryProps {
   const setLogs = blocks.flatMap((block) =>
     block.setLogs
       .slice()
@@ -121,7 +123,7 @@ function buildLocalSummary(
   return {
     completedAt,
     prs,
-    sessionName,
+    workoutName,
     setLogs,
     statusMessage,
     wasEndedEarly,
@@ -144,7 +146,7 @@ export function LoggerShell({
     sessionCompletion.completed_block_ids,
   );
   const [completedSummary, setCompletedSummary] =
-    useState<SessionSummaryProps | null>(null);
+    useState<WorkoutSummaryProps | null>(null);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(initialBlockIndex);
   const [selectedExerciseByBlockId, setSelectedExerciseByBlockId] = useState(
     buildSelectedExerciseMap(blocks),
@@ -206,7 +208,7 @@ export function LoggerShell({
     const completedAt = new Date().toISOString();
 
     const { error, status } = await supabase
-      .from("session_completions")
+      .from("workout_completions")
       .update({
         completed_at: completedAt,
         completed_block_ids: nextCompletedBlockIds,
@@ -225,7 +227,7 @@ export function LoggerShell({
         try {
           enqueue(userId, {
             id: crypto.randomUUID(),
-            kind: "session_completion_end",
+            kind: "workout_completion_end",
             payload: {
               completion_id: sessionCompletion.completion_id,
               completed_at: completedAt,
@@ -247,7 +249,7 @@ export function LoggerShell({
             blocksRef.current,
             completedAt,
             session.session_name,
-            "Session saved locally. It will sync when you're back online.",
+            "Workout saved locally. It will sync when you're back online.",
             wasEndedEarly,
           ),
         );
@@ -284,7 +286,7 @@ export function LoggerShell({
 
     const completedAt = new Date().toISOString();
     const { error, status } = await supabase
-      .from("session_completions")
+      .from("workout_completions")
       .update({
         completed_block_ids: nextCompletedBlockIds,
       })
@@ -301,7 +303,7 @@ export function LoggerShell({
         try {
           enqueue(userId, {
             id: crypto.randomUUID(),
-            kind: "session_completion_block_complete",
+            kind: "workout_completion_block_complete",
             payload: {
               completion_id: sessionCompletion.completion_id,
               block_id: blockId,
@@ -345,7 +347,7 @@ export function LoggerShell({
           <QueueIndicator userId={userId} />
         </div>
 
-        <SessionSummary {...completedSummary} />
+        <WorkoutSummary {...completedSummary} />
       </div>
     );
   }
@@ -391,7 +393,7 @@ export function LoggerShell({
                   isCurrent ? (
                     <div className="flex items-center gap-2">
                       <QueueIndicator userId={userId} />
-                      <EndSessionDialog
+                      <EndWorkoutDialog
                         onConfirm={() =>
                           completeSession(true, completedBlockIdsRef.current)
                         }
