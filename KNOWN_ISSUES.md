@@ -33,13 +33,19 @@ policies on all 10 tables.
 
 ## Slice 4 — Workout Logger
 
-### ✓ Closed — In-flight save lost on tab close (S4-M1)
+### ✅ Resolved — In-flight save lost on tab close
 
-Resolved by Slice 5's queue-on-failure pattern. Verified during
-Slice 7a pre-test setup: a deliberate tab-close-mid-save test
-showed the in-flight INSERT enqueueing to the localStorage outbox,
-draining cleanly on next page load, and resume picking up from the
-correct next-incomplete block. No data loss.
+When the browser tab is closed mid-save, the in-flight set_logs
+INSERT is cancelled and the set is not persisted. Resume correctly
+identifies the next incomplete block based on persisted set_logs,
+but the user has to re-enter the lost set. Slice 5 (Sync Layer)
+addresses this via the queue-on-failure pattern.
+
+Verified resolved via Slice 7a Phase 5 pre-test setup (deliberate
+tab-close-mid-save test). Slice 5's queue-on-failure pattern
+correctly catches in-flight network failures including synchronous
+tab close; lost set replays from queue on reopen. Closed
+2026-05-04.
 
 ### 🟢 Low — Volume tile shows 0 for bodyweight-only sessions
 
@@ -86,20 +92,29 @@ DB writes fire as on the corresponding explicit-button path."
 This is a workflow improvement candidate, not a code follow-up —
 the code is fixed.
 
-### ✓ Closed — Mobility PR detection path
+### ✅ Resolved — pr_history.set_log_id FK population on legacy rows only
 
-Verified during Slice 6.1 Phase A. The mobility PR detection path
-fires `set_log_id` correctly on `pr_history` INSERT — Lower ATG
-Split Squat from May 2 produced two PR rows with populated FKs
-that JOIN cleanly through the hybrid query in `getAllSessions`,
-contributing PR count = 2 on the Lower ATG · May 2 row. The
-failure-block path was already verified in Slice 5. Both code
-paths converge on the same writer; no path-specific divergence.
+`pr_history.set_log_id` is populated correctly on both the
+failure-block PR detection path (Slice 5 verification) and the
+mobility PR detection path (Slice 6.1 Phase A Tests 1 + 8 — Lower
+ATG Split Squat from May 2 produced two PR rows with correctly-
+populated FKs that JOIN cleanly through the hybrid query in
+`getAllSessions`, contributing PR count = 2 on the Lower ATG · May 2
+row).
 
-Legacy-row FK gap (pre-Slice-4 historical data + Slice 2's three
-seeded PRs with `set_log_id = NULL` by design) is handled by
-`WHERE set_log_id IS NOT NULL` filters in the Slice 6 queries.
-Backfill candidate logged in FUTURE_WORK.md; not a code issue.
+Remaining concern is scoped to legacy rows where the FK was never
+populated (pre-Slice-4 historical data, Slice 2's three seeded PRs
+with `set_log_id = NULL` by design). Slice 6's queries handle this
+via `WHERE set_log_id IS NOT NULL` filters; legacy rows simply
+don't appear in PR Timeline and don't contribute to All Sessions
+PR counts. No production fix required. Backfill candidate logged
+in FUTURE_WORK.md.
+
+Active paths verified populating set_log_id correctly (Slice 6.1
+Phase A Tests 1 + 8). Legacy NULL-FK rows correctly excluded by
+Slice 6.1's WHERE set_log_id IS NOT NULL filters. Backfill
+candidate remains in FUTURE_WORK.md (no urgency). Closed
+2026-05-04.
 
 ## Slice 7a — Library Tab + Workouts Rename
 

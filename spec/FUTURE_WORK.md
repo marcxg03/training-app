@@ -319,6 +319,114 @@ alongside Slice 7a.5's TS-level rename PR):
 Both can be bundled with Slice 7a.5's TS-rename PR for one
 mechanical cleanup landing — keeps the noise consolidated.
 
+### Nutrition tab — AI-powered photo + text meal logging (with multiple input methods)
+
+**Status:** Open. Surfaced May 4, 2026 during Slice 7a Phase 5b
+forward-look.
+
+**Proposal:** Ship a Cal-AI-style logging flow as the primary nutrition
+input UX. Photo + optional text description → LLM (Claude vision API) →
+extracted calories + macros + auto-generated meal name → pre-filled review
+form → user adjusts as needed → save.
+
+**Multiple input methods supported:**
+
+1. **Photo + optional text description** — primary AI flow. Single or
+   multiple photos per meal (e.g., overhead + side angle for portion
+   estimation, or multiple plates for a multi-course meal). Text augments
+   the photo, doesn't replace it.
+2. **Barcode scan** — direct product lookup. Scan barcode → product
+   database (USDA, OpenFoodFacts, or similar) → structured nutrition data.
+   Different code path from LLM analysis; needs a barcode scanner library
+   + product DB integration.
+3. **Nutrition label photo** — dedicated label-reading mode. LLM vision
+   with label-reading prompt extracts the nutrition facts panel directly.
+   Distinct from meal photos.
+4. **Manual entry** — fallback for AI failure / low confidence / private
+   meals. Plain form fields for calories + macros.
+5. **Choose from saved meals** — template reuse. Pick from recently-logged
+   meals (or a curated meal templates list) without re-running AI. Common
+   case: "I had the same lunch as yesterday."
+
+**Methodology alignment:**
+
+Meal blocks/types (already in `meal_type text` field on `meal_entries`)
+function as the catalog organizing primitive, mirroring the lifting
+block / cardio block / recovery block pattern from Slice 7a. Each meal
+block has guidelines (existing `nutrition.md` wiki content: protein
+targets, carb timing, etc.) but allows free choice at log time. AI
+handles structured extraction so logging stays low-friction; the
+methodology stays unique to Marcus.
+
+**Saved per meal entry:** meal block/type, AI-generated meal name,
+optional brief description (user-edited or AI-suggested), calories,
+protein/carbs/fat. Photos are ephemeral — never persisted in DB or
+locally. AI raw response not stored.
+
+**Schema additions to meal_entries:**
+
+- `meal_name text NOT NULL` — AI-generated or user-edited
+- `description text` — optional brief description (user-editable)
+- `is_ai_generated boolean NOT NULL DEFAULT true` — distinguishes AI
+  logs from manual entry; useful for future analytics
+- `ai_confidence numeric` — optional; AI's confidence in macros (0-1
+  range); informs whether to flag for user review
+
+**Possible new tables:**
+
+- `meal_templates` (template_id, owner_user_id, name, calories,
+  protein_g, carbs_g, fat_g, default_meal_type, description) — for
+  saved meals / favorites pattern. Mirrors cardio_activities /
+  recovery_activities catalog model from Slice 7a. Could defer to a
+  later sub-slice and bootstrap with a "recent meals" query against
+  meal_entries (DISTINCT ON meal_name).
+- `meal_blocks` (block_id, owner_user_id, name, guidelines text) — if
+  meal blocks become a Library catalog peer (4th or 5th sub-tab in
+  Library, depending on Slice 7b's IA). Could defer.
+
+**Implementation considerations (lock at Phase 0):**
+
+- LLM provider: Claude vision API (default — project affinity, strong
+  vision performance, Anthropic privacy policy)
+- Photo persistence: ephemeral (default). No DB storage, no local
+  persistence beyond the active form session. Optional persistence as
+  a future Settings toggle if user wants audit trail.
+- AI override workflow: form pre-fill with AI's analysis; user reviews
+  + adjusts; save commits user-edited values, not raw AI output. AI is
+  a starting point, not authoritative.
+- Queue-on-failure integration: AI call failure (network, rate limit,
+  server error) → queue the meal-log attempt with photo + description
+  preserved → retry on reconnect. Slice 5's pattern.
+- Fallback path: AI returns "couldn't analyze" or low confidence →
+  surface manual entry with the photo still attached as a visual aid.
+- Input flexibility: photo-only, text-only, photo+text, barcode-only,
+  label-only, manual-only, template-pick. UX accommodates the user's
+  natural flow per meal.
+- Cost ceiling: per-day soft cap (e.g., 10 AI analyses/day) as a
+  Settings toggle. Realistic usage ~150-200 calls/month/user at
+  ~$0.003-0.015 per call.
+- Privacy: Document data flow in user-facing Settings → Privacy.
+  Photos sent to Anthropic for inference, not stored on our servers,
+  not used to train AI. Settings toggle to disable AI logging entirely
+  (forces manual entry path) for users who prefer.
+
+**Probable slice split (TBD at Phase 0):**
+
+- Nutrition 1 (read scaffold + manual logging): nutrition_targets read
+  display, meal_entries history view, manual logging UI, basic schema
+  additions (meal_name, description). No AI.
+- Nutrition 2 (AI logging): photo capture + LLM call + analyze flow +
+  override UI. Nutrition label photo + multi-photo support.
+- Nutrition 3 (extended inputs): barcode scanner + product DB lookup,
+  saved meals / templates flow, meal_templates table (if pursued).
+
+Or single substantial Nutrition slice if scope discipline holds. Slice
+size will rival Slice 7a's; defer the call to Phase 0.
+
+**Sequencing:** Lands after Slice 7b (Library editing) + Slice 8 (Plan
+Editor) by current sequencing. Could shift earlier if methodology rollout
+priorities change.
+
 ### Form library — react-hook-form + zod (Slice 7-8 evaluation)
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state
