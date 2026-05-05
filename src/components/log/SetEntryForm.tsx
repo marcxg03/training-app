@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type {
   LoggerExercise,
   LoggerSetLog,
-} from "@/lib/methodology/session-state";
+} from "@/lib/methodology/workout-state";
 import { detectPRs } from "@/lib/methodology/pr-detection";
 import { createClient } from "@/lib/supabase/client";
 import { isRetryable } from "@/lib/sync/classify";
@@ -19,7 +19,7 @@ type SetEntryFormProps = {
   defaultFailureChecked?: boolean;
   exercise: LoggerExercise;
   label: string;
-  sessionId: string;
+  workoutId: string;
   setIndex: number;
   showFailureCheckbox?: boolean;
   userId: string;
@@ -49,7 +49,7 @@ export function SetEntryForm({
   defaultFailureChecked = false,
   exercise,
   label,
-  sessionId,
+  workoutId,
   setIndex,
   showFailureCheckbox = false,
   userId,
@@ -99,7 +99,7 @@ export function SetEntryForm({
     const insertPayload: SetLogInsertPayload = {
       set_log_id: setLogId,
       user_id: userId,
-      workout_id: sessionId,
+      workout_id: workoutId,
       block_id: blockId,
       exercise_id: exercise.exercise_id,
       set_index: setIndex,
@@ -152,7 +152,7 @@ export function SetEntryForm({
 
         onSaved({
           ...insertPayload,
-          session_id: insertPayload.workout_id,
+          workout_id: insertPayload.workout_id,
           weight_kg: insertPayload.weight_kg ?? null,
           notes: insertPayload.notes ?? null,
           is_to_failure: insertPayload.is_to_failure ?? false,
@@ -225,7 +225,7 @@ export function SetEntryForm({
 
     onSaved({
       ...insertedSetLog,
-      session_id: insertedSetLog.workout_id,
+      workout_id: insertedSetLog.workout_id,
       prTypes,
     });
     router.refresh();

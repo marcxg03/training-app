@@ -6,15 +6,15 @@ import { useRouter } from "next/navigation";
 import type {
   LoggerBlock,
   LoggerExercise,
-  LoggerSession,
+  LoggerWorkout,
   LoggerSetLog,
-  SessionCompletionRecord,
-} from "@/lib/methodology/session-state";
+  WorkoutCompletionRecord,
+} from "@/lib/methodology/workout-state";
 import {
   findLastIncompleteBlock,
   getSelectedExerciseIdForBlock,
   isBlockComplete,
-} from "@/lib/methodology/session-state";
+} from "@/lib/methodology/workout-state";
 import { createClient } from "@/lib/supabase/client";
 import { isRetryable } from "@/lib/sync/classify";
 import { drainQueue } from "@/lib/sync/drain";
@@ -37,8 +37,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 type LoggerShellProps = {
   blocks: LoggerBlock[];
   initialBlockIndex: number;
-  session: LoggerSession;
-  sessionCompletion: SessionCompletionRecord;
+  session: LoggerWorkout;
+  workoutCompletion: WorkoutCompletionRecord;
   userId: string;
 };
 
@@ -134,7 +134,7 @@ export function LoggerShell({
   blocks,
   initialBlockIndex,
   session,
-  sessionCompletion,
+  workoutCompletion,
   userId,
 }: LoggerShellProps) {
   const router = useRouter();
@@ -143,7 +143,7 @@ export function LoggerShell({
   const [actionError, setActionError] = useState<string | null>(null);
   const [blocksState, setBlocksState] = useState(blocks);
   const [completedBlockIds, setCompletedBlockIds] = useState(
-    sessionCompletion.completed_block_ids,
+    workoutCompletion.completed_block_ids,
   );
   const [completedSummary, setCompletedSummary] =
     useState<WorkoutSummaryProps | null>(null);
@@ -153,7 +153,7 @@ export function LoggerShell({
   );
 
   const blocksRef = useRef(blocks);
-  const completedBlockIdsRef = useRef(sessionCompletion.completed_block_ids);
+  const completedBlockIdsRef = useRef(workoutCompletion.completed_block_ids);
 
   useEffect(() => {
     void drainQueue(userId);
@@ -214,7 +214,7 @@ export function LoggerShell({
         completed_block_ids: nextCompletedBlockIds,
         was_ended_early: wasEndedEarly,
       })
-      .eq("completion_id", sessionCompletion.completion_id);
+      .eq("completion_id", workoutCompletion.completion_id);
 
     if (error) {
       if (
@@ -229,7 +229,7 @@ export function LoggerShell({
             id: crypto.randomUUID(),
             kind: "workout_completion_end",
             payload: {
-              completion_id: sessionCompletion.completion_id,
+              completion_id: workoutCompletion.completion_id,
               completed_at: completedAt,
               completed_block_ids: nextCompletedBlockIds,
               was_ended_early: wasEndedEarly,
@@ -248,7 +248,7 @@ export function LoggerShell({
           buildLocalSummary(
             blocksRef.current,
             completedAt,
-            session.session_name,
+            session.workout_name,
             "Workout saved locally. It will sync when you're back online.",
             wasEndedEarly,
           ),
@@ -261,7 +261,7 @@ export function LoggerShell({
 
     router.refresh();
     router.push(
-      `/log/${session.session_id}/summary?completion_id=${sessionCompletion.completion_id}`,
+      `/log/${session.workout_id}/summary?completion_id=${workoutCompletion.completion_id}`,
     );
   }
 
@@ -290,7 +290,7 @@ export function LoggerShell({
       .update({
         completed_block_ids: nextCompletedBlockIds,
       })
-      .eq("completion_id", sessionCompletion.completion_id);
+      .eq("completion_id", workoutCompletion.completion_id);
 
     if (error) {
       if (
@@ -305,7 +305,7 @@ export function LoggerShell({
             id: crypto.randomUUID(),
             kind: "workout_completion_block_complete",
             payload: {
-              completion_id: sessionCompletion.completion_id,
+              completion_id: workoutCompletion.completion_id,
               block_id: blockId,
             },
             attempts: 0,
@@ -341,7 +341,7 @@ export function LoggerShell({
               Workout Logger
             </p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              {session.session_name}
+              {session.workout_name}
             </h1>
           </div>
           <QueueIndicator userId={userId} />
@@ -359,7 +359,7 @@ export function LoggerShell({
           Workout Logger
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          {session.session_name}
+          {session.workout_name}
         </h1>
       </div>
 
@@ -422,7 +422,7 @@ export function LoggerShell({
                       <FailureProtocol
                         block={block}
                         exercise={selectedExercise}
-                        sessionId={session.session_id}
+                        workoutId={session.workout_id}
                         userId={userId}
                         onSetSaved={(setLog) =>
                           handleSetSaved(
@@ -448,7 +448,7 @@ export function LoggerShell({
                       <FreeFormProtocol
                         block={block}
                         exercise={selectedExercise}
-                        sessionId={session.session_id}
+                        workoutId={session.workout_id}
                         userId={userId}
                         onSetSaved={(setLog) =>
                           handleSetSaved(

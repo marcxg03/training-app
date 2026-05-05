@@ -119,7 +119,7 @@ function normalizeStoredQueueRow(row: StoredQueueRow): StoredQueueRow {
 
   const payload = row.payload as Record<string, unknown>;
 
-  if (row.kind === "session_completion_start") {
+  if (row.kind === "workout_completion_start") {
     return {
       ...row,
       kind: "workout_completion_start",
@@ -128,26 +128,26 @@ function normalizeStoredQueueRow(row: StoredQueueRow): StoredQueueRow {
         workout_id:
           typeof payload.workout_id === "string"
             ? payload.workout_id
-            : payload.session_id,
+            : payload.workout_id,
       },
     } as StoredQueueRow;
   }
 
-  if (row.kind === "session_completion_block_complete") {
+  if (row.kind === "workout_completion_block_complete") {
     return {
       ...row,
       kind: "workout_completion_block_complete",
     } as StoredQueueRow;
   }
 
-  if (row.kind === "session_completion_end") {
+  if (row.kind === "workout_completion_end") {
     return {
       ...row,
       kind: "workout_completion_end",
     } as StoredQueueRow;
   }
 
-  if (row.kind === "set_log_insert" && typeof payload.session_id === "string") {
+  if (row.kind === "set_log_insert" && typeof payload.workout_id === "string") {
     return {
       ...row,
       payload: {
@@ -155,7 +155,7 @@ function normalizeStoredQueueRow(row: StoredQueueRow): StoredQueueRow {
         workout_id:
           typeof payload.workout_id === "string"
             ? payload.workout_id
-            : payload.session_id,
+            : payload.workout_id,
       },
     } as StoredQueueRow;
   }

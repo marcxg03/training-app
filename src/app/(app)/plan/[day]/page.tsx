@@ -12,8 +12,8 @@ type PlanDayPageProps = {
 };
 
 type SessionDetail = {
-  sessionId: string;
-  sessionType: Enums<"session_type_enum">;
+  workoutId: string;
+  workoutType: Enums<"session_type_enum">;
   sessionName: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
@@ -230,8 +230,8 @@ async function getDayPlan(day: Enums<"day_of_week_enum">) {
   }
 
   const sessionDetails: SessionDetail[] = sortedWorkouts.map((workout) => ({
-    sessionId: workout.workout_id,
-    sessionType: workout.workout_type,
+    workoutId: workout.workout_id,
+    workoutType: workout.workout_type,
     sessionName: workout.workout_name,
     timing: workout.timing,
     gym: workout.gym,
@@ -289,7 +289,7 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
 
       <div className="space-y-4">
         {dayPlan.sessions.map((session) => (
-          <SessionDetailPanel key={session.sessionId} session={session} />
+          <SessionDetailPanel key={session.workoutId} session={session} />
         ))}
       </div>
     </div>

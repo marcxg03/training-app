@@ -18,7 +18,7 @@ export function TodaySessionCard({ session }: TodaySessionCardProps) {
           className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <SessionSummaryRow
-            sessionType={session.workoutType}
+            workoutType={session.workoutType}
             sessionName={session.workoutName}
             timing={session.timing}
             gym={session.gym}

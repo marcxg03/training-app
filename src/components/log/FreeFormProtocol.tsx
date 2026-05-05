@@ -6,7 +6,7 @@ import type {
   LoggerBlock,
   LoggerExercise,
   LoggerSetLog,
-} from "@/lib/methodology/session-state";
+} from "@/lib/methodology/workout-state";
 import { Button } from "@/components/ui/button";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
@@ -14,7 +14,7 @@ import { SetLogRow } from "@/components/log/SetLogRow";
 type FreeFormProtocolProps = {
   block: LoggerBlock;
   exercise: LoggerExercise;
-  sessionId: string;
+  workoutId: string;
   userId: string;
   onComplete: () => Promise<void>;
   onSetSaved: (setLog: LoggerSetLog) => void;
@@ -23,7 +23,7 @@ type FreeFormProtocolProps = {
 export function FreeFormProtocol({
   block,
   exercise,
-  sessionId,
+  workoutId,
   userId,
   onComplete,
   onSetSaved,
@@ -71,7 +71,7 @@ export function FreeFormProtocol({
           blockId={block.block_id}
           exercise={exercise}
           label={`Set ${loggedSets.length + 1}`}
-          sessionId={sessionId}
+          workoutId={workoutId}
           setIndex={loggedSets.length + 1}
           userId={userId}
           onSaved={(setLog) => {

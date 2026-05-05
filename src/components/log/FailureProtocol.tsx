@@ -4,14 +4,14 @@ import type {
   LoggerBlock,
   LoggerExercise,
   LoggerSetLog,
-} from "@/lib/methodology/session-state";
+} from "@/lib/methodology/workout-state";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
 
 type FailureProtocolProps = {
   block: LoggerBlock;
   exercise: LoggerExercise;
-  sessionId: string;
+  workoutId: string;
   userId: string;
   onComplete: () => void;
   onSetSaved: (setLog: LoggerSetLog) => void;
@@ -26,7 +26,7 @@ const failureSteps = [
 export function FailureProtocol({
   block,
   exercise,
-  sessionId,
+  workoutId,
   userId,
   onComplete,
   onSetSaved,
@@ -73,7 +73,7 @@ export function FailureProtocol({
             blockId={block.block_id}
             exercise={exercise}
             label={step.label}
-            sessionId={sessionId}
+            workoutId={workoutId}
             setIndex={step.setIndex}
             showFailureCheckbox={step.setIndex === 3}
             defaultFailureChecked={step.setIndex === 3}

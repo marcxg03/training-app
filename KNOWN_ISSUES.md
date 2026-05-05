@@ -33,13 +33,13 @@ policies on all 10 tables.
 
 ## Slice 4 — Workout Logger
 
-### 🟡 Medium — In-flight save lost on tab close
+### ✓ Closed — In-flight save lost on tab close (S4-M1)
 
-When the browser tab is closed mid-save, the in-flight set_logs
-INSERT is cancelled and the set is not persisted. Resume correctly
-identifies the next incomplete block based on persisted set_logs,
-but the user has to re-enter the lost set. Slice 5 (Sync Layer)
-addresses this via the queue-on-failure pattern.
+Resolved by Slice 5's queue-on-failure pattern. Verified during
+Slice 7a pre-test setup: a deliberate tab-close-mid-save test
+showed the in-flight INSERT enqueueing to the localStorage outbox,
+draining cleanly on next page load, and resume picking up from the
+correct next-incomplete block. No data loss.
 
 ### 🟢 Low — Volume tile shows 0 for bodyweight-only sessions
 
@@ -86,36 +86,29 @@ DB writes fire as on the corresponding explicit-button path."
 This is a workflow improvement candidate, not a code follow-up —
 the code is fixed.
 
-### 🟢 Low — pr_history.set_log_id FK population on legacy rows only
+### ✓ Closed — Mobility PR detection path
 
-🟢 Low — `pr_history.set_log_id` is populated correctly on both
-the failure-block PR detection path (Slice 5 verification) and the
-mobility PR detection path (Slice 6.1 Phase A Tests 1 + 8 — Lower
-ATG Split Squat from May 2 produced two PR rows with correctly-
-populated FKs that JOIN cleanly through the hybrid query in
-`getAllSessions`, contributing PR count = 2 on the Lower ATG · May 2
-row).
+Verified during Slice 6.1 Phase A. The mobility PR detection path
+fires `set_log_id` correctly on `pr_history` INSERT — Lower ATG
+Split Squat from May 2 produced two PR rows with populated FKs
+that JOIN cleanly through the hybrid query in `getAllSessions`,
+contributing PR count = 2 on the Lower ATG · May 2 row. The
+failure-block path was already verified in Slice 5. Both code
+paths converge on the same writer; no path-specific divergence.
 
-Remaining concern is scoped to legacy rows where the FK was never
-populated (pre-Slice-4 historical data, Slice 2's three seeded PRs
-with `set_log_id = NULL` by design). Slice 6's queries handle this
-via `WHERE set_log_id IS NOT NULL` filters; legacy rows simply
-don't appear in PR Timeline and don't contribute to All Sessions
-PR counts. No production fix required. Backfill candidate logged
-in FUTURE_WORK.md.
+Legacy-row FK gap (pre-Slice-4 historical data + Slice 2's three
+seeded PRs with `set_log_id = NULL` by design) is handled by
+`WHERE set_log_id IS NOT NULL` filters in the Slice 6 queries.
+Backfill candidate logged in FUTURE_WORK.md; not a code issue.
 
 ## Slice 7a — Library Tab + Workouts Rename
 
-### 🟡 Medium — TS-level session\_\* identifiers half-renamed
+### ✓ Closed — TS-level session\_\* identifiers half-renamed
 
-~25 references across 11 files (logger components, plan day route,
-page-level prop types, queue discriminated union kinds) still use
-`session_id` / `session_name` / `session_type` / `session_completion_*`
-as in-memory JS field and prop names. The DB layer is fully renamed
-to `workout_*` and runtime is unaffected — these are cognitive-friction
-mismatches, not functional risk. Mechanical cleanup deferred to Slice
-7a.5, a focused TS-rename PR with no schema or behavioral changes.
-Bundling the rename into 7a's Phase 4B review would have diluted
-attention from the Calves block_type collision (the methodologically
-important issue) and added rename-introduced-bug risk to a slice
-already touching ~55 files.
+Resolved by Slice 7a.5 (mechanical TS-rename PR). 88 substring
+substitutions across 14 files plus the
+`src/lib/methodology/session-state.ts` → `workout-state.ts`
+file rename. The only remaining `session_*` reference is the
+`Enums<"session_type_enum">` enum-type-name carryover, which
+requires an `ALTER TYPE` migration; logged in FUTURE_WORK.md
+under Schema cleanup.

@@ -1,7 +1,7 @@
 import type {
   LoggerExercise,
   LoggerSetLog,
-} from "@/lib/methodology/session-state";
+} from "@/lib/methodology/workout-state";
 import { formatWeight } from "@/lib/units";
 import { PRBadge } from "@/components/log/PRBadge";
 

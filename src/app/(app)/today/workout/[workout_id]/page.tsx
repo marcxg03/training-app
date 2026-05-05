@@ -14,8 +14,8 @@ type TodayWorkoutDetailPageProps = {
 };
 
 type WorkoutDetail = {
-  sessionId: string;
-  sessionType: Enums<"session_type_enum">;
+  workoutId: string;
+  workoutType: Enums<"session_type_enum">;
   sessionName: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
@@ -166,8 +166,8 @@ async function getTodayWorkoutDetail(
   }
 
   return {
-    sessionId: workout.workout_id,
-    sessionType: workout.workout_type,
+    workoutId: workout.workout_id,
+    workoutType: workout.workout_type,
     sessionName: workout.workout_name,
     timing: workout.timing,
     gym: workout.gym,
@@ -203,8 +203,8 @@ export default async function TodayWorkoutDetailPage({
         >
           Back to today
         </Link>
-        {workout.sessionType === "lifting" ? (
-          <StartWorkoutButton workoutId={workout.sessionId} />
+        {workout.workoutType === "lifting" ? (
+          <StartWorkoutButton workoutId={workout.workoutId} />
         ) : null}
       </div>
       <SessionDetailPanel session={workout} />

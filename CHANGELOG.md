@@ -770,3 +770,46 @@ resolved value into a private`requireEnv(name, value)`validator. Documented the 
 - `phase-5b-drafts/`, `workflow-v3.md`, `setup-guide-v2.md` added to
   `.prettierignore` (Marcus-owned drafts, not version-controlled
   deliverables).
+
+## Slice 7a.5 — TS-level session\_\* rename cleanup (2026-05-04)
+
+### What was built
+
+- Mechanical TS-rename PR closing the 🟡 KI from Slice 7a. 88
+  substring substitutions across 14 files: snake*case fields
+  (`session_id` → `workout_id`, `session_name` → `workout_name`,
+  `session_type` → `workout_type`, `session_completion*{start,
+  block*complete, end}`→`workout_completion*\*`), camelCase
+identifiers (`sessionId`→`workoutId`, `sessionType`→`workoutType`— cascades to`sessionTypeLabel`→`workoutTypeLabel`—`sessionCompletion`→`workoutCompletion`,
+`targetSessionId`→`targetWorkoutId`), and type/function names
+(`SessionCompletionRecord`→`WorkoutCompletionRecord`,
+`getOrCreateSessionCompletion`→`getOrCreateWorkoutCompletion`,
+`LoggerSession`→`LoggerWorkout`).
+- File rename: `src/lib/methodology/session-state.ts` →
+  `src/lib/methodology/workout-state.ts`. Seven import paths
+  updated.
+- `Enums<"session_type_enum">` references intentionally retained
+  — the underlying Postgres enum type still carries the old name;
+  renaming requires `ALTER TYPE session_type_enum RENAME TO
+workout_type_enum` paired with `supabase gen types`. Logged in
+  FUTURE_WORK.md under Schema cleanup; bundle with the FK
+  constraint name carryovers in a future cosmetic-cleanup pass.
+
+### Closed during this slice
+
+- 🟡 Slice 7a TS-level session\_\* half-rename
+- 🟡 Slice 4 S4-M1 (in-flight save lost on tab close) — verified
+  resolved by Slice 5's queue-on-failure pattern during Slice 7a
+  pre-test setup
+- 🟢 Slice 5 mobility-PR detection path — verified during Slice
+  6.1 Phase A; both code paths converge on the same writer
+
+### Verification
+
+- `pnpm typecheck` ✓ (clean on first try after the sed pass),
+  `pnpm lint` ✓, `pnpm format:check` ✓.
+- Residual grep: zero matches for renamed identifiers anywhere in
+  `src/` outside `src/lib/supabase/types.ts` (DB-generated) and
+  the documented `Enums<"session_type_enum">` carryover.
+- No schema changes. No migrations. No dependency changes.
+- No spec, no Phase 5 — pure mechanical rename per scope.

@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 type SessionDetailPanelProps = {
   session: {
-    sessionId: string;
-    sessionType: Enums<"session_type_enum">;
+    workoutId: string;
+    workoutType: Enums<"session_type_enum">;
     sessionName: string;
     timing: Enums<"timing_enum">;
     gym: string | null;
@@ -62,7 +62,7 @@ export function SessionDetailPanel({ session }: SessionDetailPanelProps) {
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 pb-4">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            {session.sessionType}
+            {session.workoutType}
           </p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
             {session.sessionName}
@@ -78,7 +78,7 @@ export function SessionDetailPanel({ session }: SessionDetailPanelProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {session.sessionType === "lifting" ? (
+        {session.workoutType === "lifting" ? (
           <BlockList
             blocks={session.blocks.map((block) => ({
               blockId: block.blockId,

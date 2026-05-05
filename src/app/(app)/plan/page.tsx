@@ -184,7 +184,7 @@ async function getWeeklyPlan() {
       const cardSessions = sortedWorkouts.map<DayCardSession>((workout) => {
         if (workout.workout_type !== "lifting") {
           return {
-            sessionType: workout.workout_type,
+            workoutType: workout.workout_type,
             sessionName: workout.workout_name,
             timing: workout.timing,
             gym: workout.gym,
@@ -218,7 +218,7 @@ async function getWeeklyPlan() {
         }
 
         return {
-          sessionType: "lifting",
+          workoutType: "lifting",
           sessionName: workout.workout_name,
           timing: workout.timing,
           gym: workout.gym,

@@ -5,7 +5,7 @@ import { SessionSummaryRow } from "@/components/plan/SessionSummaryRow";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export type DayCardSession = {
-  sessionType: Enums<"session_type_enum">;
+  workoutType: Enums<"session_type_enum">;
   sessionName: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
@@ -49,8 +49,8 @@ export function DayCard({
           ) : null}
           {sessions.map((session) => (
             <SessionSummaryRow
-              key={`${session.sessionType}-${session.sessionName}-${session.timing}`}
-              sessionType={session.sessionType}
+              key={`${session.workoutType}-${session.sessionName}-${session.timing}`}
+              workoutType={session.workoutType}
               sessionName={session.sessionName}
               timing={session.timing}
               gym={session.gym}

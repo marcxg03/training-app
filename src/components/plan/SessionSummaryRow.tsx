@@ -1,14 +1,14 @@
 import type { Enums } from "@/lib/supabase/types";
 
 type SessionSummaryRowProps = {
-  sessionType: Enums<"session_type_enum">;
+  workoutType: Enums<"session_type_enum">;
   sessionName: string;
   timing: Enums<"timing_enum">;
   gym: string | null;
   summary: string;
 };
 
-const sessionTypeLabel: Record<Enums<"session_type_enum">, string> = {
+const workoutTypeLabel: Record<Enums<"session_type_enum">, string> = {
   lifting: "Lift",
   cardio: "Cardio",
   recovery: "Recovery",
@@ -23,7 +23,7 @@ function formatTimingLabel(timing: Enums<"timing_enum">) {
 }
 
 export function SessionSummaryRow({
-  sessionType,
+  workoutType,
   sessionName,
   timing,
   gym,
@@ -37,7 +37,7 @@ export function SessionSummaryRow({
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="rounded-full border border-border px-2 py-0.5 text-[11px] uppercase tracking-[0.18em]">
-              {sessionTypeLabel[sessionType]}
+              {workoutTypeLabel[workoutType]}
             </span>
             {timingLabel ? (
               <span className="text-[11px] uppercase tabular-nums tracking-[0.18em]">

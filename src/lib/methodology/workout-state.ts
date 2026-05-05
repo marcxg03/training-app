@@ -27,7 +27,7 @@ export type LoggerSetLog = Pick<
   | "logged_at"
 > & {
   prTypes: Enums<"pr_type_enum">[];
-  session_id: string;
+  workout_id: string;
 };
 
 export type LoggerBlock = {
@@ -39,35 +39,35 @@ export type LoggerBlock = {
   setLogs: LoggerSetLog[];
 };
 
-export type LoggerSession = {
-  session_id: string;
-  session_name: string;
-  session_type: Enums<"session_type_enum">;
+export type LoggerWorkout = {
+  workout_id: string;
+  workout_name: string;
+  workout_type: Enums<"session_type_enum">;
   dayOfWeek: Enums<"day_of_week_enum">;
 };
 
-export type SessionCompletionRecord = Tables<"workout_completions">;
+export type WorkoutCompletionRecord = Tables<"workout_completions">;
 
 type SessionCompletionStore = {
   create: (
     payload: TablesInsert<"workout_completions">,
-  ) => Promise<SessionCompletionRecord>;
+  ) => Promise<WorkoutCompletionRecord>;
   findLatestForToday: (args: {
-    sessionId: string;
+    workoutId: string;
     startedAfterIso: string;
     userId: string;
-  }) => Promise<SessionCompletionRecord | null>;
+  }) => Promise<WorkoutCompletionRecord | null>;
 };
 
-export async function getOrCreateSessionCompletion(
+export async function getOrCreateWorkoutCompletion(
   store: SessionCompletionStore,
-  sessionId: string,
+  workoutId: string,
   userId: string,
   startedAfterIso: string,
   nowIso: string = new Date().toISOString(),
 ) {
   const existing = await store.findLatestForToday({
-    sessionId,
+    workoutId,
     startedAfterIso,
     userId,
   });
@@ -78,7 +78,7 @@ export async function getOrCreateSessionCompletion(
 
   return store.create({
     user_id: userId,
-    workout_id: sessionId,
+    workout_id: workoutId,
     started_at: nowIso,
     completed_block_ids: [],
     was_ended_early: false,

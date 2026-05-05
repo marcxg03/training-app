@@ -1,6 +1,6 @@
 "use client";
 
-import type { LoggerExercise } from "@/lib/methodology/session-state";
+import type { LoggerExercise } from "@/lib/methodology/workout-state";
 import { getPrimaryMuscleGroupLabel } from "@/lib/methodology/muscle-groups";
 
 type ExercisePickerProps = {

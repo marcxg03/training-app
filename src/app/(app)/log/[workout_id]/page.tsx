@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { LoggerShell } from "@/components/log/LoggerShell";
 import {
   findLastIncompleteBlock,
-  getOrCreateSessionCompletion,
+  getOrCreateWorkoutCompletion,
   type LoggerBlock,
-  type LoggerSession,
-} from "@/lib/methodology/session-state";
+  type LoggerWorkout,
+} from "@/lib/methodology/workout-state";
 import { getTodayDayOfWeek } from "@/lib/methodology/today";
 import { createClient } from "@/lib/supabase/server";
 
@@ -203,16 +203,16 @@ async function getLoggerData(workoutId: string) {
 
     list.push({
       ...setLog,
-      session_id: setLog.workout_id,
+      workout_id: setLog.workout_id,
       prTypes: prTypesBySetLogId.get(setLog.set_log_id) ?? [],
     });
     setLogsByBlockId.set(setLog.block_id, list);
   }
 
-  const session: LoggerSession = {
-    session_id: workout.workout_id,
-    session_name: workout.workout_name,
-    session_type: workout.workout_type,
+  const session: LoggerWorkout = {
+    workout_id: workout.workout_id,
+    workout_name: workout.workout_name,
+    workout_type: workout.workout_type,
     dayOfWeek: schedule.day_of_week,
   };
 
@@ -252,7 +252,7 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
   }
 
   const todayStartIso = getTodayStartIso();
-  const sessionCompletion = await getOrCreateSessionCompletion(
+  const workoutCompletion = await getOrCreateWorkoutCompletion(
     {
       async create(payload) {
         const { data: insertedCompletion, error: insertError } = await supabase
@@ -268,7 +268,7 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
         return insertedCompletion;
       },
       async findLatestForToday({
-        sessionId: targetSessionId,
+        workoutId: targetSessionId,
         startedAfterIso,
         userId,
       }) {
@@ -289,18 +289,18 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
         return completion;
       },
     },
-    session.session_id,
+    session.workout_id,
     user.id,
     todayStartIso,
   );
 
-  if (sessionCompletion.completed_at) {
+  if (workoutCompletion.completed_at) {
     redirect("/today");
   }
 
   const initialBlockIndex = findLastIncompleteBlock(
     blocks,
-    sessionCompletion.completed_block_ids,
+    workoutCompletion.completed_block_ids,
   );
 
   if (initialBlockIndex === -1) {
@@ -310,14 +310,14 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
       .update({
         completed_at: completedAt,
       })
-      .eq("completion_id", sessionCompletion.completion_id);
+      .eq("completion_id", workoutCompletion.completion_id);
 
     if (updateError) {
       throw new Error(updateError.message);
     }
 
     redirect(
-      `/log/${session.session_id}/summary?completion_id=${sessionCompletion.completion_id}`,
+      `/log/${session.workout_id}/summary?completion_id=${workoutCompletion.completion_id}`,
     );
   }
 
@@ -326,7 +326,7 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
       blocks={blocks}
       initialBlockIndex={initialBlockIndex}
       session={session}
-      sessionCompletion={sessionCompletion}
+      workoutCompletion={workoutCompletion}
       userId={user.id}
     />
   );
