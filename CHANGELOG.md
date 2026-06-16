@@ -1155,3 +1155,43 @@ cover`.
   errors.
 - The offline-fallback path is verified by code + the cached `/offline` entry
   (toggling real network offline isn't scriptable here).
+
+## Slice 12 — Multiple plans + active-plan switcher (2026-06-16)
+
+> Solo-built (Claude Code) + reviewer-subagent pass. Spec:
+> `spec/slices/SLICE_12_MULTIPLE_PLANS.md`. No migration, no new dependency.
+
+### What was built
+
+- A **plan switcher** on `/plan`: a Select of all the user's plans (active
+  selected) plus "Rename" and "New plan". Switching activates the chosen plan;
+  the active plan drives Today, the Plan week, the Plan Editor, and the
+  Nutrition day-type.
+- `createPlan` seeds an empty **7-day rest-day skeleton** (`daily_schedules`
+  mon–sun); new plans are inactive unless the user has no active plan. A new
+  plan is built out via the existing Plan Editor (Slice 10).
+- `activatePlan` enforces **exactly one active plan** in app code; `renamePlan`
+  with a friendly duplicate-name (23505) message.
+- `src/lib/plan/plan-mutations.ts` + `PlanControls.tsx`; `page.tsx` gains
+  `getPlans()` and handles the zero-plans / no-active states.
+
+### Reviewer-subagent findings (fixed / accepted)
+
+- **Fixed:** `createPlan` no longer self-activates on a count-query error (which
+  could have stolen active status); a failed skeleton insert now
+  compensating-deletes the orphan plan; friendly 23505; the switcher refreshes
+  on activate-failure to resync, disables Rename when there's no active plan,
+  and clears stale errors.
+- **Consciously accepted (🟡, see KNOWN_ISSUES):** the activate is two
+  non-transactional statements. Deactivate-first is deliberate — a partial
+  failure degrades to _zero_ active (graceful empty state, recoverable) rather
+  than _two_ active (which would crash every `maybeSingle()` reader). A truly
+  atomic switch (RPC / partial unique index) is in FUTURE_WORK.
+
+### Verification
+
+- typecheck / lint / format:check / build clean (`/plan` rebuilt with controls).
+- **Live (browser):** created "Cut Phase v1" → it appeared in the switcher →
+  switched active → the week became the empty rest skeleton; reset to base.
+  DB verified: 2 plans, **exactly 1 active**, and the new plan got its 7-day
+  mon–sun skeleton. No data deleted (no delete affordance in this slice).

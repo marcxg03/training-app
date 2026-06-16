@@ -246,3 +246,17 @@ page; it intentionally does not cache app data or API responses (so auth and
 training data never go stale). The app is therefore installable and degrades
 gracefully offline, but is not usable offline. Richer offline (app-shell
 precache, read-only cached views) is tracked in FUTURE_WORK.
+
+## Slice 12 — Multiple plans
+
+### 🟡 Medium — Active-plan switch is non-transactional (deactivate-then-activate)
+
+`activatePlan` runs two statements (deactivate others, then activate the
+chosen plan) with no transaction. If the second fails, the user is left with
+**zero** active plans — Today/Plan/Nutrition render their empty states until
+they re-pick (no data lost; recoverable). Deactivate-first is deliberate so a
+partial failure can't leave _two_ active plans (which would crash every
+`.eq("is_active",true).maybeSingle()` reader). `createPlan`'s "self-activate
+when none active" is also a check-then-write (TOCTOU); negligible for a single
+user. The clean fix is a Postgres RPC/transaction or a partial unique index
+`(user_id) WHERE is_active` — tracked in FUTURE_WORK.

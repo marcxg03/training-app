@@ -651,3 +651,16 @@ precaching or read-only cached views (currently navigations fall back to a
 static `/offline` page, no data caching by design); (3) optionally adopt
 Serwist (the maintained next-pwa successor) if Workbox-grade caching/runtime
 strategies are wanted; (4) web push notifications for workout reminders.
+
+### Plans — atomic active-switch, delete, and clone
+
+Slice 12 added multiple plans + an active-plan switcher. Follow-ups: (1) make
+the active-plan switch atomic — a Postgres RPC `set_active_plan(target)` that
+flips both updates in one transaction, or a partial unique index
+`CREATE UNIQUE INDEX ... ON training_plans (user_id) WHERE is_active` so the DB
+rejects a second active row (replaces the current non-transactional
+deactivate-then-activate; see KNOWN_ISSUES 🟡). (2) Delete a plan — guarded,
+because it cascades `daily_schedules → workouts → set_logs`/completions; block
+deletion of a plan that has logged history, or require an explicit
+"this deletes N logged sessions" confirmation. (3) Clone a plan (deep-copy
+schedules/workouts/`workout_blocks`) to spin up a variant quickly.

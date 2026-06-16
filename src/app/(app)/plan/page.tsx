@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
+
 import { getHighLevelMuscleGroups } from "@/lib/methodology/muscle-groups";
 import type { Enums, Tables } from "@/lib/supabase/types";
 import { DayCard, type DayCardSession } from "@/components/plan/DayCard";
+import { PlanControls } from "@/app/(app)/plan/_components/PlanControls";
 import { createClient } from "@/lib/supabase/server";
 
 const dayOrder: Enums<"day_of_week_enum">[] = [
@@ -162,6 +165,7 @@ async function getWeeklyPlan() {
   }
 
   return {
+    planId: plan.plan_id,
     planName: plan.name,
     days: dayOrder.map((dayOfWeek) => {
       const schedule = schedules.find(
@@ -238,47 +242,59 @@ async function getWeeklyPlan() {
   };
 }
 
-export default async function PlanPage() {
-  const weeklyPlan = await getWeeklyPlan();
+async function getPlans() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("training_plans")
+    .select("plan_id, name")
+    .order("created_at", { ascending: true });
 
-  if (!weeklyPlan) {
-    return (
-      <div className="mx-auto max-w-3xl rounded-[1.5rem] border border-border bg-card/80 p-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Training Plan
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          Seed the plan data first to load the weekly schedule.
-        </p>
-      </div>
-    );
+  if (error) {
+    throw new Error(`Failed to load plans: ${error.message}`);
   }
+
+  return data ?? [];
+}
+
+export default async function PlanPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const [plans, weeklyPlan] = await Promise.all([getPlans(), getWeeklyPlan()]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
-          Plan Tab
-        </p>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground">
-          {weeklyPlan.planName}
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Seven day cards, read-only, with every workout in week order.
-        </p>
-      </div>
+      <PlanControls
+        plans={plans}
+        activePlanId={weeklyPlan?.planId ?? null}
+        userId={user.id}
+      />
 
-      <div className="space-y-4">
-        {weeklyPlan.days.map((day) => (
-          <DayCard
-            key={day.dayOfWeek}
-            dayOfWeek={day.dayOfWeek}
-            dayLabel={day.dayLabel}
-            isRestDay={day.isRestDay}
-            sessions={day.sessions}
-          />
-        ))}
-      </div>
+      {weeklyPlan ? (
+        <div className="space-y-4">
+          {weeklyPlan.days.map((day) => (
+            <DayCard
+              key={day.dayOfWeek}
+              dayOfWeek={day.dayOfWeek}
+              dayLabel={day.dayLabel}
+              isRestDay={day.isRestDay}
+              sessions={day.sessions}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          {plans.length === 0
+            ? "Create your first plan to get started."
+            : "Select a plan above to view its week."}
+        </div>
+      )}
     </div>
   );
 }

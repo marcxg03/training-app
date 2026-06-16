@@ -983,3 +983,27 @@ exactly what is (and isn't) cached — important because caching Supabase
 auth/data would be actively harmful. Named `service-worker.js` (not the
 gitignored `sw.js`) so the source is committed. Serwist/next-pwa remains an
 option if richer Workbox caching is ever wanted (FUTURE_WORK).
+
+## Slice 12 — Multiple plans
+
+### Single-active-plan enforced in app code, deactivate-first ordering
+
+**Context:** The whole app reads the active plan via
+`.eq("is_active", true).maybeSingle()`, which **throws** if more than one plan
+is active. The DB has no constraint enforcing a single active plan, and
+supabase-js can't express the atomic `SET is_active = (plan_id = $target)` in
+one statement (that needs an RPC).
+
+**Decision:** Enforce single-active in `activatePlan` with two statements —
+**deactivate the user's other plans first, then activate the chosen one** — and
+have `createPlan` self-activate only when the active count is confirmably zero.
+
+**Reasoning:** Of the two non-atomic orderings, deactivate-first is the safer
+failure mode: a crash between the statements leaves _zero_ active plans, which
+every reader handles gracefully (empty/“select a plan” state, recoverable by
+re-picking). Activate-first would instead risk _two_ active plans, which would
+crash every `maybeSingle()` reader (Today, Plan, Nutrition). Given a single
+user on a single session the race window is negligible. A fully atomic switch
+(a Postgres RPC, or a `UNIQUE INDEX ... WHERE is_active` partial index) is the
+correct long-term fix and is logged in FUTURE_WORK; the non-atomic version is a
+conscious, documented acceptance (KNOWN_ISSUES 🟡).
