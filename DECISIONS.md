@@ -961,3 +961,25 @@ a large schema refactor. Block-within-workout editing and adding cardio/recovery
 sessions are deferred (FUTURE_WORK) rather than rushed into this risky surface.
 The full schema split (Option A) remains available later if the plan ever needs
 to diverge from history without these guards.
+
+## Slice 11 — PWA
+
+### Dependency-free PWA (hand-rolled service worker over next-pwa)
+
+**Context:** The repo's `.gitignore` reserved `public/sw.js` / `workbox-*.js`,
+implying next-pwa was the original intended PWA tool. next-pwa is effectively
+unmaintained for the Next 15 App Router; its successor (Serwist) works but adds
+a dependency + webpack/build integration that can fight Next 15.3.
+
+**Decision:** Ship the PWA with zero new dependencies: a Next metadata manifest
+(`app/manifest.ts`), SVG icons, standalone/theme metadata, and a hand-authored
+`public/service-worker.js` registered by a small client island. The worker is
+network-first for navigations with a cached `/offline` fallback and caches no
+app/API data.
+
+**Reasoning:** A few dozen lines of well-understood SW code beat a build-time
+integration that risks the whole app's build, and they give full control over
+exactly what is (and isn't) cached — important because caching Supabase
+auth/data would be actively harmful. Named `service-worker.js` (not the
+gitignored `sw.js`) so the source is committed. Serwist/next-pwa remains an
+option if richer Workbox caching is ever wanted (FUTURE_WORK).

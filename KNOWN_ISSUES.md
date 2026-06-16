@@ -228,3 +228,21 @@ The remaining rules (48h muscle-group recovery, push/pull weekly balance, max
 2 sauna/week, no yoga+sauna same day, compound 24h, recovery timing on
 two-session days) need a muscle-group / recovery-activity analysis engine and
 are tracked in FUTURE_WORK.
+
+## Slice 11 — PWA
+
+### 🟢 Low — PWA icons are SVG only (no rasterised PNG sizes)
+
+The manifest references `icon.svg` + `icon-maskable.svg`. Modern Chromium
+installs fine from SVG, but some tooling (older Lighthouse, app stores, certain
+Android launchers) prefers explicit 192/512 PNGs. Adding rasterised PNGs (and a
+proper apple-touch-icon PNG) is tracked in FUTURE_WORK — needs a real image
+asset / build step.
+
+### 🟢 Low — Offline support is a shell fallback, not full offline
+
+The service worker is network-first for navigations with a cached `/offline`
+page; it intentionally does not cache app data or API responses (so auth and
+training data never go stale). The app is therefore installable and degrades
+gracefully offline, but is not usable offline. Richer offline (app-shell
+precache, read-only cached views) is tracked in FUTURE_WORK.

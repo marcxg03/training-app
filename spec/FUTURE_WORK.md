@@ -640,3 +640,14 @@ update/insert in a single Postgres function / RPC so a mid-save failure can't
 leave a half-applied schedule. Same atomicity pattern would also benefit the
 Library bank update (Slice 7b) and the cardio/recovery activity two-step
 (Slice 8).
+
+### PWA — rasterised icons + richer offline + push
+
+Slice 11 shipped a dependency-free installable PWA (manifest + SVG icons +
+hand-rolled service worker with an offline shell). Follow-ups: (1) rasterised
+PNG icons at 192/512 + a real apple-touch-icon (needs an image asset or a build
+step) for store/older-tooling compatibility; (2) richer offline via app-shell
+precaching or read-only cached views (currently navigations fall back to a
+static `/offline` page, no data caching by design); (3) optionally adopt
+Serwist (the maintained next-pwa successor) if Workbox-grade caching/runtime
+strategies are wanted; (4) web push notifications for workout reminders.

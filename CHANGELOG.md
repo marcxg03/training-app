@@ -1106,3 +1106,52 @@ No migration needed — these are scoping choices.
 - The history-disabled-remove and hard-rest-day-block paths are verified by the
   reviewer + code (couldn't fabricate logged history live without writing to
   append-only tables). Test user + seeded data cleaned up (0 residual rows).
+
+## Slice 11 — PWA (installable + offline shell) (2026-06-16)
+
+> Solo-built (Claude Code). Spec-light. No new migration, **no new dependency**.
+
+### What was built
+
+- **Installable PWA, dependency-free** (no next-pwa / workbox):
+  - `src/app/manifest.ts` → `/manifest.webmanifest` (name "Training",
+    standalone, `start_url:/today`, scope `/`, black background/theme, SVG
+    icons any + maskable).
+  - `public/icon.svg` + `public/icon-maskable.svg` — a lilac dumbbell mark
+    (maskable variant keeps the glyph in the safe zone).
+  - Root-layout metadata: `applicationName`, `appleWebApp` (status bar +
+    title), icons, and a `viewport` export with `themeColor` + `viewportFit:
+cover`.
+- **Offline support:**
+  - `public/service-worker.js` — hand-rolled, network-first for navigations
+    with a cached `/offline` fallback. Deliberately does NOT cache Supabase
+    API responses or app data (auth/training data must stay fresh); it only
+    serves an offline shell.
+  - `src/app/offline/page.tsx` — a static, auth-free offline page.
+  - `src/components/pwa/ServiceWorkerRegistrar.tsx` — a client island that
+    registers the SW on load, mounted once in the root layout.
+
+### Notes / decisions
+
+- Used `public/service-worker.js` (not `public/sw.js`, which `.gitignore`
+  reserves for next-pwa-generated output) so the hand-authored worker is
+  committed as source. Chose a dependency-free worker over next-pwa to avoid
+  Next 15 App Router build-integration risk — see DECISIONS.
+- Icons are SVG (any + maskable). Installable in modern Chromium; a future
+  pass can add rasterised PNG sizes for stores / older tooling (FUTURE_WORK).
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` all clean
+  (`/manifest.webmanifest` + `/offline` build as static routes).
+- **Live (browser):** `/manifest.webmanifest`, `/service-worker.js`
+  (application/javascript), `/icon.svg` (image/svg+xml), and `/offline` all
+  serve 200. On the app, the service worker **registers and is active at root
+  scope** (`navigator.serviceWorker.getRegistration()` → active, scope `/`),
+  the manifest link is injected (`/manifest.webmanifest`), and the
+  standalone/theme metas are present (`theme-color`, `mobile-web-app-capable`,
+  `apple-mobile-web-app-title/status-bar-style`). All browser install criteria
+  (manifest + active SW + icons + standalone + start_url) are met. No console
+  errors.
+- The offline-fallback path is verified by code + the cached `/offline` entry
+  (toggling real network offline isn't scriptable here).
