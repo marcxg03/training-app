@@ -1043,3 +1043,66 @@ mutations,schemas,projections}.ts` (browser-client writes, no Server
   dev-mode first-compile 500 transient as Slice 8 on the first `/settings`
   hit; recovered immediately; production build is clean.)
 - Test user + data fully cleaned up afterward (0 residual rows).
+
+## Slice 10 — Plan Editor (non-destructive v1) (2026-06-16)
+
+> Solo-built (Claude Code drafter) with an independent reviewer-subagent pass.
+> Spec: `spec/slices/SLICE_10_PLAN_EDITOR.md`. No new migration.
+
+### What was built
+
+- **Edit a training day in-app** (`/plan/[day]/edit`, with an "Edit day" button
+  on the day detail): toggle rest day, rename / re-time (AM·Anytime·PM) /
+  re-gym the day's sessions, reorder them (↑/↓), add a new lifting session, and
+  remove a session.
+- **Schedule validation on save:** a hard rule (the week must keep ≥ 1 rest
+  day) disables save with an inline error; a soft rule (cardio scheduled before
+  lifting on the same day) warns and flips the button to "Save anyway —
+  overriding N warning(s)".
+- **Data layer:** pure validation in `src/lib/methodology/plan-schedule.ts`;
+  `src/lib/plan/{queries,mutations,schemas,projections}.ts`. Browser-client
+  writes, no Server Actions, no Slice 5 queue.
+
+### Two data-integrity guardrails (the reason v1 is scoped this way)
+
+`workouts` rows are referenced by logged history and a CHECK constraint:
+
+- **History is never destroyed.** `set_logs`, `workout_completions`, **and**
+  `activity_completions` all FK `workout_id → workouts ON DELETE CASCADE`.
+  Plan Editor is non-destructive: a session with any logged history can't be
+  removed — the UI disables its remove control and `saveDay` re-checks all
+  three tables server-side and refuses the save if a removed id has history.
+  Edits are diff-based (UPDATE existing / INSERT new), never delete-then-insert,
+  so existing sessions' `workout_blocks` and history are never cascade-touched.
+- **Cardio CHECK preserved.** `saveDay` never changes `workout_type` (the form
+  has no type control) and new sessions are always `lifting` with no cardio
+  fields, so the `cardio` CHECK (migration 002) can't be violated.
+
+No migration needed — these are scoping choices.
+
+### Reviewer-subagent findings (fixed)
+
+- **Critical (fixed):** the history guard originally checked only `set_logs` +
+  `workout_completions`; the reviewer caught that `activity_completions`
+  (migration 015) is a **third** `ON DELETE CASCADE` table, so a completed
+  cardio/recovery session could have been removed and its activity history
+  silently cascade-deleted. Added `activity_completions` to **both** guards
+  (the UI `has_history` query and the mutation re-check). Reviewer also verified
+  the diff/removed-id computation, the cardio-CHECK safety, and the validation
+  logic.
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` all clean
+  (`/plan/[day]/edit` compiles).
+- **Authenticated browser E2E:** opened `/plan/mon/edit` (seeded plan) →
+  pre-filled with Speed Run (cardio, AM) + Upper (lifting); the
+  cardio-before-lifting soft warning rendered and the button read "Save anyway
+  — overriding 1 warning"; renamed Upper → "Upper Body" and saved → redirected
+  to the day detail showing the new name with its blocks intact. DB verified:
+  Monday still has exactly two workouts (no loss/duplication), types preserved,
+  display_order renormalized — confirming the diff update, not delete-insert.
+  No console errors.
+- The history-disabled-remove and hard-rest-day-block paths are verified by the
+  reviewer + code (couldn't fabricate logged history live without writing to
+  append-only tables). Test user + seeded data cleaned up (0 residual rows).

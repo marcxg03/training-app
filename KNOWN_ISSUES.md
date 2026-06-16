@@ -200,3 +200,31 @@ no imperial (lbs / ft-in) display toggle. Matches the kg storage decision from
 Slice 4.5. A kg/lbs display toggle is already tracked in FUTURE_WORK
 (Settings); when built it should cover both the workout-logger weight display
 and these profile fields.
+
+## Slice 10 — Plan Editor
+
+### 🟡 Medium — Plan Editor save is non-transactional (sequential writes)
+
+`saveDay` writes sequentially with no transaction: is_rest_day → deletes →
+per-row UPDATE/INSERT loop, bailing on the first error. A mid-loop failure
+leaves a partially-applied schedule (rest-day flipped, some rows updated,
+others not) while surfacing an error as if nothing saved; the user recovers by
+re-saving. **No history can be lost** in this path (deletes are still
+history-guarded and run before the loop), so the worst case is a cosmetic
+schedule inconsistency. The clean fix is a Postgres function / RPC wrapping the
+writes in a transaction — tracked in FUTURE_WORK.
+
+### 🟢 Low — Plan Editor v1 doesn't edit blocks-within-a-workout or add cardio/recovery sessions
+
+Editing a workout's block list (`workout_blocks` order/membership) and adding
+cardio/recovery sessions (which need cardio fields + polymorphic preset wiring)
+are out of v1 scope. Block catalogs are editable in the Library (Slice 7b);
+wiring them into a day's workout is the deferred piece. Tracked in FUTURE_WORK.
+
+### 🟢 Low — Most methodology schedule-validation rules are deferred
+
+v1 implements two rules (≥1 rest day/week hard; cardio-before-lifting soft).
+The remaining rules (48h muscle-group recovery, push/pull weekly balance, max
+2 sauna/week, no yoga+sauna same day, compound 24h, recovery timing on
+two-session days) need a muscle-group / recovery-activity analysis engine and
+are tracked in FUTURE_WORK.

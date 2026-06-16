@@ -613,3 +613,30 @@ training load rather than a static table.
 painful in daily use, add an edit/delete affordance (the DB RLS already
 permits UPDATE/DELETE on `meal_entries`), or decide to keep it append-only
 and drop those policies in a migration for consistency with `set_logs`.
+
+### Plan Editor — blocks-within-a-workout + cardio/recovery sessions
+
+Deferred from Slice 10 (5B v1, which edits day-level workouts only). Add: (1)
+editing a workout's block list via `workout_blocks` (add from the user's block
+catalog, reorder, remove) including "block order"; (2) adding cardio/recovery
+sessions to a day (needs the cardio CHECK fields and the polymorphic
+`workout_blocks.preset_activity_id/type` wiring). Build on the non-destructive
+guards already in `src/lib/plan/`.
+
+### Plan Editor — full methodology schedule-validation engine
+
+Slice 10 ships two validation rules (≥1 rest day/week; cardio-before-lifting).
+Add the rest as a proper engine over the week's exercises/activities: 48h
+muscle-group recovery, push/pull weekly balance, max 2 sauna/week, no
+yoga+sauna same calendar day (hard); compound recovery 24h, recovery timing on
+two-session days (soft). Needs muscle-group resolution per workout (via
+block_lifting_items → exercises.muscle_groups) and recovery-activity detection.
+
+### Plan Editor — transactional save (RPC)
+
+`saveDay` currently writes sequentially without a transaction (see
+KNOWN_ISSUES 🟡). Wrap the rest-day update + guarded deletes + workout
+update/insert in a single Postgres function / RPC so a mid-save failure can't
+leave a half-applied schedule. Same atomicity pattern would also benefit the
+Library bank update (Slice 7b) and the cardio/recovery activity two-step
+(Slice 8).

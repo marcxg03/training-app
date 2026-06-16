@@ -932,3 +932,32 @@ structurally impossible (no runtime guard needed), and they match how a user
 thinks about ranges ("update my protein range" not "update protein max only").
 The literal spec said per-field; this is a safer, friendlier interpretation,
 recorded here as the intentional deviation.
+
+## Slice 10 — Plan Editor
+
+### Plan Editor is non-destructive to logged history (no schema split)
+
+**Context:** `workouts` rows double as the plan-schedule template AND the thing
+logged history points to — `set_logs`, `workout_completions`, and
+`activity_completions` all FK `workout_id → workouts ON DELETE CASCADE`.
+Deleting a schedule workout would silently destroy its logged history (which
+also feeds PR detection). A "clean" Plan Editor that freely deletes/recreates
+workouts is a data-loss trap.
+
+**Options considered:** (A) a schema refactor separating plan-template workouts
+from logged instances (big migration, new model); (B) a non-destructive editor
+that guards deletes and never delete-then-inserts (no migration).
+
+**Decision:** Option B. The editor edits fields, reorders, adds, and rest-day-
+toggles freely, but a workout with any logged history cannot be removed (UI
+disables it; `saveDay` re-checks all three cascade tables and refuses).
+Saves are diff-based (UPDATE existing / INSERT new), never delete-then-insert.
+`workout_type` is never changed and new workouts are `lifting`, so the cardio
+CHECK holds. No migration.
+
+**Reasoning:** For a single-user, append-only-history app, protecting logged
+history outright is more valuable than free-form schedule mutation, and avoids
+a large schema refactor. Block-within-workout editing and adding cardio/recovery
+sessions are deferred (FUTURE_WORK) rather than rushed into this risky surface.
+The full schema split (Option A) remains available later if the plan ever needs
+to diverge from history without these guards.

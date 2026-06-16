@@ -266,12 +266,20 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="space-y-3">
-        <Link
-          href="/plan"
-          className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          Back to week
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/plan"
+            className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            Back to week
+          </Link>
+          <Link
+            href={`/plan/${day}/edit`}
+            className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent/40"
+          >
+            Edit day
+          </Link>
+        </div>
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
             Plan Detail
