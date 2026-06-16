@@ -1296,3 +1296,59 @@ cover`.
   `.env.local` (not present in this environment), so the end-to-end estimate is
   verified by the user after adding their key; the auth gate, env gate, build,
   and no-key UI path are verified here.
+
+## Slice 15 — Library delete (lifting/exercises/cardio/recovery) (2026-06-17)
+
+### What was built
+
+- Delete affordance on all four Library surfaces that already had Edit (from
+  Slice 7b): lifting blocks, exercises, cardio activities, recovery activities.
+- Non-destructive guard `getDeletionImpact(supabase, kind, id)` in
+  `library/mutations.ts`. The FKs from history tables onto blocks/exercises are
+  `ON DELETE CASCADE`, so the database would *silently destroy* logged history
+  on delete rather than raise an error — the app guard is the only protection,
+  so it fails safe (any count error refuses the delete). Per kind:
+  - exercise → blocked if `set_logs` or `pr_history` reference it; else warns if
+    it sits in N `block_lifting_items` banks.
+  - block → blocked if `set_logs` reference it OR it appears in any
+    `workout_completions.completed_block_ids`; else warns about N scheduled
+    `workout_blocks`.
+  - cardio/recovery → blocked if `activity_completions` rows exist for
+    (activity_id, activity_type=kind) — that column is a polymorphic uuid with
+    no FK, so history would orphan, not cascade; else warns about the block bank
+    and any `workout_blocks` preset references (also FK-less).
+- `deleteLibraryItem` re-runs the guard at delete time (never trusts the dialog's
+  stale impact) before deleting, with friendly RLS/error messages.
+- `DeleteLibraryItemButton` client component (trash icon → confirm Dialog):
+  fetches impact on open (loading state), shows the block reason (and hides
+  Delete) or the cascade warning, then confirms. Block delete redirects to the
+  lifting list; list rows `router.refresh()`. Wired into ExerciseListCard,
+  CardioActivityCard, RecoveryActivityCard, and the block detail page.
+- No migration — `delete_own` RLS on all four tables and `select_own` on every
+  history/link table the guard counts already exist (014/016/010/008).
+
+### Deviations from the slice spec
+
+- None.
+
+### Bugs caught and fixed
+
+- Reviewer M1: the block guard initially missed `workout_completions.completed_block_ids`
+  (uuid[], no FK) — a block completed with zero logged sets could slip through and
+  dangle in completion history. Now counted and blocked.
+- Reviewer M2: cardio/recovery guard initially missed `workout_blocks.preset_activity_id`
+  (polymorphic, no FK) — deleting a preset-wired activity would orphan it silently.
+  Now surfaced as a warning (schedule config, not logged history).
+- Reviewer L3: hardened `rowsOrNull` so a null count with no error also fails safe
+  (refuse) instead of reading as zero history.
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` clean. Reviewer-subagent
+  pass: no Critical findings; guard table/column fidelity confirmed against the
+  schema; fail-safe and delete-time re-check confirmed.
+- **Live (browser):** delete buttons render on every exercise row; opening the
+  dialog on a banked exercise showed "This will also remove the exercise from 1
+  block bank" (allowed-with-warning path); created a throwaway exercise → its
+  dialog showed no warning (clean path) → Delete removed the row and the list
+  refreshed. No console errors.

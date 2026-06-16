@@ -1,3 +1,4 @@
+import { DeleteLibraryItemButton } from "@/app/(app)/library/_components/DeleteLibraryItemButton";
 import { EditPencilButton } from "@/app/(app)/library/_components/EditPencilButton";
 import type { RecoveryActivity } from "@/lib/library/projections";
 
@@ -12,7 +13,14 @@ export function RecoveryActivityCard({ activity }: RecoveryActivityCardProps) {
         <p className="text-base font-semibold text-foreground">
           {activity.name}
         </p>
-        <EditPencilButton kind="recovery" activity={activity} />
+        <div className="flex items-center gap-2">
+          <EditPencilButton kind="recovery" activity={activity} />
+          <DeleteLibraryItemButton
+            kind="recovery"
+            id={activity.activity_id}
+            name={activity.name}
+          />
+        </div>
       </div>
       {activity.description ? (
         <p className="mt-3 text-sm leading-6 text-muted-foreground">

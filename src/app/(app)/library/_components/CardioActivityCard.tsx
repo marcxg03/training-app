@@ -1,3 +1,4 @@
+import { DeleteLibraryItemButton } from "@/app/(app)/library/_components/DeleteLibraryItemButton";
 import { EditPencilButton } from "@/app/(app)/library/_components/EditPencilButton";
 import type { CardioActivity } from "@/lib/library/projections";
 import { formatCardioSummary } from "@/lib/library/displayName";
@@ -24,6 +25,11 @@ export function CardioActivityCard({ activity }: CardioActivityCardProps) {
         <div className="flex items-center gap-2">
           <CardioFormatBadge cardioFormat={activity.cardio_format} />
           <EditPencilButton kind="cardio" activity={activity} />
+          <DeleteLibraryItemButton
+            kind="cardio"
+            id={activity.activity_id}
+            name={activity.name}
+          />
         </div>
       </div>
       {activity.description ? (

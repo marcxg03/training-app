@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { BlockDetailHeader } from "@/app/(app)/library/_components/BlockDetailHeader";
+import { DeleteLibraryItemButton } from "@/app/(app)/library/_components/DeleteLibraryItemButton";
 import { EditBlockButton } from "@/app/(app)/library/_components/EditBlockButton";
 import { ExerciseListItem } from "@/app/(app)/library/_components/ExerciseListItem";
 import { getBlockDetail } from "@/lib/library/queries";
@@ -26,7 +27,15 @@ export default async function BlockDetailPage({
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="space-y-4">
         <BlockDetailHeader block={block} />
-        <EditBlockButton blockId={blockId} />
+        <div className="flex items-center gap-2">
+          <EditBlockButton blockId={blockId} />
+          <DeleteLibraryItemButton
+            kind="block"
+            id={blockId}
+            name={block.block_name}
+            redirectTo={liftingHref()}
+          />
+        </div>
       </div>
       <ul className="space-y-3">
         {block.exercises.map((exercise) => (

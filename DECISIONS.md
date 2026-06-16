@@ -1083,3 +1083,41 @@ The user chose the full env-gated Claude-vision integration knowing the image
 leaves the device for Anthropic. The image is used only for the estimate — it is
 not persisted to Supabase or referenced after the response. `.env.example`
 documents the data flow next to the key.
+
+## Slice 15 — Library delete
+
+### The application guard is the deletion safety mechanism, not the database
+
+History FKs onto blocks/exercises are `ON DELETE CASCADE`, so a delete would
+silently cascade-destroy `set_logs` / `pr_history`. The polymorphic history
+columns (`activity_completions.activity_id`, `workout_completions.completed_block_ids`,
+`workout_blocks.preset_activity_id`) have no FK at all, so they wouldn't even
+cascade — they'd orphan. `getDeletionImpact` counts every one of these paths and
+**fails safe**: on any count error it refuses the delete, and `deleteLibraryItem`
+re-runs the guard at delete time rather than trusting the dialog's stale result.
+
+**Options considered**
+
+1. Application-level guard that counts history and refuses (chosen).
+2. Change the FKs to `ON DELETE RESTRICT` (or add a trigger) so the DB blocks it.
+3. Soft-delete (an `archived_at` flag) instead of hard delete.
+
+**Reasoning**
+Option 2 is the most robust but means re-opening applied migrations' FK
+definitions (or a new migration altering constraints on history tables) and
+still wouldn't cover the FK-less polymorphic columns — those need an app or
+trigger check regardless. Option 3 is a larger model change (every read would
+have to filter archived rows) for a feature whose intent is "remove things I
+created and don't want." Option 1 delivers the user's intent now, protects
+history, and is honest about its one limitation (a tiny TOCTOU window, logged in
+KNOWN_ISSUES). A future migration could add RESTRICT as defense-in-depth.
+
+### Block when it's logged history; warn when it's catalog/schedule
+
+set_logs, pr_history, and activity_completions are *logged history* — deleting
+through them loses real data, so the guard blocks. Bank links
+(`block_*_items`) and schedule links (`workout_blocks`, including its presets)
+are *configuration* — deleting cascades or orphans them harmlessly, so the guard
+allows and warns ("this will also remove it from N banks / N scheduled
+workouts"). This keeps delete usable (you can always remove an unused item)
+while making the history-protecting refusal unambiguous.

@@ -296,3 +296,25 @@ not a correctness bug. Could add a bounded timeout later. (Reviewer L4.)
 `numeric` and the manual form accepts decimals. Intentional (sub-gram precision
 is meaningless for a photo estimate) and documented at `clamp()`; noted here so
 the divergence from manual entry is visible. (Reviewer M2.)
+
+## Slice 15 — Library delete
+
+### 🟢 Low — Deletion guard has a TOCTOU window (no DB-level RESTRICT)
+
+`deleteLibraryItem` re-checks `getDeletionImpact` immediately before deleting,
+but the count-check and the `DELETE` are separate statements (no transaction).
+A `set_log` inserted in the millisecond between the check and the delete would be
+cascade-destroyed. For this single-user, single-session app the window is
+negligible. A fully airtight fix would change the history FKs to
+`ON DELETE RESTRICT` (or add a DB trigger) in a future migration — defense in
+depth behind the app guard. (Reviewer L2.)
+
+### 🟢 Low — `set_logs` retains UPDATE/DELETE RLS policies (pre-existing)
+
+`set_logs` has `update_own` + `delete_own` policies (migration 010), which
+deviates from the CLAUDE.md append-only rule that `pr_history` follows correctly
+(SELECT/INSERT only). This is pre-existing (not introduced by Slice 15) and is
+precisely why the cascade from a block/exercise delete would succeed at the RLS
+layer — reinforcing that the app guard is load-bearing. Surfaced here because it
+is adjacent to this slice's history-protection concern; a future migration could
+tighten it.

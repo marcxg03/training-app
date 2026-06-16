@@ -493,3 +493,214 @@ export async function updateRecoveryActivity(
 
   return { ok: true, data: null };
 }
+
+// --- Deletion (Slice 15) ---------------------------------------------------
+//
+// Non-destructive delete. The FKs from history tables (set_logs, pr_history)
+// onto blocks/exercises are ON DELETE CASCADE, so the database would *silently
+// destroy* logged history rather than block the delete. The guard below is the
+// only thing standing between a delete and that data loss, so it fails safe: if
+// the impact check errors, the delete is refused. activity_completions stores a
+// polymorphic activity_id with no FK, so cardio/recovery history wouldn't even
+// cascade — it would orphan; the guard catches that too.
+
+export type LibraryItemKind = "block" | "exercise" | "cardio" | "recovery";
+
+export type DeletionImpact = {
+  /** True when logged history would be lost — deletion is refused. */
+  blocked: boolean;
+  /** Why the item can't be deleted (only when blocked). */
+  reason?: string;
+  /** What else changes if the user proceeds (catalog links that cascade). */
+  warning?: string;
+};
+
+// Fail safe: a query error OR a null count (which would otherwise read as
+// "0 rows → safe to delete") both return null, and every blocking check treats
+// null as "couldn't verify → refuse". With head+exact, success always yields a
+// number, so null here means something genuinely went wrong.
+function rowsOrNull(query: {
+  count: number | null;
+  error: PostgrestError | null;
+}): number | null {
+  return query.error || query.count === null ? null : query.count;
+}
+
+const CHECK_FAILED: DeletionImpact = {
+  blocked: true,
+  reason: "Couldn't verify this is safe to delete. Please try again.",
+};
+
+export async function getDeletionImpact(
+  supabase: BrowserClient,
+  kind: LibraryItemKind,
+  id: string,
+): Promise<DeletionImpact> {
+  if (kind === "exercise") {
+    const sets = rowsOrNull(
+      await supabase
+        .from("set_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("exercise_id", id),
+    );
+    const prs = rowsOrNull(
+      await supabase
+        .from("pr_history")
+        .select("*", { count: "exact", head: true })
+        .eq("exercise_id", id),
+    );
+    if (sets === null || prs === null) {
+      return CHECK_FAILED;
+    }
+    if (sets > 0 || prs > 0) {
+      return {
+        blocked: true,
+        reason:
+          "This exercise has logged sets or PRs. Deleting it would erase that history, so it's kept — edit it instead.",
+      };
+    }
+    const banks = rowsOrNull(
+      await supabase
+        .from("block_lifting_items")
+        .select("*", { count: "exact", head: true })
+        .eq("exercise_id", id),
+    );
+    return {
+      blocked: false,
+      warning:
+        banks && banks > 0
+          ? `This will also remove the exercise from ${banks} block bank${banks === 1 ? "" : "s"}.`
+          : undefined,
+    };
+  }
+
+  if (kind === "block") {
+    const sets = rowsOrNull(
+      await supabase
+        .from("set_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("block_id", id),
+    );
+    // completed_block_ids is a uuid[] on finished workouts with no FK, so a
+    // completed block wouldn't cascade or error — it would dangle in history.
+    // A block can be completed with zero sets, so this isn't covered by set_logs.
+    const completed = rowsOrNull(
+      await supabase
+        .from("workout_completions")
+        .select("*", { count: "exact", head: true })
+        .contains("completed_block_ids", [id]),
+    );
+    if (sets === null || completed === null) {
+      return CHECK_FAILED;
+    }
+    if (sets > 0 || completed > 0) {
+      return {
+        blocked: true,
+        reason:
+          "This block appears in your logged workout history. Deleting it would erase that history, so it's kept — edit it instead.",
+      };
+    }
+    const scheduled = rowsOrNull(
+      await supabase
+        .from("workout_blocks")
+        .select("*", { count: "exact", head: true })
+        .eq("block_id", id),
+    );
+    return {
+      blocked: false,
+      warning:
+        scheduled && scheduled > 0
+          ? `This block is in ${scheduled} scheduled workout${scheduled === 1 ? "" : "s"}; deleting removes it from ${scheduled === 1 ? "it" : "them"}.`
+          : undefined,
+    };
+  }
+
+  // cardio / recovery — activity_completions.activity_id is a polymorphic uuid
+  // (no FK), discriminated by activity_type.
+  const completions = rowsOrNull(
+    await supabase
+      .from("activity_completions")
+      .select("*", { count: "exact", head: true })
+      .eq("activity_id", id)
+      .eq("activity_type", kind),
+  );
+  if (completions === null) {
+    return CHECK_FAILED;
+  }
+  if (completions > 0) {
+    return {
+      blocked: true,
+      reason: `This ${kind} activity has logged history. Deleting it would erase that history, so it's kept — edit it instead.`,
+    };
+  }
+  const bankTable =
+    kind === "cardio" ? "block_cardio_items" : "block_recovery_items";
+  const banks = rowsOrNull(
+    await supabase
+      .from(bankTable)
+      .select("*", { count: "exact", head: true })
+      .eq("activity_id", id),
+  );
+  // workout_blocks.preset_activity_id is a polymorphic uuid (no FK), so a
+  // scheduled preset wouldn't cascade — it would dangle. Schedule config, not
+  // logged history, so warn rather than block.
+  const presets = rowsOrNull(
+    await supabase
+      .from("workout_blocks")
+      .select("*", { count: "exact", head: true })
+      .eq("preset_activity_id", id)
+      .eq("preset_activity_type", kind),
+  );
+  const notes: string[] = [];
+  if (banks && banks > 0) {
+    notes.push(`remove it from your ${kind} block`);
+  }
+  if (presets && presets > 0) {
+    notes.push(
+      `clear it from ${presets} scheduled workout${presets === 1 ? "" : "s"}`,
+    );
+  }
+  return {
+    blocked: false,
+    warning:
+      notes.length > 0 ? `This will also ${notes.join(" and ")}.` : undefined,
+  };
+}
+
+const DELETE_CONFIG: Record<
+  LibraryItemKind,
+  {
+    table: "blocks" | "exercises" | "cardio_activities" | "recovery_activities";
+    idColumn: "block_id" | "exercise_id" | "activity_id";
+  }
+> = {
+  block: { table: "blocks", idColumn: "block_id" },
+  exercise: { table: "exercises", idColumn: "exercise_id" },
+  cardio: { table: "cardio_activities", idColumn: "activity_id" },
+  recovery: { table: "recovery_activities", idColumn: "activity_id" },
+};
+
+export async function deleteLibraryItem(
+  supabase: BrowserClient,
+  kind: LibraryItemKind,
+  id: string,
+): Promise<MutationResult<null>> {
+  // Re-check at delete time: the guard is the only protection against the
+  // cascade, so never trust a stale impact computed when the dialog opened.
+  const impact = await getDeletionImpact(supabase, kind, id);
+  if (impact.blocked) {
+    return { ok: false, error: impact.reason ?? "This item can't be deleted." };
+  }
+
+  const { table, idColumn } = DELETE_CONFIG[kind];
+  const { error } = await supabase.from(table).delete().eq(idColumn, id);
+
+  if (error) {
+    if (isRlsDenied(error)) {
+      return { ok: false, error: "You don't have permission to delete this." };
+    }
+    return { ok: false, error: "Delete failed — please retry." };
+  }
+
+  return { ok: true, data: null };
+}

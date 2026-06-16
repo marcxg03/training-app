@@ -1,3 +1,4 @@
+import { DeleteLibraryItemButton } from "@/app/(app)/library/_components/DeleteLibraryItemButton";
 import { EditPencilButton } from "@/app/(app)/library/_components/EditPencilButton";
 import type { ExerciseListItem } from "@/lib/library/projections";
 
@@ -25,6 +26,11 @@ export function ExerciseListCard({ exercise }: ExerciseListCardProps) {
             </span>
           ) : null}
           <EditPencilButton kind="exercise" exercise={exercise} />
+          <DeleteLibraryItemButton
+            kind="exercise"
+            id={exercise.exercise_id}
+            name={exercise.name}
+          />
         </div>
       </div>
     </li>
