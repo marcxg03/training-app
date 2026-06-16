@@ -854,3 +854,60 @@ states (cardio block with a block_type, lifting block without one)
 at the type level rather than via runtime guards, and matches the
 route structure (`/library/lifting/blocks/...`). This supersedes the
 "3-option category Select" wording in test cases T6/T9.
+
+## Slice 8 — Nutrition
+
+### Build loop: solo author + reviewer-subagent cross-check
+
+**Context:** The established methodology is a two-model loop (Codex drafts
+from a spec, Claude Code reviews/debugs/tests). For the post-7b push to
+complete the app, the Codex web session was not drivable from Claude
+Code's browser tooling (separate tab group), and the user opted to
+complete the app without it.
+
+**Decision:** Claude Code authors AND implements each remaining slice,
+then spawns a fresh reviewer-subagent (no prior context) to audit the
+diff against the same quality bar, applies the findings, and runs the
+authenticated browser-E2E loop before the post-slice commit.
+
+**Reasoning:** The value of the Codex↔Claude split is an independent
+second pass over the code. A cold reviewer-subagent recovers most of
+that cross-check (it caught the missing 23505 mapping and the
+recovery→cardio mislabel in this slice) without requiring a human to
+shuttle prompts between two AI products. Documented so the provenance of
+slices 8+ (single-author + review pass, not Codex-generated) is explicit.
+
+### Macro-to-calorie consistency is informative, not a hard block
+
+**Context:** The Targets editor has both a calorie range and four macro
+ranges. They can disagree (e.g. macros imply 2270–2890 kcal but the
+calorie range says 2000–2200). The only DB-enforced rule is `min < max`
+per pair.
+
+**Decision:** Compute the calorie range implied by the macro ranges
+(4P + 4C + 9F at each bound) and surface a green/amber advisory when the
+entered calorie range is within / outside ±10% of it. It never blocks
+the save. Only `min < max` (zod refine + DB CHECK) blocks.
+
+**Reasoning:** Macros and calories are independent inputs Marcus may want
+slightly out of sync (rounding, refeeds). A hard equality constraint
+would be wrong and annoying; an advisory nudges without trapping. The
+±10% tolerance and `Math.max(1, derived)` denominator avoid false alarms
+and divide-by-zero.
+
+### Day-type meal framework: derive day type from the schedule, fixed guidance table
+
+**Context:** The spec calls for an "auto-generated day-type meal
+framework" but does not define a meal-by-meal algorithm.
+
+**Decision:** Derive today's `NutritionDayType` (`rest | lifting |
+cardio`) from the active plan's `daily_schedules` + `workouts` (lifting if
+any lifting workout; cardio if any cardio; otherwise rest — recovery-only
+and empty days included), and render a fixed guidance card keyed off
+(day type × goal mode). Not a per-meal-slot planner.
+
+**Reasoning:** Reuses the exact schedule-resolution the Today dashboard
+already uses (`getTodayDayOfWeek` + active-plan join), keeps the feature
+shippable against a thin spec, and leaves richer per-meal planning as a
+clearly-scoped FUTURE_WORK item rather than inventing an unvalidated
+algorithm.

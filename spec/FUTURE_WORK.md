@@ -575,3 +575,34 @@ or equivalent — surfaces every block-name + exercise-name that
 repeats across the wiki. Catches the "I forgot Calves was in two
 workouts" failure mode by mechanical enumeration rather than
 recall.
+
+### Goal Mode selector + 5E.1 recommendation (Settings slice)
+
+Deferred from Slice 8. `profiles.goal_mode` exists and Slice 8 reads it to
+seed target defaults, but there is no in-app selector to change it, and no
+5E.1 "Goal Mode Recommendation" flow (show current vs recommended ranges
+per the new mode, with per-field "apply default" toggles). Build alongside
+the Settings tab (5A/5E). When the mode changes, only toggled fields should
+update; past meal logs and target history stay unchanged.
+
+### Today dashboard macro mirror
+
+MASTER_SPEC §1A wants the four macro bars + a Log Meal CTA on the Today
+dashboard too. Slice 8 built `MacroProgressBar` and the nutrition queries
+reusably; wiring them into `/today` (sharing the same totals/targets
+computation as `/nutrition`) is a small follow-up. Extract the bar-building
+logic from `nutrition/page.tsx` into a shared helper when doing this.
+
+### Richer day-type meal framework
+
+Slice 8 ships a fixed guidance card (day type × goal mode). A future
+iteration could generate suggested meal slots / macro splits across the day
+(e.g. pre/post-training carb timing), and personalize off bodyweight and
+training load rather than a static table.
+
+### Meal-entry correction UI
+
+`meal_entries` is append-only via the Slice 8 UI. If corrections become
+painful in daily use, add an edit/delete affordance (the DB RLS already
+permits UPDATE/DELETE on `meal_entries`), or decide to keep it append-only
+and drop those policies in a migration for consistency with `set_logs`.

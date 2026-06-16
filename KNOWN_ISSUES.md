@@ -165,3 +165,28 @@ If a seeded exercise carries a `muscle_groups` value outside the locked
 the unrecognized tag is silently dropped when the exercise is saved.
 Echoes spec edge case E7b.22. No such tag was present in the verification
 catalog; cleanup (if ever needed) is a one-shot SQL update.
+
+## Slice 8 — Nutrition
+
+### 🟢 Low — Day-type meal framework is guidance-only
+
+The dashboard's framework card is a fixed guidance string keyed off
+(day type × goal mode), not a per-meal-slot plan. Day type is derived
+from the active plan's schedule; recovery-only and plan-less days both
+resolve to "rest" guidance. Intentional given the thin spec for this
+feature — richer per-meal planning is logged in FUTURE_WORK.
+
+### 🟢 Low — Macro bars not yet mirrored on the Today dashboard
+
+MASTER_SPEC §1A calls for a 4-bar macro summary on Today as well. Slice 8
+built `MacroProgressBar` reusably but only wired it into `/nutrition`;
+adopting it on `/today` is deferred to the Today/Settings work. No
+behavioral regression — Today is unchanged.
+
+### 🟢 Low — `meal_entries` edit/delete is UI-omitted, not DB-enforced
+
+Append-only-via-UI per spec: the UI exposes no edit/delete affordance,
+but migration 008 left UPDATE/DELETE RLS policies on `meal_entries`
+(unlike the truly append-only `set_logs` / `pr_history`, which are
+SELECT/INSERT-only). A future correction-UI slice can use them, or a
+migration can drop them to enforce append-only at the DB if desired.

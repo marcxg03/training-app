@@ -911,3 +911,78 @@ workout_type_enum` paired with `supabase gen types`. Logged in
   `@supabase/ssr`, wiki-catalog seed, cleanup) kept local under
   `e2e/_setup/` — untracked, not a slice deliverable. The seeded test
   user and catalog were fully cleaned up afterward (0 residual rows).
+
+## Slice 8 — Nutrition (Dashboard + Log Meal + Targets) (2026-06-16)
+
+> Solo-built (Claude Code as drafter) with an independent reviewer-subagent
+> cross-check standing in for the Codex↔Claude two-model loop, per the
+> 2026-06-16 decision to complete the app without the Codex web session.
+
+### What was built
+
+- **Nutrition tab promoted from a 3-line stub to a working surface.** Spec:
+  `spec/slices/SLICE_8_NUTRITION.md`.
+- **4A Dashboard (`/nutrition`):** an auto-contextual day-type meal-framework
+  card (derived from today's active-plan schedule × goal mode), four macro
+  progress bars (calories / protein / carbs / fat) against the user's target
+  ranges with under/in/over status shown by **both** color and a text label
+  (accessibility), today's logged meals + totals, and a Log Meal CTA. Shows a
+  "Set targets" prompt instead of bars when no targets exist, and an empty
+  state when no meals are logged.
+- **4B Log Meal:** a bottom-Sheet form (reusing the Slice 7b RHF + zod +
+  shadcn standard) — free-form meal type, protein/carbs/fat in grams, a **live
+  auto-derived calories preview** (4P + 4C + 9F), and an optional note. Insert
+  refreshes the dashboard in place.
+- **5D Targets editor (`/nutrition/targets`, subset):** full-page form, eight
+  fields (cal/protein/carbs/fat min+max) with strict `min < max` validation
+  mirroring the DB CHECK, a **macro-to-calorie consistency check** that flags
+  when the entered calorie range diverges >±10% from the macros' implied
+  range, and **goal-mode default seeding** when the user has no targets yet.
+  Upserts the single per-user row.
+- **No new migration:** `nutrition_targets` + `meal_entries` already existed
+  (migration 005, RLS 008). Confirmed columns/constraints match and reused
+  them. No new dependencies.
+- **Module layout:** pure math/defaults/framework in
+  `src/lib/methodology/nutrition.ts`; IO in `src/lib/nutrition/{queries,
+mutations,schemas,projections}.ts` (browser-client writes, no Server
+  Actions, no Slice 5 queue); presentation in
+  `src/app/(app)/nutrition/_components/`. `MacroProgressBar` is built reusably
+  so the Today dashboard's macro mirror can adopt it later.
+
+### Deviations / scope
+
+- Goal Mode selector + 5E.1 recommendation flow deferred to the Settings
+  slice (goal_mode is read from `profiles` to seed target defaults).
+- Mirroring the macro bars onto the Today dashboard deferred to the Today
+  slice (component built reusably).
+- Meal entries are append-only **via UI** (no edit/delete affordance), per
+  MASTER_SPEC; the DB retains UPDATE/DELETE policies.
+
+### Reviewer-subagent findings (fixed)
+
+- **M1:** `translateMutationError` was missing the 23505 mapping the spec
+  requires — added (unreachable for the targets upsert, but spec-complete).
+- **M2:** recovery-only training days were mislabeled "Cardio day"; now they
+  fall through to "rest" guidance (nutritionally closer). Reviewer also
+  verified macro-math agreement across preview/insert/dashboard, schema
+  fidelity, module boundaries, and server/client date consistency.
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` all clean (the
+  `/nutrition` and `/nutrition/targets` routes compile).
+- **Authenticated browser E2E at 375px:** rest-day framework card renders;
+  no-targets prompt → Targets editor seeded with maintain defaults →
+  consistency check shows green "~2270–2890 kcal" → save → dashboard shows the
+  four bars (all "Under"); Log Meal preview computes 535 kcal for P40/C60/F15
+  → save → bars + meal list update live; a second meal pushes protein to
+  170/160–200 and the bar flips to green **"On target"**. DB verified:
+  one `nutrition_targets` row + `meal_entries` rows with derived `calories`.
+  No console errors. (The "over"/danger status uses the identical
+  status→color map as the verified "under"/"in" cases.)
+- A one-time Next.js **dev-mode** first-compile 500
+  (`__webpack_require__ ... reading 'call'`) appeared on the very first
+  `/nutrition` request and immediately recovered (200, no recurrence); the
+  production build compiles the route cleanly, confirming it was an HMR
+  transient, not a code defect.
+- Test user + seeded data fully cleaned up afterward (0 residual rows).
