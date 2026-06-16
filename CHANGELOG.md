@@ -813,3 +813,101 @@ workout_type_enum` paired with `supabase gen types`. Logged in
   the documented `Enums<"session_type_enum">` carryover.
 - No schema changes. No migrations. No dependency changes.
 - No spec, no Phase 5 — pure mechanical rename per scope.
+
+## Slice 7b — Library Edit (2026-06-16)
+
+### What was built
+
+- **Create + Update across all four Library surfaces** — lifting
+  blocks, exercises, cardio activities, recovery activities. Delete
+  stays out of scope (deferred to a future slice).
+- **Migration 017** (`017_library_edit_uniqueness.sql`): idempotent
+  `CREATE UNIQUE INDEX IF NOT EXISTS` on `cardio_activities`
+  (owner_user_id, name), `recovery_activities` (owner_user_id, name),
+  and `block_lifting_items` (block_id, exercise_id). No-op against the
+  constraints migration 015/002 already established; migrations 001-016
+  untouched. Types regenerated.
+- **Form library adoption** (executes the Slice 1/4 deferred decision):
+  `react-hook-form` 7.75.0 + `zod` 4.4.2 + `@hookform/resolvers` 5.2.2,
+  plus nine shadcn primitives (`form`, `sheet`, `input`, `textarea`,
+  `select`, `checkbox`, `label`, `popover`, `command`) and their
+  transitive deps (`@radix-ui/react-{checkbox,label,popover,select,slot}`,
+  `cmdk`). No other new dependencies.
+- **Exercises sub-tab** added as the 4th Library section
+  (`/library/exercises`). Lists the user's exercises alphabetically as
+  `ExerciseListCard`s (name, primary muscle-group caption, prescribed
+  range, bodyweight tag, per-row pencil). Four sub-tab labels fit at
+  375px without truncation.
+- **Block create/edit** as full-page routes (`/library/lifting/blocks/new`,
+  `/library/lifting/blocks/[id]/edit`). `BlockForm` is lifting-only:
+  block name (async-unique), Protocol Select (block_type, no default),
+  and a bank-composition section with reorder (↑/↓, disabled at
+  boundaries), remove, and add-via-`ExercisePicker`. The picker supports
+  inline-create of a new exercise (nested Sheet → auto-select → append).
+  Edit mode pre-fills, shows a static "Lifting block" label, and renders
+  the historical-set-log `block_type` warning per AC #22.
+- **Sheet-modal create/edit** for exercises, cardio, and recovery
+  activities, with a per-row pencil affordance (`EditPencilButton`).
+  `MuscleGroupMultiSelect` exposes the locked 11-tag taxonomy in two
+  grouped sections (Primary 7 + Specific 4). `DiscardChangesDialog`
+  fires on dirty Sheet close.
+- **Data layer:** `schemas.ts` (four zod schemas with async uniqueness
+  refines), `mutations.ts` (one helper per entity/action, discriminated
+  `{ ok }` results, 23505/23514/42501 → friendly errors), `uniqueness.ts`
+  (`nameConflicts`). Extended `queries.ts` (`getExercises`,
+  `getHistoricalSetLogCount`), `projections.ts` (`ExerciseListItem`),
+  `crossLinks.ts` (`exerciseDetailHref`, `blockEditHref`,
+  `blockCreateHref`).
+- All Library writes use the supabase **browser client** directly — no
+  Server Actions, no Slice 5 sync queue. Cardio/recovery create
+  auto-wires the new activity to the user's single block via
+  `block_{cardio,recovery}_items` with `display_order = MAX + 1`.
+
+### Deviations from the slice spec
+
+- **BlockForm is lifting-only with `block_category` derived from the
+  route** (AC #16 revision / Q5b correction locked in Phase 0). No
+  category Select renders in create or edit — so the legacy wording of
+  test cases T6/T9 (a "3-option category Select" and a cardio structural
+  toggle) is **superseded**; verification ran against the revised
+  lifting-only behavior, confirmed correct.
+- `src/app/layout.tsx` (outside the Section 3 allowlist) gained
+  `suppressHydrationWarning` on `<body>`. Cosmetic; no behavioral change.
+- The existing 7a `ExerciseListItem` is reused on the block-detail page
+  for notes rendering; the new `ExerciseListCard` (per Section 3) backs
+  the Exercises sub-tab list.
+
+### Bugs caught and fixed during the build
+
+- **ExerciseForm reps inputs bound `value={NaN}`** when cleared (React
+  controlled-input warning). Guarded — caught in the line-by-line
+  quality review.
+- **T7 — submit button stayed enabled while the async name-uniqueness
+  error was showing.** Fixed `BlockForm` to disable the submit button on
+  `formState.isSubmitting || Object.keys(formState.errors).length > 0`
+  (keying off `errors` rather than the async-lagging `isValid`). Verified
+  live: button disables on a duplicate name, re-enables once corrected,
+  and does not over-disable the still-untouched Protocol field.
+
+### Verification
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm build` all
+  clean. Migration 017 applied (Local 017 | Remote 017).
+- **Authenticated browser E2E at 375px** across the T1-T54 plan. Live
+  PASS on every high-value flow: 4 sub-tabs render/fit; block create →
+  redirect to detail with DB-verified `block_lifting_items`
+  (display_order = 0); inline-create exercise auto-selects and appends;
+  reorder boundary disabling; bank update via delete-then-insert
+  (DB-verified order); exercise validation trio (muscle-required /
+  max ≥ min / async uniqueness); notes propagation to block detail;
+  cardio/recovery junction `display_order = MAX + 1` (DB-verified);
+  discard-changes dialog (Cancel keeps / Discard closes); no console
+  errors; 7a read flows + Today/History/nav regression clean.
+- block_type warning (T20/T21) verified by code (logic + copy match
+  AC #22) plus the live negative case (T22); the positive case was
+  deliberately **not** simulated to avoid fabricating rows in the
+  append-only `set_logs` table.
+- Verification harness (authenticated-session cookie injection via
+  `@supabase/ssr`, wiki-catalog seed, cleanup) kept local under
+  `e2e/_setup/` — untracked, not a slice deliverable. The seeded test
+  user and catalog were fully cleaned up afterward (0 residual rows).

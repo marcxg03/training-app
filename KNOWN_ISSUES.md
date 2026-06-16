@@ -127,3 +127,41 @@ file rename. The only remaining `session_*` reference is the
 `Enums<"session_type_enum">` enum-type-name carryover, which
 requires an `ALTER TYPE` migration; logged in FUTURE_WORK.md
 under Schema cleanup.
+
+## Slice 7b — Library Edit
+
+### 🟢 Low — Two-step activity create is non-transactional (cardio/recovery)
+
+`createCardioActivity` / `createRecoveryActivity` insert the activity,
+then wire the junction row (`block_{cardio,recovery}_items`,
+`display_order = MAX + 1`) in a second statement. If step 2 fails after
+step 1 succeeds, the activity exists in the catalog but is not wired to
+the block; the helper surfaces a retry warning, but a retry then hits
+the name-uniqueness refine (the activity already exists). Recovery path
+is awkward. Acceptable for personal-first scope; the clean fix is to
+wrap both writes in a Postgres function for atomicity. Echoes spec edge
+case E7b.16. No live occurrence during verification.
+
+### 🟢 Low — Block bank update is delete-then-insert (non-transactional)
+
+`updateBlock` deletes all `block_lifting_items` for the block, then
+re-inserts the new set. A failure between the two leaves an empty or
+partial bank; the user recovers by re-editing the block. Same atomicity
+caveat as activity create, same future fix (Postgres function).
+
+### 🟢 Low — Sheet forms don't disable submit on async name error
+
+The T7 fix (disable submit while a validation error is present) was
+applied to `BlockForm` only. The Exercise / Cardio / Recovery Sheet
+forms still show the inline "…already exists" error and block submit on
+attempt, but the submit button is not visually disabled. Cosmetic —
+duplicates cannot be created. Extend the `BlockForm` pattern to the
+three Sheet forms if consistency is wanted.
+
+### 🟢 Low — Muscle-group tags outside the 11-tag taxonomy are dropped on edit
+
+If a seeded exercise carries a `muscle_groups` value outside the locked
+11-tag taxonomy, `MuscleGroupMultiSelect` renders no checkbox for it and
+the unrecognized tag is silently dropped when the exercise is saved.
+Echoes spec edge case E7b.22. No such tag was present in the verification
+catalog; cleanup (if ever needed) is a one-shot SQL update.

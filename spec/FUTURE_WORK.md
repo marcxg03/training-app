@@ -427,7 +427,7 @@ size will rival Slice 7a's; defer the call to Phase 0.
 Editor) by current sequencing. Could shift earlier if methodology rollout
 priorities change.
 
-### Form library — react-hook-form + zod (Slice 7-8 evaluation)
+### Form library — react-hook-form + zod (Slice 7-8 evaluation) — ✓ EXECUTED in Slice 7b
 
 Surfaced during Slice 4 implementation. SetEntryForm uses local state
 validation since the repo doesn't have react-hook-form + zod
@@ -438,6 +438,30 @@ begins; if Slice 7 surfaces multi-field validation pain, evaluate
 adding react-hook-form + zod as devDeps. Current SetEntryForm pattern
 is fine to keep even after the library lands — it's a small simple
 form.
+
+**Resolved 2026-06-16 (Slice 7b):** Adopted `react-hook-form` 7.75.0 +
+`zod` 4.4.2 + `@hookform/resolvers` 5.2.2 (runtime deps, not devDeps —
+they ship in client form components) + nine shadcn primitives. Pattern
+and conventions recorded in DECISIONS.md ("Form-library standard").
+SetEntryForm intentionally left on local state. Plan Editor + Nutrition
+logging should reuse the Slice 7b schema/resolver/uniqueness pattern.
+
+### Delete affordance for the Library catalog (with in-use guard)
+
+Deferred from Slice 7b (Phase 0 lockdown 3 — 7b shipped Create + Update
+only). A future slice adds Delete to blocks, exercises, cardio
+activities, and recovery activities. The open design question is the
+**in-use guard**: an exercise referenced by `block_lifting_items`, or a
+block/activity referenced by `workout_blocks` /
+`block_{cardio,recovery}_items`, cannot be hard-deleted without either
+(a) blocking with an "in use by N blocks/workouts" message, (b) cascade
+with confirmation, or (c) a soft-delete/`archived` flag that hides it
+from pickers while preserving historical references (set_logs,
+completions). Soft-delete is likely correct given the append-only
+history model — hard delete would orphan `set_logs.exercise_id` /
+`block_id` FKs. Decide the guard semantics before implementing; pair
+with the bulk-operations question (multi-select delete) which is also
+out of scope for 7b.
 
 ## Workflow Improvement Candidates
 

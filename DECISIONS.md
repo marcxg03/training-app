@@ -786,3 +786,71 @@ no controlled component pattern. Active sub-tab is derived from
 URL on every render. This also means 7b's edit/add/delete
 affordances can be added as inline forms without re-architecting
 the read surface.
+
+## Slice 7b — Library Edit
+
+### Form-library standard: react-hook-form + zod + shadcn Form
+
+**Context:** Slice 7b introduces the project's first multi-field,
+cross-validated forms (block create/edit with bank composition;
+exercise/cardio/recovery editors). The form-library decision was
+deferred from Slice 1 (single-field carve-out) and Slice 4
+(SetEntryForm kept on local state) to "the Slice 7-8 evaluation
+point."
+
+**Decision:** Adopt `react-hook-form` + `zod` +
+`@hookform/resolvers` with the shadcn `Form` primitive as the
+project standard for multi-field forms. Conventions established
+here (precedent for the Plan Editor and Nutrition logging):
+zod schemas live in `src/lib/library/schemas.ts`; form value types
+come from `z.infer` (no hand-rolled types); `zodResolver` runs in
+`"onBlur"` mode; async name-uniqueness is a zod `.refine()` calling
+`nameConflicts` (`SELECT <pk> WHERE name = $v [AND pk != $own]
+LIMIT 2`, fail-open on query error so the DB constraint is the
+final guard). The simple Slice 4 `SetEntryForm` stays on local
+state — the carve-out still holds for trivial forms.
+
+**Reasoning:** The cross-field rules (prescribed_max ≥
+prescribed_min, lifting-requires-block_type) and async uniqueness
+are exactly the pain the deferral was waiting for. RHF + zod is the
+AGENTS.md rule-8 standard; adopting it now sets one pattern before
+three more editing surfaces land.
+
+### Submit disables on present errors, not `formState.isValid`
+
+**Context:** With an async `.refine()`, RHF's `formState.isValid`
+lags the async validation, so it can't gate the submit button
+reliably. Slice 7b verification (T7) found the block submit button
+stayed enabled while the async name-uniqueness error was visible.
+
+**Decision:** Disable the submit button on
+`formState.isSubmitting || Object.keys(formState.errors).length > 0`.
+Applied to `BlockForm` (the surface with the explicit AC). The three
+Sheet forms still block submit on attempt (RHF re-validates) and
+surface the inline error, but don't visually disable the button —
+logged as a 🟢 Low in KNOWN_ISSUES for optional follow-up.
+
+**Reasoning:** `formState.errors` is populated reliably on blur and
+reflects exactly "is an error currently shown," which is what the AC
+asks for; `isValid` is unreliable with async resolvers. Keying off
+`errors` also avoids over-disabling untouched required fields on
+initial load (errors is empty until a field is validated).
+
+### BlockForm is lifting-only; `block_category` is implicit from the route
+
+**Context:** Phase 0 Q5b's premise was corrected: per-block fields
+(range, notes) live on `exercises` (global), and cardio/recovery
+blocks are seeded one-per-user with no create/edit affordance in 7b.
+
+**Decision:** `BlockForm` renders no category Select in either mode;
+a static "Lifting block" label provides context in edit mode;
+`onSubmit` hardcodes `block_category: "lifting"`; `updateBlock`'s
+payload type structurally omits `block_category` (can't be edited).
+The DB CHECK `blocks_lifting_has_type` (migration 013) is the
+backstop.
+
+**Reasoning:** A lifting-only form removes a whole class of invalid
+states (cardio block with a block_type, lifting block without one)
+at the type level rather than via runtime guards, and matches the
+route structure (`/library/lifting/blocks/...`). This supersedes the
+"3-option category Select" wording in test cases T6/T9.

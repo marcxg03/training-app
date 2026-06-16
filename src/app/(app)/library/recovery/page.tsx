@@ -1,3 +1,4 @@
+import { AddRecoveryActivityButton } from "@/app/(app)/library/_components/AddRecoveryActivityButton";
 import { EmptyState } from "@/app/(app)/library/_components/EmptyState";
 import { LibraryTabs } from "@/app/(app)/library/_components/LibraryTabs";
 import { RecoveryActivityCard } from "@/app/(app)/library/_components/RecoveryActivityCard";
@@ -29,16 +30,22 @@ export default async function RecoveryLibraryPage() {
             </h2>
           </div>
           {block.activities.length > 0 ? (
-            <ul className="space-y-3">
-              {block.activities.map((activity) => (
-                <RecoveryActivityCard
-                  key={activity.activity_id}
-                  activity={activity}
-                />
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <AddRecoveryActivityButton blockId={block.block_id} />
+              <ul className="space-y-3">
+                {block.activities.map((activity) => (
+                  <RecoveryActivityCard
+                    key={activity.activity_id}
+                    activity={activity}
+                  />
+                ))}
+              </ul>
+            </div>
           ) : (
-            <EmptyState message="No recovery activities yet." />
+            <div className="space-y-4">
+              <EmptyState message="No recovery activities yet." />
+              <AddRecoveryActivityButton blockId={block.block_id} />
+            </div>
           )}
         </section>
       )}

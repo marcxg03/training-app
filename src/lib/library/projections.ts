@@ -16,6 +16,17 @@ export type LiftingExerciseInBlock = {
   display_order: number;
 };
 
+export type ExerciseListItem = {
+  exercise_id: string;
+  name: string;
+  muscle_groups: string[];
+  primary_muscle_group_label: string | null;
+  is_bodyweight: boolean;
+  prescribed_min: number;
+  prescribed_max: number;
+  notes: string;
+};
+
 export type LiftingBlockDetail = {
   block_id: string;
   block_name: string;

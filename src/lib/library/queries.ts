@@ -3,11 +3,13 @@ import "server-only";
 import type {
   CardioActivity,
   CardioBlockWithActivities,
+  ExerciseListItem,
   LiftingBlockDetail,
   LiftingBlockSummary,
   RecoveryActivity,
   RecoveryBlockWithActivities,
 } from "@/lib/library/projections";
+import { getPrimaryMuscleGroupLabel } from "@/lib/methodology/muscle-groups";
 import { createClient } from "@/lib/supabase/server";
 
 function toRelationArray<T>(value: T | T[] | null): T[] {
@@ -241,4 +243,47 @@ export async function getRecoveryBlock(): Promise<RecoveryBlockWithActivities | 
     block_name: block.block_name,
     activities: await getRecoveryActivities(block.block_id),
   };
+}
+
+export async function getExercises(): Promise<ExerciseListItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select(
+      "exercise_id, name, muscle_groups, is_bodyweight, prescribed_min, prescribed_max, notes",
+    )
+    .order("name");
+
+  if (error) {
+    throw new Error(`Failed to load exercises: ${error.message}`);
+  }
+
+  return data.map((exercise) => ({
+    exercise_id: exercise.exercise_id,
+    name: exercise.name,
+    muscle_groups: exercise.muscle_groups,
+    primary_muscle_group_label: getPrimaryMuscleGroupLabel(
+      exercise.muscle_groups,
+    ),
+    is_bodyweight: exercise.is_bodyweight,
+    prescribed_min: exercise.prescribed_min,
+    prescribed_max: exercise.prescribed_max,
+    notes: exercise.notes,
+  }));
+}
+
+export async function getHistoricalSetLogCount(
+  blockId: string,
+): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("set_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("block_id", blockId);
+
+  if (error) {
+    throw new Error(`Failed to load historical set count: ${error.message}`);
+  }
+
+  return count ?? 0;
 }

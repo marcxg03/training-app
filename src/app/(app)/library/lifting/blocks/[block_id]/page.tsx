@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { BlockDetailHeader } from "@/app/(app)/library/_components/BlockDetailHeader";
+import { EditBlockButton } from "@/app/(app)/library/_components/EditBlockButton";
 import { ExerciseListItem } from "@/app/(app)/library/_components/ExerciseListItem";
 import { getBlockDetail } from "@/lib/library/queries";
 import { liftingHref } from "@/lib/library/crossLinks";
@@ -23,7 +24,10 @@ export default async function BlockDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <BlockDetailHeader block={block} />
+      <div className="space-y-4">
+        <BlockDetailHeader block={block} />
+        <EditBlockButton blockId={blockId} />
+      </div>
       <ul className="space-y-3">
         {block.exercises.map((exercise) => (
           <ExerciseListItem

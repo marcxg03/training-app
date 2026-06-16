@@ -1,3 +1,4 @@
+import { AddCardioActivityButton } from "@/app/(app)/library/_components/AddCardioActivityButton";
 import { CardioActivityCard } from "@/app/(app)/library/_components/CardioActivityCard";
 import { EmptyState } from "@/app/(app)/library/_components/EmptyState";
 import { LibraryTabs } from "@/app/(app)/library/_components/LibraryTabs";
@@ -29,16 +30,22 @@ export default async function CardioLibraryPage() {
             </h2>
           </div>
           {block.activities.length > 0 ? (
-            <ul className="space-y-3">
-              {block.activities.map((activity) => (
-                <CardioActivityCard
-                  key={activity.activity_id}
-                  activity={activity}
-                />
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <AddCardioActivityButton blockId={block.block_id} />
+              <ul className="space-y-3">
+                {block.activities.map((activity) => (
+                  <CardioActivityCard
+                    key={activity.activity_id}
+                    activity={activity}
+                  />
+                ))}
+              </ul>
+            </div>
           ) : (
-            <EmptyState message="No cardio activities yet." />
+            <div className="space-y-4">
+              <EmptyState message="No cardio activities yet." />
+              <AddCardioActivityButton blockId={block.block_id} />
+            </div>
           )}
         </section>
       )}

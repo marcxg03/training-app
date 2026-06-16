@@ -1,11 +1,11 @@
-import { AddBlockButton } from "@/app/(app)/library/_components/AddBlockButton";
-import { BlockListCard } from "@/app/(app)/library/_components/BlockListCard";
+import { AddExerciseButton } from "@/app/(app)/library/_components/AddExerciseButton";
 import { EmptyState } from "@/app/(app)/library/_components/EmptyState";
+import { ExerciseListCard } from "@/app/(app)/library/_components/ExerciseListCard";
 import { LibraryTabs } from "@/app/(app)/library/_components/LibraryTabs";
-import { getLiftingBlocks } from "@/lib/library/queries";
+import { getExercises } from "@/lib/library/queries";
 
-export default async function LiftingLibraryPage() {
-  const blocks = await getLiftingBlocks();
+export default async function ExercisesLibraryPage() {
+  const exercises = await getExercises();
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -14,25 +14,28 @@ export default async function LiftingLibraryPage() {
           Library
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Lifting
+          Exercises
         </h1>
       </div>
 
       <LibraryTabs />
 
-      {blocks.length > 0 ? (
+      {exercises.length > 0 ? (
         <div className="space-y-4">
-          <AddBlockButton />
+          <AddExerciseButton />
           <ul className="space-y-3">
-            {blocks.map((block) => (
-              <BlockListCard key={block.block_id} block={block} />
+            {exercises.map((exercise) => (
+              <ExerciseListCard
+                key={exercise.exercise_id}
+                exercise={exercise}
+              />
             ))}
           </ul>
         </div>
       ) : (
         <div className="space-y-4">
-          <EmptyState message="No lifting blocks yet." />
-          <AddBlockButton />
+          <EmptyState message="No exercises yet." />
+          <AddExerciseButton />
         </div>
       )}
     </div>

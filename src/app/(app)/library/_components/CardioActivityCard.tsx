@@ -1,3 +1,4 @@
+import { EditPencilButton } from "@/app/(app)/library/_components/EditPencilButton";
 import type { CardioActivity } from "@/lib/library/projections";
 import { formatCardioSummary } from "@/lib/library/displayName";
 import { CardioFormatBadge } from "@/app/(app)/library/_components/CardioFormatBadge";
@@ -20,7 +21,10 @@ export function CardioActivityCard({ activity }: CardioActivityCardProps) {
             <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
           ) : null}
         </div>
-        <CardioFormatBadge cardioFormat={activity.cardio_format} />
+        <div className="flex items-center gap-2">
+          <CardioFormatBadge cardioFormat={activity.cardio_format} />
+          <EditPencilButton kind="cardio" activity={activity} />
+        </div>
       </div>
       {activity.description ? (
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
