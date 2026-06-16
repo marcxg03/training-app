@@ -1031,3 +1031,55 @@ deprecated columns (vs dropping) avoids data loss and a risky destructive
 migration for a single-user app; nothing reads them after the code update.
 `max >= min` (not strict `<`) is the correct CHECK since exact entries are
 min==max — distinct from `nutrition_targets`' strict `min < max`.
+
+## Slice 14 — AI photo macro estimator
+
+### A thin first-party API route, not a client-side Anthropic call or Managed Agent
+
+The estimator is a single `POST /v1/messages` vision call with structured JSON
+output, wrapped in a Next.js route handler.
+
+**Options considered**
+
+1. Server route handler calling the Anthropic SDK (chosen).
+2. Call Anthropic directly from the client component.
+3. Anthropic Managed Agent / multi-step tool loop.
+
+**Reasoning**
+Option 2 would expose `ANTHROPIC_API_KEY` in the browser bundle — disqualifying.
+Option 3 is built for stateful, multi-turn, tool-using agents; macro estimation
+is one perception-plus-arithmetic shot where a single structured-output call is
+the right tier (the claude-api skill's "start simple" guidance). The route also
+gives us the security boundary we need: an auth gate so it's never an open proxy,
+an env gate for graceful degradation, and input validation — none of which a
+client-side call could enforce.
+
+### Estimate macros, derive calories — and return ranges, not point values
+
+The model returns protein/carbs/fat as min–max gram ranges; calories are derived
+from those by the existing `macroCalories` helper (server-side `toMealRow` on
+save, live preview in the sheet). The model is told **not** to estimate calories.
+
+**Reasoning**
+Calories are a deterministic function of macros (4/4/9). Having the model also
+emit calories invites internal inconsistency (its calories not matching its
+macros). Deriving them keeps a single source of truth. Ranges (vs a single
+number) honestly express portion uncertainty from a photo and reuse Slice 13's
+range plumbing end-to-end — the estimate lands in the same range-mode form a
+user could have filled by hand.
+
+### No thinking, structured output, whole-gram rounding
+
+The call omits adaptive thinking (a constrained single-shot extraction; keeps
+latency/cost down for a mobile logging flow), constrains the response with
+`zodOutputFormat`, and `sanitize()` rounds to whole grams and re-enforces the
+form/DB invariants (0–1000, max ≥ min) because structured output doesn't enforce
+numeric bounds. The model's output is treated as untrusted and clamped before it
+ever reaches the form.
+
+### The photo is sent to Anthropic, by explicit user choice; it is not stored
+
+The user chose the full env-gated Claude-vision integration knowing the image
+leaves the device for Anthropic. The image is used only for the estimate — it is
+not persisted to Supabase or referenced after the response. `.env.example`
+documents the data flow next to the key.

@@ -1243,3 +1243,56 @@ cover`.
   live "535–660 kcal"); dashboard showed range bands per macro and
   "535–660 kcal" on the meal; deleted it via the confirm dialog → totals reset
   to 0. No console errors. Demo data cleaned up.
+
+## Slice 14 — AI photo macro estimator (Claude vision) (2026-06-17)
+
+### What was built
+
+- Photograph a meal → Claude estimates protein/carbs/fat as min–max gram
+  ranges that prefill `LogMealSheet` in range mode. Builds directly on
+  Slice 13's ranges (an estimate is inherently a range).
+- `nutrition/macro-estimate.ts` — pure shared contract (only imports zod):
+  `macroEstimateSchema` (meal_type + six macro numbers + notes),
+  `MacroEstimate`, `ACCEPTED_IMAGE_TYPES`, `MAX_IMAGE_BYTES`. Imported by both
+  the server route and the client form so the payload is typed identically.
+- `app/api/estimate-macros/route.ts` — server-only POST handler. Gate order is
+  **auth (401) → env key (503) → input validation (400/413)**, then
+  `claude-opus-4-8` vision via `messages.parse()` with
+  `output_config.format = zodOutputFormat(macroEstimateSchema)`. `sanitize()`
+  clamps each macro to whole grams 0–1000 and enforces max ≥ min (mirrors
+  `gramsField` + the migration 018 CHECK), and falls back to "Meal" if the model
+  returns a blank name. Refusal / null `parsed_output` → 422; SDK/network error
+  → 502 (logged server-side, never leaked to the client).
+- `LogMealSheet` — new `aiEnabled` prop renders an "Estimate from photo" button
+  (hidden file input, `capture="environment"` for the phone camera). On success
+  `applyEstimate` flips to range mode, fills the six macro fields outright, and
+  fills name/note only when still blank (never clobbers typed input). `estimating`
+  disables the button; errors surface inline. `MealsSection` / `page.tsx` thread
+  `aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}` — a boolean, so the key
+  never reaches the client bundle.
+- Fully env-gated: with no `ANTHROPIC_API_KEY` the button is hidden and entry is
+  manual. Added `ANTHROPIC_API_KEY` to `.env.example` (server-only, optional,
+  with a note that uploaded photos are sent to Anthropic).
+- Added dependency `@anthropic-ai/sdk` 0.104.2.
+
+### Deviations from the slice spec
+
+- None.
+
+### Bugs caught and fixed
+
+- Reviewer M1: a blank `meal_type` from the model would have left the prefill
+  name empty (the form requires `min(1)`). `sanitize()` now falls back to "Meal".
+- Reviewer M2: documented that `clamp()` rounds estimates to whole grams
+  intentionally (the columns are `numeric` and accept decimals elsewhere).
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` clean. Route compiles and
+  registers; an unauthenticated `POST /api/estimate-macros` returns 401 (auth
+  gate runs before any Anthropic call). Reviewer-subagent pass: no Critical
+  findings; safe proxy, no key leak, module boundaries respected.
+- The live Claude-vision estimate requires a real `ANTHROPIC_API_KEY` in
+  `.env.local` (not present in this environment), so the end-to-end estimate is
+  verified by the user after adding their key; the auth gate, env gate, build,
+  and no-key UI path are verified here.

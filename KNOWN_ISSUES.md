@@ -272,3 +272,27 @@ kept to avoid a destructive column drop on a table that may hold history. A
 future cleanup migration could drop them once nothing references them (nothing
 does today). The old `005` CHECK (`protein_g >= 0 AND …`) also remains but
 passes on the NULLs new rows write.
+
+## Slice 14 — AI photo macro estimator
+
+### 🟢 Low — Live Claude-vision estimate unverified without an API key in this environment
+
+The auth gate (401), env gate (503), input validation, build, and the no-key UI
+path are all verified. The actual end-to-end vision estimate needs a real
+`ANTHROPIC_API_KEY` in `.env.local`, which isn't present in the build
+environment — so that path is verified by the user after adding their key. The
+route degrades gracefully (button hidden) until then.
+
+### 🟢 Low — No client-side request timeout on the estimate fetch
+
+The "Estimate from photo" fetch has no `AbortController`; a hung Anthropic call
+leaves the button on "Estimating…" until the socket/platform times out. The
+`disabled` guard prevents double-submits in the meantime, so this is UX polish,
+not a correctness bug. Could add a bounded timeout later. (Reviewer L4.)
+
+### 🟢 Low — Estimates are rounded to whole grams
+
+`sanitize()` rounds each macro to an integer even though the columns are
+`numeric` and the manual form accepts decimals. Intentional (sub-gram precision
+is meaningless for a photo estimate) and documented at `clamp()`; noted here so
+the divergence from manual entry is visible. (Reviewer M2.)

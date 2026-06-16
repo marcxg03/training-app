@@ -167,7 +167,12 @@ export default async function NutritionPage() {
         )}
       </section>
 
-      <MealsSection meals={meals} userId={user.id} date={today} />
+      <MealsSection
+        meals={meals}
+        userId={user.id}
+        date={today}
+        aiEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+      />
     </div>
   );
 }

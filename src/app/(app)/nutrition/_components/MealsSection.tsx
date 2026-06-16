@@ -22,6 +22,7 @@ type MealsSectionProps = {
   meals: MealEntry[];
   userId: string;
   date: string;
+  aiEnabled: boolean;
 };
 
 /** Formats a [min, max] range, collapsing to a single value when exact. */
@@ -29,7 +30,12 @@ function range(min: number, max: number): string {
   return min === max ? `${min}` : `${min}–${max}`;
 }
 
-export function MealsSection({ meals, userId, date }: MealsSectionProps) {
+export function MealsSection({
+  meals,
+  userId,
+  date,
+  aiEnabled,
+}: MealsSectionProps) {
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | undefined>(undefined);
@@ -133,6 +139,7 @@ export function MealsSection({ meals, userId, date }: MealsSectionProps) {
         userId={userId}
         date={date}
         meal={editing}
+        aiEnabled={aiEnabled}
       />
 
       <Dialog

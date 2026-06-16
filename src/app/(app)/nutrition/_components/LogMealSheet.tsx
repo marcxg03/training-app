@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -26,6 +27,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  type AcceptedImageType,
+  type MacroEstimate,
+} from "@/lib/nutrition/macro-estimate";
 import { macroCalories } from "@/lib/methodology/nutrition";
 import { logMeal, updateMeal } from "@/lib/nutrition/mutations";
 import type { MealEntry } from "@/lib/nutrition/projections";
@@ -38,7 +45,18 @@ type LogMealSheetProps = {
   userId: string;
   date: string;
   meal?: MealEntry;
+  /** Whether the Claude-vision photo estimator is configured (ANTHROPIC_API_KEY). */
+  aiEnabled: boolean;
 };
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 type MacroKey = "protein" | "carbs" | "fat";
 
@@ -90,6 +108,7 @@ export function LogMealSheet({
   userId,
   date,
   meal,
+  aiEnabled,
 }: LogMealSheetProps) {
   const router = useRouter();
   const isEdit = Boolean(meal);
@@ -99,6 +118,9 @@ export function LogMealSheet({
     [meal],
   );
   const [rangeMode, setRangeMode] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const form = useForm<MealFormValues, unknown, MealFormValues>({
     resolver: zodResolver(mealSchema),
@@ -112,6 +134,8 @@ export function LogMealSheet({
   useEffect(() => {
     form.reset(defaultValues);
     setSubmitError(null);
+    setEstimateError(null);
+    setEstimating(false);
     // Open in range mode if the meal being edited already has any range.
     setRangeMode(
       meal
@@ -190,6 +214,67 @@ export function LogMealSheet({
     setRangeMode(next);
   };
 
+  // A photo estimate is inherently a range, so it always lands in range mode.
+  // Macros are prefilled outright; name/note only fill when the user left them
+  // blank, so estimating never clobbers what they already typed.
+  const applyEstimate = (estimate: MacroEstimate) => {
+    setRangeMode(true);
+    const set = (name: keyof MealFormValues, value: number | string) =>
+      form.setValue(name, value as never, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    set("protein_min_g", estimate.protein_min_g);
+    set("protein_max_g", estimate.protein_max_g);
+    set("carbs_min_g", estimate.carbs_min_g);
+    set("carbs_max_g", estimate.carbs_max_g);
+    set("fat_min_g", estimate.fat_min_g);
+    set("fat_max_g", estimate.fat_max_g);
+    if (!form.getValues("meal_type")) {
+      set("meal_type", estimate.meal_type);
+    }
+    if (!form.getValues("note")) {
+      set("note", estimate.notes);
+    }
+  };
+
+  const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // allow re-selecting the same file
+    if (!file) {
+      return;
+    }
+    setEstimateError(null);
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type as AcceptedImageType)) {
+      setEstimateError("Use a JPEG, PNG, WebP, or GIF photo.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setEstimateError("That photo is too large. Try one under 4 MB.");
+      return;
+    }
+    setEstimating(true);
+    try {
+      const dataUrl = await readAsDataUrl(file);
+      const base64 = dataUrl.split(",")[1] ?? "";
+      const response = await fetch("/api/estimate-macros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mediaType: file.type }),
+      });
+      const data = (await response.json()) as MacroEstimate | { error: string };
+      if (!response.ok) {
+        setEstimateError("error" in data ? data.error : "Estimation failed.");
+        return;
+      }
+      applyEstimate(data as MacroEstimate);
+    } catch {
+      setEstimateError("Estimation failed. Enter macros manually.");
+    } finally {
+      setEstimating(false);
+    }
+  };
+
   return (
     <>
       <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -230,6 +315,36 @@ export function LogMealSheet({
                     </FormItem>
                   )}
                 />
+
+                {aiEnabled ? (
+                  <div className="space-y-1.5">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePhoto}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={estimating}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      {estimating ? "Estimating…" : "Estimate from photo"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Sends the photo to Claude for a macro estimate you can
+                      adjust before saving.
+                    </p>
+                    {estimateError ? (
+                      <p className="text-sm text-danger">{estimateError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Checkbox
