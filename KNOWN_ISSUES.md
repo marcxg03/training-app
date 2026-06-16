@@ -190,3 +190,13 @@ but migration 008 left UPDATE/DELETE RLS policies on `meal_entries`
 (unlike the truly append-only `set_logs` / `pr_history`, which are
 SELECT/INSERT-only). A future correction-UI slice can use them, or a
 migration can drop them to enforce append-only at the DB if desired.
+
+## Slice 9 — Settings + Profile + Goal Mode
+
+### 🟢 Low — Profile bodyweight/height are metric-only (kg / cm)
+
+The Profile editor stores and displays bodyweight in kg and height in cm with
+no imperial (lbs / ft-in) display toggle. Matches the kg storage decision from
+Slice 4.5. A kg/lbs display toggle is already tracked in FUTURE_WORK
+(Settings); when built it should cover both the workout-logger weight display
+and these profile fields.

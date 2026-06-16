@@ -576,7 +576,7 @@ repeats across the wiki. Catches the "I forgot Calves was in two
 workouts" failure mode by mechanical enumeration rather than
 recall.
 
-### Goal Mode selector + 5E.1 recommendation (Settings slice)
+### Goal Mode selector + 5E.1 recommendation (Settings slice) — ✓ EXECUTED in Slice 9
 
 Deferred from Slice 8. `profiles.goal_mode` exists and Slice 8 reads it to
 seed target defaults, but there is no in-app selector to change it, and no
@@ -584,6 +584,13 @@ seed target defaults, but there is no in-app selector to change it, and no
 per the new mode, with per-field "apply default" toggles). Build alongside
 the Settings tab (5A/5E). When the mode changes, only toggled fields should
 update; past meal logs and target history stay unchanged.
+
+**Resolved 2026-06-16 (Slice 9):** Profile editor includes the goal-mode
+selector; changing it opens the 5E.1 recommendation Sheet with per-group
+apply toggles that write only the selected ranges to `nutrition_targets`.
+Implemented via the pure `applyTargetToggles` merge. Remaining nuance: the
+toggles are per macro group (min+max together) rather than per individual
+field — a deliberate choice so the result can't violate `CHECK(min < max)`.
 
 ### Today dashboard macro mirror
 

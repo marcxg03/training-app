@@ -911,3 +911,24 @@ already uses (`getTodayDayOfWeek` + active-plan join), keeps the feature
 shippable against a thin spec, and leaves richer per-meal planning as a
 clearly-scoped FUTURE_WORK item rather than inventing an unvalidated
 algorithm.
+
+## Slice 9 — Settings + Goal Mode
+
+### Goal Mode Recommendation toggles are per macro group, not per field
+
+**Context:** 5E.1 lets the user apply the recommended target defaults for a new
+goal mode per "field". `nutrition_targets` has a DB `CHECK(min < max)` on each
+of the four pairs. If a calorie min came from the recommended set but the
+calorie max stayed at the (lower) current value, the merge could violate the
+CHECK.
+
+**Decision:** Expose one Apply toggle per macro **group** (Calories / Protein /
+Carbs / Fat), flipping that group's `_min` and `_max` together. The pure
+`applyTargetToggles` merge therefore always draws a group's min and max from the
+same source.
+
+**Reasoning:** Per-group toggles make a CHECK-violating mixed result
+structurally impossible (no runtime guard needed), and they match how a user
+thinks about ranges ("update my protein range" not "update protein max only").
+The literal spec said per-field; this is a safer, friendlier interpretation,
+recorded here as the intentional deviation.

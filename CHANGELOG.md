@@ -986,3 +986,60 @@ mutations,schemas,projections}.ts` (browser-client writes, no Server
   production build compiles the route cleanly, confirming it was an HMR
   transient, not a code defect.
 - Test user + seeded data fully cleaned up afterward (0 residual rows).
+
+## Slice 9 — Settings + Profile + Goal Mode Recommendation (2026-06-16)
+
+> Solo-built (Claude Code drafter) with an independent reviewer-subagent pass.
+> Spec: `spec/slices/SLICE_9_SETTINGS.md`. No new migration.
+
+### What was built
+
+- **5A Settings menu (`/settings`):** replaced the sign-out-only stub with a
+  hub — rows linking to Profile, Nutrition targets, and the Exercise library,
+  plus the existing Sign out. (Plan Editor row omitted until that slice ships.)
+- **5E Profile (`/settings/profile`):** RHF + zod form for display name,
+  bodyweight (kg), height (cm), and goal mode. Bodyweight/height accept a
+  positive number or blank (→ null); display name optional. Upserts `profiles`
+  via the browser client.
+- **5E.1 Goal Mode Recommendation:** when goal mode changes and the profile
+  saves, a Sheet opens showing each macro/calorie range as "current →
+  recommended" (recommended = the Slice 8 `goalModeDefaultTargets(newMode)`)
+  with a per-group Apply toggle (default on when the values differ, or when no
+  targets exist yet). "Apply selected" writes only the toggled groups to
+  `nutrition_targets` (others keep current values); "Keep current" leaves them
+  untouched. Closes the nutrition goal-mode loop end to end.
+- **Reused, no new schema:** `profiles` already had all four columns
+  (migration 001); the recommendation reuses Slice 8's `goalModeDefaultTargets`
+  - `upsertTargets`. New pure helper `applyTargetToggles` in
+    `methodology/nutrition.ts`. No new dependencies, no migration.
+
+### Key invariant (5E.1)
+
+- Apply toggles are **per macro group** (a toggle flips both `_min` and `_max`
+  together), so `applyTargetToggles` always takes a group's min and max from
+  the **same** source — a mixed result that could violate the DB
+  `CHECK(min < max)` is structurally impossible. With no existing targets, the
+  recommended set is the merge base, so every field resolves to a valid integer
+  (no null/NaN can reach the NOT-NULL columns).
+
+### Reviewer-subagent findings (fixed)
+
+- Defaulted each Apply toggle on only when its values differ (spec intent), and
+  keyed the recommendation Sheet on the mode so it remounts fresh per change;
+  dropped a redundant `router.refresh`. Reviewer confirmed the central
+  min<max / no-null invariant holds in both has-targets and no-targets cases,
+  plus schema fidelity, module boundaries, and the nullable-number handling.
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` all clean
+  (`/settings` + `/settings/profile` compile).
+- **Authenticated browser E2E:** menu renders with working links; profile form
+  pre-fills; filled name/bodyweight/height and changed goal mode to Lean bulk →
+  save opened the recommendation Sheet ("no targets yet", all rows
+  "— → recommended") → Apply seeded the lean_bulk defaults. DB verified:
+  `profiles` = {Marcus, 82, 180, lean_bulk} and `nutrition_targets` =
+  2800–3200 / 170–210 / 320–400 / 80–100. No console errors. (Same benign
+  dev-mode first-compile 500 transient as Slice 8 on the first `/settings`
+  hit; recovered immediately; production build is clean.)
+- Test user + data fully cleaned up afterward (0 residual rows).

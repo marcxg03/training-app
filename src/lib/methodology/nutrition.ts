@@ -184,3 +184,21 @@ export function dayTypeFramework(
     guidance: `${guidanceByType[dayType]} ${GOAL_MODE_SUFFIX[goalMode]}`,
   };
 }
+
+export type TargetToggles = Record<keyof NutritionTargetValues, boolean>;
+
+/**
+ * Goal Mode Recommendation merge (5E.1): for each target field, take the
+ * recommended default when its toggle is on, otherwise keep the current value.
+ */
+export function applyTargetToggles(
+  current: NutritionTargetValues,
+  recommended: NutritionTargetValues,
+  toggles: TargetToggles,
+): NutritionTargetValues {
+  const keys = Object.keys(current) as (keyof NutritionTargetValues)[];
+  return keys.reduce((acc, key) => {
+    acc[key] = toggles[key] ? recommended[key] : current[key];
+    return acc;
+  }, {} as NutritionTargetValues);
+}
