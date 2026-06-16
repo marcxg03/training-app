@@ -10,26 +10,40 @@ import { z } from "zod";
 // output types identical — required for the zod 4 + @hookform/resolvers typing
 // to line up with `useForm<z.infer<...>>`.
 
-export const mealSchema = z.object({
-  meal_type: z
-    .string()
-    .trim()
-    .min(1, "Name this meal (e.g. Breakfast)")
-    .max(60, "Keep the meal name under 60 characters"),
-  protein_g: z
-    .number({ error: "Enter protein in grams" })
-    .min(0, "Protein can't be negative")
-    .max(1000, "That looks too high"),
-  carbs_g: z
-    .number({ error: "Enter carbs in grams" })
-    .min(0, "Carbs can't be negative")
-    .max(1000, "That looks too high"),
-  fat_g: z
-    .number({ error: "Enter fat in grams" })
-    .min(0, "Fat can't be negative")
-    .max(1000, "That looks too high"),
-  note: z.string().max(500, "Keep the note under 500 characters"),
-});
+const gramsField = (label: string) =>
+  z
+    .number({ error: `Enter ${label} in grams` })
+    .min(0, `${label} can't be negative`)
+    .max(1000, "That looks too high");
+
+// Each macro is a [min, max] range; an exact entry has min === max (the form's
+// single-value mode sets both). max >= min mirrors the DB CHECK.
+export const mealSchema = z
+  .object({
+    meal_type: z
+      .string()
+      .min(1, "Name this meal (e.g. Breakfast)")
+      .max(60, "Keep the meal name under 60 characters"),
+    protein_min_g: gramsField("protein"),
+    protein_max_g: gramsField("protein"),
+    carbs_min_g: gramsField("carbs"),
+    carbs_max_g: gramsField("carbs"),
+    fat_min_g: gramsField("fat"),
+    fat_max_g: gramsField("fat"),
+    note: z.string().max(500, "Keep the note under 500 characters"),
+  })
+  .refine((d) => d.protein_max_g >= d.protein_min_g, {
+    message: "Max protein must be at least the minimum",
+    path: ["protein_max_g"],
+  })
+  .refine((d) => d.carbs_max_g >= d.carbs_min_g, {
+    message: "Max carbs must be at least the minimum",
+    path: ["carbs_max_g"],
+  })
+  .refine((d) => d.fat_max_g >= d.fat_min_g, {
+    message: "Max fat must be at least the minimum",
+    path: ["fat_max_g"],
+  });
 
 export type MealFormValues = z.infer<typeof mealSchema>;
 

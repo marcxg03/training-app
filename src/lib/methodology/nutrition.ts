@@ -41,6 +41,27 @@ export function rangeStatus(
   return "in";
 }
 
+/**
+ * Status of a logged range [valueMin, valueMax] against a target range
+ * [targetMin, targetMax]. "in" means the logged range overlaps the target band
+ * (i.e. it's possible to be on target); "under"/"over" only when the whole
+ * logged range sits below/above the target.
+ */
+export function rangeStatusForRange(
+  valueMin: number,
+  valueMax: number,
+  targetMin: number,
+  targetMax: number,
+): RangeStatus {
+  if (valueMax < targetMin) {
+    return "under";
+  }
+  if (valueMin > targetMax) {
+    return "over";
+  }
+  return "in";
+}
+
 export type NutritionTargetValues = {
   cal_min: number;
   cal_max: number;

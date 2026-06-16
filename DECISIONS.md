@@ -1007,3 +1007,27 @@ user on a single session the race window is negligible. A fully atomic switch
 (a Postgres RPC, or a `UNIQUE INDEX ... WHERE is_active` partial index) is the
 correct long-term fix and is logged in FUTURE_WORK; the non-atomic version is a
 conscious, documented acceptance (KNOWN_ISSUES 🟡).
+
+## Slice 13 — Macro ranges
+
+### Meals store per-macro [min, max]; exact entries are min == max
+
+**Context:** Macros/calories should be loggable as ranges (estimates), and the
+AI photo estimator (Slice 14) produces ranges. The previous schema stored a
+single value per macro.
+
+**Decision:** Add min/max columns per macro + calories to `meal_entries`. An
+exact entry sets min == max (the form's default single-input mode). Calories
+are derived as an envelope: `cal_min = 4·Pmin+4·Cmin+9·Fmin`,
+`cal_max = …max`. The dashboard sums to a total range and renders a band. The
+old single columns are **deprecated, not dropped** — backfilled (min=max),
+made nullable, and left in place so historical rows are preserved without a
+destructive migration.
+
+**Reasoning:** Per-macro ranges are the most expressive model and map directly
+to a photo estimate's per-macro uncertainty; collapsing to a single ±% would
+lose that. min==max keeps exact logging a one-number experience. Keeping the
+deprecated columns (vs dropping) avoids data loss and a risky destructive
+migration for a single-user app; nothing reads them after the code update.
+`max >= min` (not strict `<`) is the correct CHECK since exact entries are
+min==max — distinct from `nutrition_targets`' strict `min < max`.

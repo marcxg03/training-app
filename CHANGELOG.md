@@ -1195,3 +1195,51 @@ cover`.
   switched active → the week became the empty rest skeleton; reset to base.
   DB verified: 2 plans, **exactly 1 active**, and the new plan got its 7-day
   mon–sun skeleton. No data deleted (no delete affordance in this slice).
+
+## Slice 13 — Macro ranges + edit/delete meals (2026-06-17)
+
+> Solo-built (Claude Code) + reviewer-subagent pass. Migration 018. Spec:
+> `spec/slices/SLICE_13_MEAL_RANGES.md`.
+
+### What was built
+
+- **Meals are now range-based.** Migration 018 adds min/max columns for each
+  macro + calories to `meal_entries`, backfills existing rows (min=max=value),
+  deprecates the old single columns (nullable, no longer written), and adds
+  `max >= min AND min >= 0` CHECKs.
+- **Log Meal reworked:** an **exact/range toggle** — exact mode shows one input
+  per macro (saved as min=max); range mode shows Low/High. Leaving range mode
+  collapses max→min so the single-input view is WYSIWYG. Live calorie preview
+  shows a single value or a range (e.g. "535–660 kcal"). Calories derive as a
+  range from the macro bounds.
+- **Edit + delete logged meals:** per-row pencil (re-opens the sheet prefilled;
+  range meals open in range mode) and trash (with a confirm dialog).
+- **Dashboard shows ranges:** totals sum to a range; each `MacroProgressBar`
+  renders a band — solid fill to the lower bound, lighter band to the upper —
+  with status via `rangeStatusForRange` (on-target when the logged range
+  overlaps the target band).
+
+### Bug caught + fixed during verification
+
+- **Runtime error (caught live, not by typecheck):** the macro _group_ heading
+  used `<FormLabel>`, which requires a `<FormField>` context, throwing
+  "useFormField should be used within <FormField>". Swapped to the plain
+  `Label` primitive.
+
+### Reviewer-subagent findings (fixed)
+
+- **M1:** toggling an existing range meal back to exact mode _without editing_
+  could silently persist the stale max. Fixed — leaving range mode now collapses
+  each max→min. Reviewer also confirmed the migration ordering is safe (backfill
+  before CHECKs; new range-only inserts don't trip the old single-column CHECK
+  since NULL passes), the calorie min/max envelope is correct/monotonic, and the
+  totals/status math is sound.
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` clean. Migration 018
+  applied to remote; types regenerated.
+- **Live (browser):** logged a range meal (P 40–50 / C 60–70 / F 15–20 →
+  live "535–660 kcal"); dashboard showed range bands per macro and
+  "535–660 kcal" on the meal; deleted it via the confirm dialog → totals reset
+  to 0. No console errors. Demo data cleaned up.

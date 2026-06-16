@@ -260,3 +260,15 @@ partial failure can't leave _two_ active plans (which would crash every
 when none active" is also a check-then-write (TOCTOU); negligible for a single
 user. The clean fix is a Postgres RPC/transaction or a partial unique index
 `(user_id) WHERE is_active` — tracked in FUTURE_WORK.
+
+## Slice 13 — Macro ranges
+
+### 🟢 Low — Deprecated single-value meal columns kept (nullable, unused)
+
+Migration 018 added range columns to `meal_entries` and left the original
+single columns (`protein_g`/`carbs_g`/`fat_g`/`calories`) in place — backfilled,
+made nullable, and no longer written by the app. They're harmless dead schema
+kept to avoid a destructive column drop on a table that may hold history. A
+future cleanup migration could drop them once nothing references them (nothing
+does today). The old `005` CHECK (`protein_g >= 0 AND …`) also remains but
+passes on the NULLs new rows write.

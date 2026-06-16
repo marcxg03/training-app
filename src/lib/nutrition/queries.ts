@@ -43,7 +43,7 @@ export async function getMealsForDate(date: string): Promise<MealEntry[]> {
   const { data, error } = await supabase
     .from("meal_entries")
     .select(
-      "meal_id, meal_type, protein_g, carbs_g, fat_g, calories, note, logged_at",
+      "meal_id, meal_type, protein_min_g, protein_max_g, carbs_min_g, carbs_max_g, fat_min_g, fat_max_g, cal_min, cal_max, note, logged_at",
     )
     .eq("date", date)
     .order("logged_at", { ascending: true });
