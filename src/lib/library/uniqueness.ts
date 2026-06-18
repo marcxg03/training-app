@@ -20,6 +20,11 @@ type NameConflictArgs =
       table: "recovery_activities";
       name: string;
       ownId?: string;
+    }
+  | {
+      table: "workout_defs";
+      name: string;
+      ownId?: string;
     };
 
 export async function nameConflicts(args: NameConflictArgs): Promise<boolean> {
@@ -79,14 +84,30 @@ export async function nameConflicts(args: NameConflictArgs): Promise<boolean> {
     return !error && (data?.length ?? 0) > 0;
   }
 
+  if (args.table === "recovery_activities") {
+    let query = supabase
+      .from("recovery_activities")
+      .select("activity_id")
+      .eq("name", normalizedName)
+      .limit(2);
+
+    if (args.ownId) {
+      query = query.neq("activity_id", args.ownId);
+    }
+
+    const { data, error } = await query;
+
+    return !error && (data?.length ?? 0) > 0;
+  }
+
   let query = supabase
-    .from("recovery_activities")
-    .select("activity_id")
+    .from("workout_defs")
+    .select("workout_def_id")
     .eq("name", normalizedName)
     .limit(2);
 
   if (args.ownId) {
-    query = query.neq("activity_id", args.ownId);
+    query = query.neq("workout_def_id", args.ownId);
   }
 
   const { data, error } = await query;

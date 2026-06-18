@@ -60,3 +60,27 @@ export type RecoveryBlockWithActivities = {
   block_name: string;
   activities: RecoveryActivity[];
 };
+
+export type WorkoutType = "lifting" | "cardio" | "recovery";
+
+export type WorkoutDefSummary = {
+  workout_def_id: string;
+  name: string;
+  workout_type: WorkoutType;
+  block_count: number;
+};
+
+export type BlockInWorkoutDef = {
+  block_id: string;
+  block_name: string;
+  block_type: "failure" | "mobility" | "corrective" | null;
+  exercise_count: number;
+  display_order: number;
+};
+
+export type WorkoutDefDetail = {
+  workout_def_id: string;
+  name: string;
+  workout_type: WorkoutType;
+  blocks: BlockInWorkoutDef[];
+};

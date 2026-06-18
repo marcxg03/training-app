@@ -29,3 +29,19 @@ export function cardioHref(): string {
 export function recoveryHref(): string {
   return "/library/recovery";
 }
+
+export function workoutsHref(): string {
+  return "/library/workouts";
+}
+
+export function workoutDetailHref(workoutDefId: string): string {
+  return `/library/workouts/${workoutDefId}`;
+}
+
+export function workoutEditHref(workoutDefId: string): string {
+  return `/library/workouts/${workoutDefId}/edit`;
+}
+
+export function workoutCreateHref(): string {
+  return "/library/workouts/new";
+}

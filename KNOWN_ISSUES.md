@@ -318,3 +318,20 @@ precisely why the cascade from a block/exercise delete would succeed at the RLS
 layer — reinforcing that the app guard is load-bearing. Surfaced here because it
 is adjacent to this slice's history-protection concern; a future migration could
 tighten it.
+
+## Slice 16 — Reusable Workouts catalog
+
+### 🟢 Low — `update_own` RLS policies lack a `WITH CHECK` (project-wide)
+
+`workout_defs` / `workout_def_blocks` `update_own` policies use only `USING`, no
+`WITH CHECK` — mirroring the existing `blocks`/`block_lifting_items` policies
+(migration 016). In principle an UPDATE could move a row to another owner; not
+exploitable today because no mutation sets `owner_user_id` on update. A future
+migration could add `WITH CHECK` to the whole family at once. (Reviewer Low #2.)
+
+### 🟢 Low — `replaceWorkoutDefBlocks` is non-transactional (project-wide pattern)
+
+Block replacement deletes then inserts in two statements (no transaction), so a
+failed insert after a successful delete would leave a workout with zero blocks.
+This is the same pattern as `replaceBlockBank`; acceptable for a single-user app.
+Surfaced here as it's now used by a second feature. (Reviewer Low #3.)

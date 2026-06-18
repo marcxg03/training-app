@@ -8,6 +8,8 @@ import type {
   LiftingBlockSummary,
   RecoveryActivity,
   RecoveryBlockWithActivities,
+  WorkoutDefDetail,
+  WorkoutDefSummary,
 } from "@/lib/library/projections";
 import { getPrimaryMuscleGroupLabel } from "@/lib/methodology/muscle-groups";
 import { createClient } from "@/lib/supabase/server";
@@ -270,6 +272,124 @@ export async function getExercises(): Promise<ExerciseListItem[]> {
     prescribed_max: exercise.prescribed_max,
     notes: exercise.notes,
   }));
+}
+
+export async function getWorkoutDefs(): Promise<WorkoutDefSummary[]> {
+  const supabase = await createClient();
+  const { data: defs, error } = await supabase
+    .from("workout_defs")
+    .select("workout_def_id, name, workout_type")
+    .order("name");
+
+  if (error) {
+    throw new Error(`Failed to load workouts: ${error.message}`);
+  }
+
+  if (defs.length === 0) {
+    return [];
+  }
+
+  const defIds = defs.map((def) => def.workout_def_id);
+  const { data: items, error: itemsError } = await supabase
+    .from("workout_def_blocks")
+    .select("workout_def_id")
+    .in("workout_def_id", defIds);
+
+  if (itemsError) {
+    throw new Error(
+      `Failed to load workout block counts: ${itemsError.message}`,
+    );
+  }
+
+  const counts = new Map<string, number>();
+
+  for (const item of items) {
+    counts.set(item.workout_def_id, (counts.get(item.workout_def_id) ?? 0) + 1);
+  }
+
+  return defs.map((def) => ({
+    workout_def_id: def.workout_def_id,
+    name: def.name,
+    workout_type: def.workout_type,
+    block_count: counts.get(def.workout_def_id) ?? 0,
+  }));
+}
+
+export async function getWorkoutDefDetail(
+  workoutDefId: string,
+): Promise<WorkoutDefDetail | null> {
+  const supabase = await createClient();
+  const { data: def, error: defError } = await supabase
+    .from("workout_defs")
+    .select("workout_def_id, name, workout_type")
+    .eq("workout_def_id", workoutDefId)
+    .maybeSingle();
+
+  if (defError) {
+    throw new Error(`Failed to load workout: ${defError.message}`);
+  }
+
+  if (!def) {
+    return null;
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from("workout_def_blocks")
+    .select(
+      `
+        display_order,
+        blocks!inner (
+          block_id,
+          block_name,
+          block_type
+        )
+      `,
+    )
+    .eq("workout_def_id", workoutDefId)
+    .order("display_order");
+
+  if (itemsError) {
+    throw new Error(`Failed to load workout blocks: ${itemsError.message}`);
+  }
+
+  // Exercise counts for each block, to mirror the lifting-block summary line.
+  const blockIds = items.flatMap((item) =>
+    toRelationArray(item.blocks).map((block) => block.block_id),
+  );
+  const exerciseCounts = new Map<string, number>();
+
+  if (blockIds.length > 0) {
+    const { data: liftingItems, error: liftingError } = await supabase
+      .from("block_lifting_items")
+      .select("block_id")
+      .in("block_id", blockIds);
+
+    if (liftingError) {
+      throw new Error(`Failed to load block counts: ${liftingError.message}`);
+    }
+
+    for (const item of liftingItems) {
+      exerciseCounts.set(
+        item.block_id,
+        (exerciseCounts.get(item.block_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  return {
+    workout_def_id: def.workout_def_id,
+    name: def.name,
+    workout_type: def.workout_type,
+    blocks: items.flatMap((item) =>
+      toRelationArray(item.blocks).map((block) => ({
+        block_id: block.block_id,
+        block_name: block.block_name,
+        block_type: block.block_type,
+        exercise_count: exerciseCounts.get(block.block_id) ?? 0,
+        display_order: item.display_order,
+      })),
+    ),
+  };
 }
 
 export async function getHistoricalSetLogCount(

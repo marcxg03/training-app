@@ -34,6 +34,7 @@ const KIND_LABEL: Record<LibraryItemKind, string> = {
   exercise: "exercise",
   cardio: "cardio activity",
   recovery: "recovery activity",
+  workout: "workout",
 };
 
 export function DeleteLibraryItemButton({

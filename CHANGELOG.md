@@ -1352,3 +1352,42 @@ cover`.
   block bank" (allowed-with-warning path); created a throwaway exercise → its
   dialog showed no warning (clean path) → Delete removed the row and the list
   refreshed. No console errors.
+
+## Slice 16 — Reusable Workouts catalog (Library tab) (2026-06-18)
+
+### What was built
+
+- The missing middle tier of the model (Exercises → Blocks → **Workouts** →
+  Plans): a reusable, owner-scoped workout composed of lifting blocks, with a new
+  **Library → Workouts** tab as the single place a workout's contents are edited.
+- Migration 019: `workout_defs` (owner_user_id, name, workout_type default
+  'lifting', UNIQUE(owner_user_id, name)) + `workout_def_blocks` junction
+  (→ blocks, display_order). Full own/def-ownership RLS mirroring migration 016;
+  `set_updated_at` trigger. Applied to remote; types regenerated.
+- Data layer in `src/lib/library/`: `getWorkoutDefs` / `getWorkoutDefDetail`
+  (mirror the lifting-block queries, with per-block exercise counts);
+  `createWorkoutDef` / `updateWorkoutDef` via `replaceWorkoutDefBlocks` (the
+  workout analog of `replaceBlockBank`); `workoutDefSchema` with async
+  name-uniqueness; extended `LibraryItemKind`/`getDeletionImpact`/
+  `deleteLibraryItem`/`DELETE_CONFIG` with kind `"workout"`.
+- UI reusing the block-composition pattern almost verbatim: 5th `LibraryTabs`
+  entry (grid-cols-5); `BlockPicker` (cmdk search over lifting blocks, parallel
+  to `ExercisePicker`); `BlockComposition` (ordered list + `MoveButton` up/down +
+  remove, parallel to `BankComposition`); `WorkoutDefForm` (parallel to
+  `BlockForm`); `AddWorkoutButton`, `WorkoutListCard`; routes under
+  `library/workouts/`. Reuses `MoveButton`, `useDiscardChangesGuard`,
+  `DeleteLibraryItemButton`.
+
+### Deviations from the plan
+
+- None. (Cardio/recovery workout composition intentionally deferred; schema
+  carries `workout_type` for it.)
+
+### Verification
+
+- `pnpm typecheck` / `lint` / `format:check` / `build` clean.
+- **Live (browser):** opened Library → Workouts (5th tab, empty state); created
+  "E2E Test Workout" by picking two lifting blocks (already-added block excluded
+  from the picker), reordered them with the arrows, saved → detail showed both
+  blocks in the reordered order with type + exercise count; deleted it via the
+  confirm dialog (clean path, no warning) → back to empty list. No console errors.

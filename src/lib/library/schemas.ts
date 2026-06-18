@@ -201,7 +201,47 @@ export const recoveryActivitySchema = z
     },
   );
 
+const workoutBlockItemSchema = z.object({
+  block_id: z.string().uuid(),
+  display_order: z.number().int().min(0),
+});
+
+// A reusable workout is a name + an ordered list of lifting blocks. Contents are
+// edited only here (single source of truth); plans reference the workout.
+export const workoutDefSchema = z
+  .object({
+    own_id: z.string().uuid().optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, "Workout name is required.")
+      .max(80, "Workout name must be 80 characters or fewer."),
+    blocks: z.array(workoutBlockItemSchema),
+  })
+  .refine(
+    (values) =>
+      new Set(values.blocks.map((block) => block.block_id)).size ===
+      values.blocks.length,
+    {
+      path: ["blocks"],
+      message: "A block can only be added once.",
+    },
+  )
+  .refine(
+    async (values) =>
+      !(await nameConflicts({
+        table: "workout_defs",
+        name: values.name,
+        ownId: values.own_id,
+      })),
+    {
+      path: ["name"],
+      message: "A workout with this name already exists.",
+    },
+  );
+
 export type BlockFormValues = z.infer<typeof blockSchema>;
 export type ExerciseFormValues = z.infer<typeof exerciseSchema>;
 export type CardioActivityFormValues = z.infer<typeof cardioActivitySchema>;
 export type RecoveryActivityFormValues = z.infer<typeof recoveryActivitySchema>;
+export type WorkoutDefFormValues = z.infer<typeof workoutDefSchema>;

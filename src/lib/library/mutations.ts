@@ -7,6 +7,7 @@ import type {
   CardioActivityFormValues,
   ExerciseFormValues,
   RecoveryActivityFormValues,
+  WorkoutDefFormValues,
 } from "@/lib/library/schemas";
 import type { Database } from "@/lib/supabase/types";
 
@@ -31,6 +32,10 @@ type CardioPayload = Omit<
   >;
 };
 type RecoveryPayload = Omit<RecoveryActivityFormValues, "own_id">;
+type WorkoutDefPayload = {
+  name: string;
+  blocks: WorkoutDefFormValues["blocks"];
+};
 
 function isUniqueViolation(error: PostgrestError | null): boolean {
   return error?.code === "23505";
@@ -494,6 +499,107 @@ export async function updateRecoveryActivity(
   return { ok: true, data: null };
 }
 
+// --- Reusable workouts (Slice 16) ------------------------------------------
+
+function workoutAlreadyExistsMessage(): string {
+  return "A workout with this name already exists.";
+}
+
+async function replaceWorkoutDefBlocks(
+  supabase: BrowserClient,
+  workoutDefId: string,
+  blocks: WorkoutDefPayload["blocks"],
+): Promise<MutationResult<null>> {
+  const { error: deleteError } = await supabase
+    .from("workout_def_blocks")
+    .delete()
+    .eq("workout_def_id", workoutDefId);
+
+  if (deleteError) {
+    return { ok: false, error: "Save failed — please retry." };
+  }
+
+  if (blocks.length === 0) {
+    return { ok: true, data: null };
+  }
+
+  const rows = blocks.map((block, index) => ({
+    workout_def_id: workoutDefId,
+    block_id: block.block_id,
+    display_order: index,
+  }));
+
+  const { error: insertError } = await supabase
+    .from("workout_def_blocks")
+    .insert(rows);
+
+  if (insertError) {
+    return { ok: false, error: "Save failed — please retry." };
+  }
+
+  return { ok: true, data: null };
+}
+
+export async function createWorkoutDef(
+  supabase: BrowserClient,
+  input: WorkoutDefPayload,
+): Promise<MutationResult<{ workout_def_id: string }>> {
+  const userResult = await getCurrentUserId(supabase);
+
+  if (!userResult.ok) {
+    return userResult;
+  }
+
+  const { data, error } = await supabase
+    .from("workout_defs")
+    .insert({
+      owner_user_id: userResult.data,
+      name: normalizeText(input.name),
+      workout_type: "lifting",
+    })
+    .select("workout_def_id")
+    .single();
+
+  if (error) {
+    return {
+      ok: false,
+      error: translateMutationError(error, workoutAlreadyExistsMessage()),
+    };
+  }
+
+  const blocksResult = await replaceWorkoutDefBlocks(
+    supabase,
+    data.workout_def_id,
+    input.blocks,
+  );
+
+  if (!blocksResult.ok) {
+    return blocksResult;
+  }
+
+  return { ok: true, data: { workout_def_id: data.workout_def_id } };
+}
+
+export async function updateWorkoutDef(
+  supabase: BrowserClient,
+  workoutDefId: string,
+  input: WorkoutDefPayload,
+): Promise<MutationResult<null>> {
+  const { error } = await supabase
+    .from("workout_defs")
+    .update({ name: normalizeText(input.name) })
+    .eq("workout_def_id", workoutDefId);
+
+  if (error) {
+    return {
+      ok: false,
+      error: translateMutationError(error, workoutAlreadyExistsMessage()),
+    };
+  }
+
+  return replaceWorkoutDefBlocks(supabase, workoutDefId, input.blocks);
+}
+
 // --- Deletion (Slice 15) ---------------------------------------------------
 //
 // Non-destructive delete. The FKs from history tables (set_logs, pr_history)
@@ -504,7 +610,12 @@ export async function updateRecoveryActivity(
 // polymorphic activity_id with no FK, so cardio/recovery history wouldn't even
 // cascade — it would orphan; the guard catches that too.
 
-export type LibraryItemKind = "block" | "exercise" | "cardio" | "recovery";
+export type LibraryItemKind =
+  | "block"
+  | "exercise"
+  | "cardio"
+  | "recovery"
+  | "workout";
 
 export type DeletionImpact = {
   /** True when logged history would be lost — deletion is refused. */
@@ -615,6 +726,13 @@ export async function getDeletionImpact(
     };
   }
 
+  if (kind === "workout") {
+    // A reusable workout has no logged history of its own. Once plans can
+    // reference it (Slice 17, workouts.workout_def_id), this branch will warn
+    // when the workout is scheduled; for now deletion is always clean.
+    return { blocked: false };
+  }
+
   // cardio / recovery — activity_completions.activity_id is a polymorphic uuid
   // (no FK), discriminated by activity_type.
   const completions = rowsOrNull(
@@ -670,14 +788,20 @@ export async function getDeletionImpact(
 const DELETE_CONFIG: Record<
   LibraryItemKind,
   {
-    table: "blocks" | "exercises" | "cardio_activities" | "recovery_activities";
-    idColumn: "block_id" | "exercise_id" | "activity_id";
+    table:
+      | "blocks"
+      | "exercises"
+      | "cardio_activities"
+      | "recovery_activities"
+      | "workout_defs";
+    idColumn: "block_id" | "exercise_id" | "activity_id" | "workout_def_id";
   }
 > = {
   block: { table: "blocks", idColumn: "block_id" },
   exercise: { table: "exercises", idColumn: "exercise_id" },
   cardio: { table: "cardio_activities", idColumn: "activity_id" },
   recovery: { table: "recovery_activities", idColumn: "activity_id" },
+  workout: { table: "workout_defs", idColumn: "workout_def_id" },
 };
 
 export async function deleteLibraryItem(

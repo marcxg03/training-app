@@ -1121,3 +1121,48 @@ are *configuration* — deleting cascades or orphans them harmlessly, so the gua
 allows and warns ("this will also remove it from N banks / N scheduled
 workouts"). This keeps delete usable (you can always remove an unused item)
 while making the history-protecting refusal unambiguous.
+
+## Slice 16 — Reusable Workouts catalog
+
+### A new `workout_defs` entity, not repurposing the per-day `workouts` table
+
+A reusable workout is a new owner-scoped entity (`workout_defs` +
+`workout_def_blocks`), separate from the existing per-day `workouts` table (which
+stays the scheduled instance that `set_logs`/completions anchor to).
+
+**Options considered**
+
+1. New `workout_defs` catalog entity; plans reference it (chosen).
+2. Make the existing `workouts` table reusable (owner-scoped) and add a
+   schedule↔workout junction.
+
+**Reasoning**
+Option 2 breaks the history model: `set_logs`, `workout_completions`, and
+`activity_completions` all FK to `workouts.workout_id`. If one workout row were
+reused across many days, logged history would be ambiguous (which day's
+session?). Keeping `workouts` as the per-day instance and adding `workout_defs`
+as the reusable definition keeps the entire logging/history model untouched; the
+plan editor (Slice 17) instantiates a per-day `workouts` row that links back to
+its def via `workout_def_id`.
+
+### Workouts compose lifting blocks; cardio/recovery deferred
+
+The catalog composition UI is lifting-blocks-only for now (the dominant case;
+cardio/recovery are already single-preset blocks). `workout_defs.workout_type`
+defaults to `'lifting'` and exists in the schema so cardio/recovery composition
+can be added later without a migration. This keeps the slice focused and reuses
+the lifting-block picker/composition pattern verbatim.
+
+### Reused the block-composition pattern verbatim rather than generalizing it
+
+`BlockPicker`/`BlockComposition`/`WorkoutDefForm` are near-copies of
+`ExercisePicker`/`BankComposition`/`BlockForm` rather than a shared generic
+"catalog picker into ordered list" abstraction.
+
+**Reasoning**
+The two compositions differ in item shape (exercise vs block), labels, and the
+picker's secondary action (exercises support inline-create; blocks point to the
+Lifting tab). A premature generic abstraction would have to be parameterized on
+all of those and would obscure both call sites. Copying the well-understood
+pattern keeps each surface readable; if a third composition appears, that's the
+point to extract a generic.
