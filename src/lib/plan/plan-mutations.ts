@@ -103,6 +103,64 @@ export async function activatePlan(
   return { ok: true, data: undefined };
 }
 
+/**
+ * Deletes a plan (cascades its schedules, workouts, and any logged history).
+ * Refuses to delete the only remaining plan — the app always needs one active
+ * plan. If the deleted plan was active, the most-recent remaining plan is
+ * activated so exactly one plan stays active.
+ */
+export async function deletePlan(
+  supabase: BrowserClient,
+  userId: string,
+  planId: string,
+): Promise<MutationResult<void>> {
+  const { data: plans, error: listError } = await supabase
+    .from("training_plans")
+    .select("plan_id, is_active")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (listError || !plans) {
+    return { ok: false, error: translateMutationError(listError) };
+  }
+
+  if (plans.length <= 1) {
+    return {
+      ok: false,
+      error: "This is your only plan. Create another before deleting it.",
+    };
+  }
+
+  const wasActive =
+    plans.find((plan) => plan.plan_id === planId)?.is_active ?? false;
+
+  const { error: deleteError } = await supabase
+    .from("training_plans")
+    .delete()
+    .eq("plan_id", planId);
+
+  if (deleteError) {
+    return { ok: false, error: translateMutationError(deleteError) };
+  }
+
+  if (wasActive) {
+    // plans is newest-first, so the first survivor is the most recent.
+    const next = plans.find((plan) => plan.plan_id !== planId);
+    if (next) {
+      const { error: activateError } = await supabase
+        .from("training_plans")
+        .update({ is_active: true })
+        .eq("plan_id", next.plan_id);
+
+      if (activateError) {
+        return { ok: false, error: translateMutationError(activateError) };
+      }
+    }
+  }
+
+  return { ok: true, data: undefined };
+}
+
 export async function renamePlan(
   supabase: BrowserClient,
   planId: string,

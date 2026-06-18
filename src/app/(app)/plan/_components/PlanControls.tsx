@@ -24,6 +24,7 @@ import {
 import {
   activatePlan,
   createPlan,
+  deletePlan,
   renamePlan,
 } from "@/lib/plan/plan-mutations";
 import { createClient } from "@/lib/supabase/client";
@@ -49,6 +50,7 @@ export function PlanControls({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState("");
 
   const activeName =
@@ -108,6 +110,22 @@ export function PlanControls({
     router.refresh();
   };
 
+  const handleDelete = async () => {
+    if (!activePlanId || busy) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const result = await deletePlan(createClient(), userId, activePlanId);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setDeleteOpen(false);
+    router.refresh();
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
@@ -136,6 +154,17 @@ export function PlanControls({
           disabled={activePlanId === null}
         >
           Rename
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setDeleteOpen(true);
+          }}
+          disabled={activePlanId === null}
+        >
+          Delete
         </Button>
         <Button type="button" onClick={openCreate}>
           New plan
@@ -197,6 +226,40 @@ export function PlanControls({
               disabled={!nameValid || busy}
             >
               {dialogMode === "create" ? "Create plan" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteOpen(false);
+            setError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete “{activeName}”?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the plan and everything scheduled in it,
+              including any logged history. If it&rsquo;s your active plan,
+              another plan becomes active.
+            </DialogDescription>
+          </DialogHeader>
+          {error ? <p className="text-sm text-danger">{error}</p> : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleDelete} disabled={busy}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
