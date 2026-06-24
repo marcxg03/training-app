@@ -335,3 +335,20 @@ Block replacement deletes then inserts in two statements (no transaction), so a
 failed insert after a successful delete would leave a workout with zero blocks.
 This is the same pattern as `replaceBlockBank`; acceptable for a single-user app.
 Surfaced here as it's now used by a second feature. (Reviewer Low #3.)
+
+## Slice 17 — Plan editor
+
+### 🟡 Medium — `savePlan` is not atomic (partial save on mid-loop failure)
+
+The weekly save is a sequence of statements with no enclosing transaction. If a
+day's update/insert/materialize fails partway, earlier days are already committed
+while later days are not, and a retry can duplicate the new (workout_id-less) rows
+the failed attempt inserted. Acceptable for a single-user app; a future hardening
+would wrap `savePlan` in a Postgres RPC/transaction. (Reviewer Medium-2.)
+
+### 🟢 Low — plan activation is procedural, not constraint-enforced
+
+`activatePlan` / `deletePlan` maintain "exactly one active plan" with
+read-modify-write updates, not a DB constraint. Concurrent activations (multi-tab)
+could momentarily leave zero or two active plans. Academic for single-user,
+single-tab use. (Reviewer Low-2.)

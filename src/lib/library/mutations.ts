@@ -727,10 +727,25 @@ export async function getDeletionImpact(
   }
 
   if (kind === "workout") {
-    // A reusable workout has no logged history of its own. Once plans can
-    // reference it (Slice 17, workouts.workout_def_id), this branch will warn
-    // when the workout is scheduled; for now deletion is always clean.
-    return { blocked: false };
+    // A reusable workout has no logged history of its own. Deleting it SET NULLs
+    // any scheduled workouts.workout_def_id (those days keep their last
+    // materialized blocks but lose the live link), so allow + warn.
+    const scheduled = rowsOrNull(
+      await supabase
+        .from("workouts")
+        .select("*", { count: "exact", head: true })
+        .eq("workout_def_id", id),
+    );
+    if (scheduled === null) {
+      return CHECK_FAILED;
+    }
+    return {
+      blocked: false,
+      warning:
+        scheduled > 0
+          ? `This workout is scheduled on ${scheduled} plan day${scheduled === 1 ? "" : "s"}; deleting unlinks it (those days keep their current blocks).`
+          : undefined,
+    };
   }
 
   // cardio / recovery — activity_completions.activity_id is a polymorphic uuid

@@ -1391,3 +1391,48 @@ cover`.
   from the picker), reordered them with the arrows, saved → detail showed both
   blocks in the reordered order with type + exercise count; deleted it via the
   confirm dialog (clean path, no warning) → back to empty list. No console errors.
+
+## Slice 17 — Plan editor + delete plans + assign workouts (2026-06-24)
+
+### What was built
+
+- Completes the hierarchy (Exercises → Blocks → Workouts → **Plans**): a
+  dedicated weekly **/plan/edit** page where reusable catalog workouts (Slice 16)
+  are assigned to days, plus **delete plans**.
+- **Delete plans** (17a): `deletePlan` refuses the only plan; if the deleted plan
+  was active, auto-activates the most-recent remaining one. Delete control +
+  confirm dialog in `PlanControls`.
+- Migration 020: `workouts.workout_def_id` (nullable FK → workout_defs, ON DELETE
+  SET NULL) + index. Ad-hoc per-day workouts leave it NULL and behave as before.
+- **Propagation = materialize on save** (user-chosen over instant live): on plan
+  save, each catalog-linked workout's blocks are copied from the definition into
+  `workout_blocks` — re-synced every save for unlogged workouts, frozen once the
+  workout has logged history. The six block-read paths (Today, day view, logger,
+  history, plan week, today-workout) are **unchanged** — no risk to the
+  append-only logging core.
+- `plan/queries.ts` `getPlanEditData`; `plan/mutations.ts` `savePlan` +
+  `materializeBlocks`; `library/mutations.ts` workout-def delete guard now warns
+  when scheduled (SET NULL keeps the day's last blocks). `/plan/edit` page +
+  `PlanEditForm` (plain-state weekly editor: rest toggle + ordered workout list +
+  `MoveButton` reorder + remove [disabled when logged] + `WorkoutPicker`); "Edit
+  plan" link on the plan page.
+
+### Reviewer findings addressed
+
+- **Medium-1 (fixed):** the frozen-snapshot guarantee no longer trusts the
+  client's `has_history`. `savePlan` re-checks history **server-side**
+  (`workoutsWithHistory`) for every catalog-linked workout before
+  re-materializing, closing the load→save TOCTOU (mirrors the removal guard).
+- Low-1: documented the lifting-only coupling at the workout insert.
+- Medium-2 / Low-2 (accepted, single-user): see KNOWN_ISSUES.
+
+### Verification
+
+- typecheck / lint / format / build clean.
+- **Live (browser):** built a catalog workout, assigned it to Monday in
+  /plan/edit, saved → it appeared on the plan week as "1 blocks · Core"
+  (blocks materialized from the definition); deleting the def while scheduled
+  showed the "scheduled on 1 plan day; deleting unlinks it" warning and SET-NULLed
+  the day's workout (snapshot retained); removed + saved to restore. Delete-plans
+  (17a) verified separately (auto-activate on deleting the active plan). All test
+  data cleaned up; no console errors. Reviewer pass: no Critical; Medium-1 fixed.

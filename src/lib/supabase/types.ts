@@ -801,6 +801,7 @@ export type Database = {
           gym: string | null
           schedule_id: string
           timing: Database["public"]["Enums"]["timing_enum"]
+          workout_def_id: string | null
           workout_id: string
           workout_name: string
           workout_type: Database["public"]["Enums"]["session_type_enum"]
@@ -818,6 +819,7 @@ export type Database = {
           gym?: string | null
           schedule_id: string
           timing?: Database["public"]["Enums"]["timing_enum"]
+          workout_def_id?: string | null
           workout_id?: string
           workout_name: string
           workout_type: Database["public"]["Enums"]["session_type_enum"]
@@ -835,6 +837,7 @@ export type Database = {
           gym?: string | null
           schedule_id?: string
           timing?: Database["public"]["Enums"]["timing_enum"]
+          workout_def_id?: string | null
           workout_id?: string
           workout_name?: string
           workout_type?: Database["public"]["Enums"]["session_type_enum"]
@@ -846,6 +849,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "daily_schedules"
             referencedColumns: ["schedule_id"]
+          },
+          {
+            foreignKeyName: "workouts_workout_def_id_fkey"
+            columns: ["workout_def_id"]
+            isOneToOne: false
+            referencedRelation: "workout_defs"
+            referencedColumns: ["workout_def_id"]
           },
         ]
       }

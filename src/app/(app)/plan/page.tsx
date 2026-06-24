@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getHighLevelMuscleGroups } from "@/lib/methodology/muscle-groups";
 import type { Enums, Tables } from "@/lib/supabase/types";
+import { buttonVariants } from "@/components/ui/button";
 import { DayCard, type DayCardSession } from "@/components/plan/DayCard";
 import { PlanControls } from "@/app/(app)/plan/_components/PlanControls";
 import { createClient } from "@/lib/supabase/server";
@@ -275,6 +277,15 @@ export default async function PlanPage() {
         activePlanId={weeklyPlan?.planId ?? null}
         userId={user.id}
       />
+
+      {weeklyPlan ? (
+        <Link
+          href="/plan/edit"
+          className={buttonVariants({ variant: "default" })}
+        >
+          Edit plan
+        </Link>
+      ) : null}
 
       {weeklyPlan ? (
         <div className="space-y-4">

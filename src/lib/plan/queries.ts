@@ -1,8 +1,24 @@
 import type { Enums } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/server";
-import type { DayEditData, EditableWorkoutRow } from "@/lib/plan/projections";
+import type {
+  DayEditData,
+  EditableWorkoutRow,
+  PlanEditData,
+  PlanEditDay,
+  PlanEditWorkout,
+} from "@/lib/plan/projections";
 
 type DayOfWeek = Enums<"day_of_week_enum">;
+
+const DAY_ORDER: DayOfWeek[] = [
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+];
 
 export async function getDayEditData(
   day: DayOfWeek,
@@ -80,6 +96,98 @@ export async function getDayEditData(
     is_rest_day: schedule.is_rest_day,
     workouts: editableWorkouts,
     other_days_have_rest: (otherRest?.length ?? 0) > 0,
+  };
+}
+
+/** Loads a whole plan (all 7 days + their workouts + the workout catalog) for
+ * the weekly plan editor. */
+export async function getPlanEditData(
+  planId: string,
+): Promise<PlanEditData | null> {
+  const supabase = await createClient();
+
+  const { data: plan, error: planError } = await supabase
+    .from("training_plans")
+    .select("plan_id, name")
+    .eq("plan_id", planId)
+    .maybeSingle();
+
+  if (planError) {
+    throw new Error(`Failed to load plan: ${planError.message}`);
+  }
+  if (!plan) {
+    return null;
+  }
+
+  const { data: schedules, error: schedError } = await supabase
+    .from("daily_schedules")
+    .select("schedule_id, day_of_week, is_rest_day")
+    .eq("plan_id", planId);
+
+  if (schedError) {
+    throw new Error(`Failed to load schedules: ${schedError.message}`);
+  }
+
+  const scheduleIds = (schedules ?? []).map((s) => s.schedule_id);
+
+  const { data: workouts, error: workoutsError } =
+    scheduleIds.length > 0
+      ? await supabase
+          .from("workouts")
+          .select(
+            "workout_id, schedule_id, workout_def_id, workout_name, display_order",
+          )
+          .in("schedule_id", scheduleIds)
+          .order("display_order")
+      : { data: [], error: null };
+
+  if (workoutsError) {
+    throw new Error(`Failed to load workouts: ${workoutsError.message}`);
+  }
+
+  const historyIds = await getWorkoutsWithHistory(
+    (workouts ?? []).map((w) => w.workout_id),
+  );
+
+  const bySchedule = new Map<string, PlanEditWorkout[]>();
+  for (const w of workouts ?? []) {
+    const list = bySchedule.get(w.schedule_id) ?? [];
+    list.push({
+      workout_id: w.workout_id,
+      workout_def_id: w.workout_def_id,
+      name: w.workout_name,
+      has_history: historyIds.has(w.workout_id),
+    });
+    bySchedule.set(w.schedule_id, list);
+  }
+
+  const { data: defs, error: defsError } = await supabase
+    .from("workout_defs")
+    .select("workout_def_id, name")
+    .order("name");
+
+  if (defsError) {
+    throw new Error(`Failed to load workout catalog: ${defsError.message}`);
+  }
+
+  const days: PlanEditDay[] = (schedules ?? [])
+    .slice()
+    .sort(
+      (a, b) =>
+        DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week),
+    )
+    .map((s) => ({
+      schedule_id: s.schedule_id,
+      day_of_week: s.day_of_week,
+      is_rest_day: s.is_rest_day,
+      workouts: bySchedule.get(s.schedule_id) ?? [],
+    }));
+
+  return {
+    plan_id: plan.plan_id,
+    plan_name: plan.name,
+    days,
+    catalog: defs ?? [],
   };
 }
 

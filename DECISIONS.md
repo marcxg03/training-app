@@ -1166,3 +1166,35 @@ Lifting tab). A premature generic abstraction would have to be parameterized on
 all of those and would obscure both call sites. Copying the well-understood
 pattern keeps each surface readable; if a third composition appears, that's the
 point to extract a generic.
+
+## Slice 17 — Plan editor
+
+### Propagation by "materialize on save", not instant read-time resolution
+
+A catalog workout assigned to a day stores `workout_def_id`; its blocks are
+copied into `workout_blocks` at plan-save time (re-synced for unlogged workouts,
+frozen once logged).
+
+**Options considered**
+
+1. Materialize on save — copy def blocks → workout_blocks at save (chosen).
+2. Instant live read-time resolution — every block read falls back to the def's
+   blocks when the workout is catalog-linked and unlogged.
+
+**Reasoning**
+Blocks are read in six places, including the **workout logger and history** (the
+append-only core). Option 2 would route all six through a resolver — the highest-
+risk change in the whole build. The user explicitly chose the lower-risk path:
+Option 1 leaves every read path reading `workout_blocks` unchanged, so the
+logging/history model is untouched. The tradeoff (def edits propagate when you
+re-save the plan, not instantly) was accepted with eyes open. The frozen-snapshot
+guarantee is enforced **server-side** in `savePlan` (a logged workout's snapshot
+is never re-materialized), not from the client `has_history` flag.
+
+### Delete a plan: never the last one; auto-activate on active delete
+
+`deletePlan` refuses to delete the only remaining plan (the app always needs one
+active plan) and, when the deleted plan was active, activates the most-recent
+remaining plan so exactly one stays active. Chosen over hard-blocking active-plan
+deletion because the user wanted "delete any plan with confirmation"; the
+last-plan guard is the minimum needed to avoid a broken zero-plan state.
