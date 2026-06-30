@@ -8,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { COACHING_ENABLED } from "@/lib/coach/flag";
 import { cn } from "@/lib/utils/cn";
 
 type Persona = "training" | "coaching";
@@ -34,6 +35,20 @@ export function PersonaSwitcher({ active }: PersonaSwitcherProps) {
   const current =
     personas.find((persona) => persona.key === active) ?? personas[0];
   const isCoaching = active === "coaching";
+
+  // Coaching is gated off for real users — render a static, non-interactive
+  // "My Training" pill (no dropdown, no coach link) so the mock coaching
+  // surface is never discoverable.
+  if (!COACHING_ENABLED) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
+          My Training
+        </span>
+      </span>
+    );
+  }
 
   return (
     <Popover>

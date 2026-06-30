@@ -345,8 +345,18 @@ export function getActivityFeed(): ActivityItem[] {
   return ACTIVITY;
 }
 
+const EMPTY_PROGRESS: ClientProgress = {
+  adherenceSeries: [],
+  fuelAdherencePct: 0,
+  recentPRCount: 0,
+  trendingUp: false,
+  recentPRs: [],
+};
+
 export function getClientProgress(id: string): ClientProgress {
-  return PROGRESS[id] ?? PROGRESS["sam-lee"];
+  // Fall back to zeroed progress (not another client's data) when a known
+  // client has no progress record yet.
+  return PROGRESS[id] ?? EMPTY_PROGRESS;
 }
 
 export function getClientAssignment(id: string): ClientAssignment {

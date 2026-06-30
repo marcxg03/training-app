@@ -1051,11 +1051,10 @@ export async function getCompletedSession(
     group.sets.sort((left, right) => left.set_index - right.set_index);
   }
 
-  const prCount = setLogs.reduce(
-    (total, setLog) =>
-      prBySetLogId.has(setLog.set_log_id) ? total + 1 : total,
-    0,
-  );
+  // Count every PR row (a single set can earn both a weight and an in-range
+  // rep PR). This matches getAllWorkouts' pr_history-row counting so the
+  // all-workouts list and this session-detail header agree.
+  const prCount = prRows.length;
 
   const durationSeconds =
     completion.completed_at === null
