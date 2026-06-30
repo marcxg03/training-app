@@ -1,9 +1,9 @@
+import { Pencil } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getHighLevelMuscleGroups } from "@/lib/methodology/muscle-groups";
 import type { Enums, Tables } from "@/lib/supabase/types";
-import { buttonVariants } from "@/components/ui/button";
 import { DayCard, type DayCardSession } from "@/components/plan/DayCard";
 import { PlanControls } from "@/app/(app)/plan/_components/PlanControls";
 import { createClient } from "@/lib/supabase/server";
@@ -271,7 +271,25 @@ export default async function PlanPage() {
   const [plans, weeklyPlan] = await Promise.all([getPlans(), getWeeklyPlan()]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-7">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="eyebrow">Active plan</p>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-foreground">
+            {weeklyPlan?.planName ?? "Plan"}
+          </h1>
+        </div>
+        {weeklyPlan ? (
+          <Link
+            href="/plan/edit"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-accent transition-colors hover:border-accent/60"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Edit
+          </Link>
+        ) : null}
+      </div>
+
       <PlanControls
         plans={plans}
         activePlanId={weeklyPlan?.planId ?? null}
@@ -279,28 +297,22 @@ export default async function PlanPage() {
       />
 
       {weeklyPlan ? (
-        <Link
-          href="/plan/edit"
-          className={buttonVariants({ variant: "default" })}
-        >
-          Edit plan
-        </Link>
-      ) : null}
-
-      {weeklyPlan ? (
         <div className="space-y-4">
-          {weeklyPlan.days.map((day) => (
-            <DayCard
-              key={day.dayOfWeek}
-              dayOfWeek={day.dayOfWeek}
-              dayLabel={day.dayLabel}
-              isRestDay={day.isRestDay}
-              sessions={day.sessions}
-            />
-          ))}
+          <p className="eyebrow">This week</p>
+          <div className="space-y-[9px]">
+            {weeklyPlan.days.map((day) => (
+              <DayCard
+                key={day.dayOfWeek}
+                dayOfWeek={day.dayOfWeek}
+                dayLabel={day.dayLabel}
+                isRestDay={day.isRestDay}
+                sessions={day.sessions}
+              />
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-[var(--radius)] border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           {plans.length === 0
             ? "Create your first plan to get started."
             : "Select a plan above to view its week."}

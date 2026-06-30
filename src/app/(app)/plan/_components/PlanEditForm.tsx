@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
 import { MoveButton } from "@/app/(app)/library/_components/MoveButton";
 import { WorkoutPicker } from "@/app/(app)/plan/_components/WorkoutPicker";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { savePlan } from "@/lib/plan/mutations";
 import type { Enums } from "@/lib/supabase/types";
@@ -168,126 +167,134 @@ export function PlanEditForm({ data }: PlanEditFormProps) {
 
   return (
     <>
-      <div className="space-y-6">
-        <button
-          type="button"
-          onClick={() => requestConfirmation(goBack)}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to plan
-        </button>
-
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Edit plan
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {data.plan_name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Assign workouts from your catalog to each day. Build the workouts
-            themselves in Library → Workouts.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          {days.map((day, dayIndex) => (
-            <div
-              key={day.schedule_id}
-              className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-foreground">
-                  {DAY_LABELS[day.day_of_week]}
-                </h2>
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Checkbox
-                    checked={day.is_rest_day}
-                    onCheckedChange={(value) =>
-                      toggleRest(dayIndex, Boolean(value))
-                    }
-                  />
-                  Rest day
-                </label>
-              </div>
-
-              {day.rows.length > 0 ? (
-                <ul className="space-y-2">
-                  {day.rows.map((row, rowIndex) => (
-                    <li
-                      key={`${row.workout_id ?? "new"}:${rowIndex}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {row.name}
-                        </p>
-                        {row.workout_def_id === null ? (
-                          <p className="text-xs text-muted-foreground">
-                            Manual session — edit in the day editor
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MoveButton
-                          direction="up"
-                          disabled={rowIndex === 0}
-                          onClick={() => moveRow(dayIndex, rowIndex, -1)}
-                        />
-                        <MoveButton
-                          direction="down"
-                          disabled={rowIndex === day.rows.length - 1}
-                          onClick={() => moveRow(dayIndex, rowIndex, 1)}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          aria-label="Remove workout"
-                          disabled={row.has_history}
-                          onClick={() => removeRow(dayIndex, rowIndex)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-border/70 px-4 py-4 text-sm text-muted-foreground">
-                  No workouts on this day.
-                </p>
-              )}
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPickerDay(dayIndex)}
-              >
-                Add workout
-              </Button>
-            </div>
-          ))}
-        </div>
-
-        {error ? (
-          <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
+      <div>
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+          <button
             type="button"
-            variant="outline"
             onClick={() => requestConfirmation(goBack)}
+            className="text-[13px] font-medium text-subtle transition-colors hover:text-foreground"
           >
             Cancel
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save plan"}
-          </Button>
+          </button>
+          <h1 className="text-sm font-semibold text-foreground">Edit Plan</h1>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="font-mono text-[13px] font-bold uppercase tracking-[0.03em] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+
+        <div className="space-y-6 pt-[18px]">
+          <div className="space-y-[7px]">
+            <p className="eyebrow">Plan name</p>
+            <div className="rounded-xl border border-border bg-input px-[14px] py-[13px] text-[15px] font-semibold text-foreground">
+              {data.plan_name}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Assign workouts from your catalog to each day. Build the workouts
+              themselves in Library → Workouts.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="eyebrow">Week schedule</p>
+            <div className="space-y-[7px]">
+              {days.map((day, dayIndex) => (
+                <div
+                  key={day.schedule_id}
+                  className="space-y-3 rounded-xl border border-border bg-card p-[14px]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-[13px] font-semibold text-foreground">
+                      {DAY_LABELS[day.day_of_week]}
+                    </h2>
+                    <label className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+                      Rest
+                      <Checkbox
+                        checked={day.is_rest_day}
+                        onCheckedChange={(value) =>
+                          toggleRest(dayIndex, Boolean(value))
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  {day.rows.length > 0 ? (
+                    <ul className="space-y-[7px]">
+                      {day.rows.map((row, rowIndex) => (
+                        <li
+                          key={`${row.workout_id ?? "new"}:${rowIndex}`}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card-alt px-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-foreground">
+                              {row.name}
+                            </p>
+                            {row.workout_def_id === null ? (
+                              <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-faint">
+                                Manual session — edit in the day editor
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <MoveButton
+                              direction="up"
+                              disabled={rowIndex === 0}
+                              onClick={() => moveRow(dayIndex, rowIndex, -1)}
+                            />
+                            <MoveButton
+                              direction="down"
+                              disabled={rowIndex === day.rows.length - 1}
+                              onClick={() => moveRow(dayIndex, rowIndex, 1)}
+                            />
+                            <button
+                              type="button"
+                              aria-label="Remove workout"
+                              disabled={row.has_history}
+                              onClick={() => removeRow(dayIndex, rowIndex)}
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-danger transition-colors hover:bg-danger/10 disabled:pointer-events-none disabled:opacity-40"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : day.is_rest_day ? (
+                    <div className="rounded-lg border border-dashed border-border px-3 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
+                      Rest day
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-[13px] text-faint">
+                      No workouts on this day.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setPickerDay(dayIndex)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-[13px] font-semibold text-subtle transition-colors hover:border-faint hover:text-foreground"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Add workout
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {error ? (
+            <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+              {error}
+            </div>
+          ) : null}
+
+          <p className="text-center font-mono text-[11px] uppercase tracking-[0.04em] text-faint">
+            Assign workouts per day in day edit →
+          </p>
         </div>
       </div>
 

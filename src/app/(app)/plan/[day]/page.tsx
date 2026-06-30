@@ -1,3 +1,4 @@
+import { ArrowLeft, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -265,35 +266,31 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/plan"
-            className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
-          >
-            Back to week
-          </Link>
-          <Link
-            href={`/plan/${day}/edit`}
-            className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent/40"
-          >
-            Edit day
-          </Link>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
-            Plan Detail
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground">
-            {dayPlan.dayLabel}
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {dayPlan.isRestDay
-              ? "Rest day with optional recovery work."
-              : "All workouts are read-only here, including cardio and recovery."}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/plan"
+          aria-label="Back to week"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/40 hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Link>
+        <h1 className="text-sm font-semibold text-foreground">
+          {dayPlan.dayLabel}
+        </h1>
+        <Link
+          href={`/plan/${day}/edit`}
+          className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent transition-colors hover:text-accent/80"
+        >
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+          Edit
+        </Link>
       </div>
+
+      {dayPlan.isRestDay && dayPlan.sessions.length === 0 ? (
+        <div className="rounded-[var(--radius)] border border-dashed border-border px-[18px] py-5 text-sm text-faint">
+          Rest day with optional recovery work.
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         {dayPlan.sessions.map((session) => (
