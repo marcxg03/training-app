@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Sparkles } from "lucide-react";
+import { Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -298,12 +298,41 @@ export function LogMealSheet({
                   void form.handleSubmit(handleSubmit)(event);
                 }}
               >
+                {aiEnabled ? (
+                  <div className="space-y-1.5">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePhoto}
+                    />
+                    <button
+                      type="button"
+                      disabled={estimating}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cardio bg-cardio/10 px-4 py-3.5 text-xs font-bold uppercase tracking-[0.06em] text-cardio transition-colors hover:bg-cardio/15 disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      <Camera className="h-5 w-5" />
+                      {estimating ? "Estimating…" : "Estimate from photo"}
+                    </button>
+                    <p className="text-xs text-muted-foreground">
+                      Sends the photo to Claude for a macro estimate you can
+                      adjust before saving.
+                    </p>
+                    {estimateError ? (
+                      <p className="text-sm text-danger">{estimateError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <FormField
                   control={form.control}
                   name="meal_type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Meal</FormLabel>
+                      <FormLabel className="eyebrow">Meal type</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -315,36 +344,6 @@ export function LogMealSheet({
                     </FormItem>
                   )}
                 />
-
-                {aiEnabled ? (
-                  <div className="space-y-1.5">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={handlePhoto}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      disabled={estimating}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      {estimating ? "Estimating…" : "Estimate from photo"}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      Sends the photo to Claude for a macro estimate you can
-                      adjust before saving.
-                    </p>
-                    {estimateError ? (
-                      <p className="text-sm text-danger">{estimateError}</p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Checkbox
@@ -359,7 +358,7 @@ export function LogMealSheet({
                 <div className="space-y-3">
                   {MACROS.map((macro) => (
                     <div key={macro.key} className="space-y-1.5">
-                      <Label>{macro.label}</Label>
+                      <Label className="eyebrow">{macro.label}</Label>
                       {rangeMode ? (
                         <div className="grid grid-cols-2 gap-3">
                           {(["min", "max"] as const).map((bound) => (
@@ -434,11 +433,9 @@ export function LogMealSheet({
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
-                  <span className="text-sm text-muted-foreground">
-                    Calories
-                  </span>
-                  <span className="text-lg font-semibold tabular-nums text-foreground">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-card-alt px-4 py-3">
+                  <span className="eyebrow">Calories</span>
+                  <span className="font-mono text-lg font-semibold tabular-nums text-foreground">
                     {calLabel} kcal
                   </span>
                 </div>
@@ -448,7 +445,7 @@ export function LogMealSheet({
                   name="note"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Note (optional)</FormLabel>
+                      <FormLabel className="eyebrow">Note (optional)</FormLabel>
                       <FormControl>
                         <Textarea {...field} />
                       </FormControl>

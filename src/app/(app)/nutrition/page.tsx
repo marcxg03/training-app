@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SlidersHorizontal } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { DayTypeFrameworkCard } from "@/app/(app)/nutrition/_components/DayTypeFrameworkCard";
@@ -64,6 +65,14 @@ export default async function NutritionPage() {
   );
 
   const framework = dayTypeFramework(dayType, goalMode);
+
+  const dateEyebrow = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
+    .format(new Date(`${today}T00:00:00`))
+    .replace(",", " ·");
 
   const bars: MacroBar[] = targets
     ? [
@@ -131,39 +140,48 @@ export default async function NutritionPage() {
     : [];
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Nutrition
-        </p>
-        <h1 className="text-3xl font-semibold text-foreground">Today</h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <p className="eyebrow tracking-[0.16em]">{dateEyebrow}</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            Fuel
+          </h1>
+        </div>
+        <Link
+          href="/nutrition/targets"
+          aria-label={
+            targets ? "Edit nutrition targets" : "Set nutrition targets"
+          }
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
+        >
+          <SlidersHorizontal className="h-5 w-5" />
+        </Link>
       </header>
 
       <DayTypeFrameworkCard framework={framework} />
 
-      <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">
-            Macros today
-          </h2>
-          <Link
-            href="/nutrition/targets"
-            className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
-          >
-            {targets ? "Edit targets" : "Set targets"}
-          </Link>
-        </div>
+      <section className="space-y-3">
+        <h2 className="eyebrow tracking-[0.16em]">Macros · range vs target</h2>
         {targets ? (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-5 rounded-[var(--radius)] border border-border bg-card p-[18px]">
             {bars.map((bar) => (
               <MacroProgressBar key={bar.key} bar={bar} />
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Set your daily calorie and macro ranges to track progress against
-            them.
-          </p>
+          <div className="rounded-[var(--radius)] border border-border bg-card p-5">
+            <p className="text-sm text-muted-foreground">
+              Set your daily calorie and macro ranges to track progress against
+              them.
+            </p>
+            <Link
+              href="/nutrition/targets"
+              className="mt-3 inline-flex text-sm font-medium text-accent transition-colors hover:text-accent/80"
+            >
+              Set targets
+            </Link>
+          </div>
         )}
       </section>
 

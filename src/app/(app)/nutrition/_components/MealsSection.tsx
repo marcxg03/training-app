@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Camera, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { LogMealSheet } from "@/app/(app)/nutrition/_components/LogMealSheet";
@@ -70,67 +70,88 @@ export function MealsSection({
   };
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-foreground">Meals</h2>
-        <Button onClick={openCreate}>Log meal</Button>
+        <h2 className="eyebrow tracking-[0.16em]">Meals</h2>
+        <span className="eyebrow tracking-[0.06em] text-faint">
+          {meals.length} logged
+        </span>
       </div>
 
       {meals.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No meals logged yet today. Tap “Log meal” to start.
+        <div className="rounded-[var(--radius)] border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          No meals logged yet today. Tap “Log Meal” to start.
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2.5">
           {meals.map((meal) => (
             <li
               key={meal.meal_id}
-              className="rounded-2xl border border-border bg-card p-4"
+              className="rounded-[14px] border border-border bg-card px-4 py-3.5"
             >
-              <div className="flex items-start justify-between gap-3">
-                <span className="font-medium text-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-semibold text-foreground">
                   {meal.meal_type}
                 </span>
                 <div className="flex items-center gap-1">
-                  <span className="mr-1 text-sm tabular-nums text-muted-foreground">
-                    {range(meal.cal_min, meal.cal_max)} kcal
+                  <span className="mr-1 font-mono text-xs font-semibold tabular-nums text-subtle">
+                    {range(meal.cal_min, meal.cal_max)}
                   </span>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-9 w-9"
+                    className="h-8 min-h-0 w-8"
                     aria-label="Edit meal"
                     onClick={() => openEdit(meal)}
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-9 w-9"
+                    className="h-8 min-h-0 w-8"
                     aria-label="Delete meal"
                     onClick={() => setDeleteTarget(meal)}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
-              <div className="mt-1 text-sm tabular-nums text-muted-foreground">
-                P {range(meal.protein_min_g, meal.protein_max_g)}g · C{" "}
-                {range(meal.carbs_min_g, meal.carbs_max_g)}g · F{" "}
-                {range(meal.fat_min_g, meal.fat_max_g)}g
+              <div className="mt-1.5 font-mono text-[10px] uppercase tabular-nums tracking-[0.05em] text-faint">
+                P {range(meal.protein_min_g, meal.protein_max_g)} · C{" "}
+                {range(meal.carbs_min_g, meal.carbs_max_g)} · F{" "}
+                {range(meal.fat_min_g, meal.fat_max_g)}
+                {meal.note ? ` · ${meal.note.toUpperCase()}` : ""}
               </div>
-              {meal.note ? (
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {meal.note}
-                </p>
-              ) : null}
             </li>
           ))}
         </ul>
       )}
+
+      <div className="flex gap-2.5 pt-1.5">
+        <Button
+          type="button"
+          onClick={openCreate}
+          className="flex-1 gap-2 uppercase tracking-[0.07em]"
+        >
+          <Plus className="h-5 w-5" />
+          Log Meal
+        </Button>
+        {aiEnabled ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={openCreate}
+            aria-label="Estimate a meal from a photo"
+            className="gap-2 uppercase tracking-[0.05em]"
+          >
+            <Camera className="h-5 w-5 text-cardio" />
+            AI
+          </Button>
+        ) : null}
+      </div>
 
       <LogMealSheet
         key={editing?.meal_id ?? "new"}
