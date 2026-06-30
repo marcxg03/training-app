@@ -28,6 +28,13 @@ const tabs: TabDefinition[] = [
 export function BottomTabBar() {
   const pathname = usePathname();
 
+  // The coach shell owns its own navigation (CoachTabBar + in-page back links);
+  // the athlete tab bar is hidden there so the two don't stack. Athlete routes
+  // are unaffected.
+  if (pathname.startsWith("/coach")) {
+    return null;
+  }
+
   return (
     <nav
       aria-label="Bottom navigation"

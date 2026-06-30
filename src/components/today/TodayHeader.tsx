@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ChevronDown, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
+import { PersonaSwitcher } from "@/components/coach/PersonaSwitcher";
 import type { Enums } from "@/lib/supabase/types";
 
 type TodayHeaderProps = {
@@ -32,12 +33,8 @@ export function TodayHeader({ dayOfWeek, date }: TodayHeaderProps) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <div className="mb-3.5 inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
-            My Training
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 text-faint" />
+        <div className="mb-3.5">
+          <PersonaSwitcher active="training" />
         </div>
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
           {formatDateEyebrow(date)}
