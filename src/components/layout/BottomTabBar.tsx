@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Dumbbell,
   Home,
   LineChart,
   UtensilsCrossed,
@@ -21,6 +22,7 @@ type TabDefinition = {
 const tabs: TabDefinition[] = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/plan", label: "Plan", icon: CalendarDays },
+  { href: "/library", label: "Library", icon: Dumbbell },
   { href: "/nutrition", label: "Fuel", icon: UtensilsCrossed },
   { href: "/history", label: "Progress", icon: LineChart },
 ];
