@@ -19,13 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils/cn";
 import type { GoalMode } from "@/lib/methodology/nutrition";
 import type { NutritionTargets } from "@/lib/nutrition/projections";
 import { updateProfile } from "@/lib/settings/mutations";
@@ -105,22 +99,22 @@ export function ProfileForm({
         <button
           type="button"
           onClick={() => requestConfirmation(goBack)}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent transition-colors hover:text-accent/80"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to settings
         </button>
 
         <header className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Settings
-          </p>
-          <h1 className="text-3xl font-semibold text-foreground">Profile</h1>
+          <p className="eyebrow">Settings</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            Profile
+          </h1>
         </header>
 
         <Form {...form}>
           <form
-            className="space-y-5 rounded-2xl border border-border bg-card p-5"
+            className="space-y-5 rounded-[var(--radius)] border border-border bg-card p-5"
             onSubmit={(event) => {
               event.preventDefault();
               void form.handleSubmit(handleSubmit)(event);
@@ -130,8 +124,8 @@ export function ProfileForm({
               control={form.control}
               name="display_name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Display name</FormLabel>
+                <FormItem className="space-y-2">
+                  <FormLabel className="eyebrow">Display name</FormLabel>
                   <FormControl>
                     <Input {...field} autoComplete="off" placeholder="Marcus" />
                   </FormControl>
@@ -145,13 +139,14 @@ export function ProfileForm({
                 control={form.control}
                 name="bodyweight_kg"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bodyweight (kg)</FormLabel>
+                  <FormItem className="space-y-2">
+                    <FormLabel className="eyebrow">Bodyweight (kg)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         inputMode="decimal"
                         min={0}
+                        className="font-mono tabular-nums"
                         value={field.value ?? ""}
                         onBlur={field.onBlur}
                         name={field.name}
@@ -171,13 +166,14 @@ export function ProfileForm({
                 control={form.control}
                 name="height_cm"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Height (cm)</FormLabel>
+                  <FormItem className="space-y-2">
+                    <FormLabel className="eyebrow">Height (cm)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         inputMode="decimal"
                         min={0}
+                        className="font-mono tabular-nums"
                         value={field.value ?? ""}
                         onBlur={field.onBlur}
                         name={field.name}
@@ -198,22 +194,31 @@ export function ProfileForm({
               control={form.control}
               name="goal_mode"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Goal mode</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {GOAL_MODES.map((mode) => (
-                        <SelectItem key={mode.value} value={mode.value}>
-                          {mode.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <FormItem className="space-y-2">
+                  <FormLabel className="eyebrow">Goal mode</FormLabel>
+                  <FormControl>
+                    <div className="flex gap-1.5 rounded-xl border border-border bg-input p-1.5">
+                      {GOAL_MODES.map((mode) => {
+                        const selected = field.value === mode.value;
+                        return (
+                          <button
+                            key={mode.value}
+                            type="button"
+                            onClick={() => field.onChange(mode.value)}
+                            aria-pressed={selected}
+                            className={cn(
+                              "flex-1 rounded-lg px-2 py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                              selected
+                                ? "bg-accent text-black"
+                                : "text-subtle hover:text-foreground",
+                            )}
+                          >
+                            {mode.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </FormControl>
                   <FormDescription>
                     Changing this suggests updated nutrition targets.
                   </FormDescription>

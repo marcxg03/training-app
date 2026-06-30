@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth/signOut";
 
 type SignOutButtonProps = {
@@ -40,14 +40,15 @@ export function SignOutButton({ userId }: SignOutButtonProps) {
 
   return (
     <div className="space-y-3">
-      <Button
+      <button
         type="button"
-        variant="outline"
         onClick={handleSignOut}
         disabled={isPending}
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-transparent px-4 py-3.5 text-sm font-semibold tracking-wide text-danger transition-colors hover:border-danger/40 hover:bg-danger/5 disabled:pointer-events-none disabled:opacity-50"
       >
+        <LogOut className="h-4 w-4" />
         {isPending ? "Signing out..." : "Sign out"}
-      </Button>
+      </button>
       {errorMessage ? (
         <p className="text-sm text-danger">{errorMessage}</p>
       ) : null}
