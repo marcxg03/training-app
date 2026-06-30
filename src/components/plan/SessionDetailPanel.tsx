@@ -2,6 +2,19 @@ import type { Enums } from "@/lib/supabase/types";
 import { BlockList } from "@/components/plan/BlockList";
 import { ExerciseBankList } from "@/components/plan/ExerciseBankList";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils/cn";
+
+const workoutTypeLabel: Record<Enums<"session_type_enum">, string> = {
+  lifting: "Lift",
+  cardio: "Cardio",
+  recovery: "Recovery",
+};
+
+const typeChipClass: Record<Enums<"session_type_enum">, string> = {
+  lifting: "bg-accent/[0.16] text-accent",
+  cardio: "bg-cardio/[0.14] text-cardio",
+  recovery: "bg-success/[0.14] text-success",
+};
 
 type SessionDetailPanelProps = {
   session: {
@@ -57,25 +70,37 @@ function buildCardioMetaLine(session: SessionDetailPanelProps["session"]) {
 export function SessionDetailPanel({ session }: SessionDetailPanelProps) {
   const cardioMetaLine = buildCardioMetaLine(session);
 
+  const blockCount = session.blocks.length;
+
   return (
-    <Card className="bg-card/80">
-      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 pb-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            {session.workoutType}
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-            {session.sessionName}
-          </h2>
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-medium text-foreground">
+    <Card className="bg-card">
+      <CardHeader className="space-y-4 pb-4">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-md px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em]",
+              typeChipClass[session.workoutType],
+            )}
+          >
+            {workoutTypeLabel[session.workoutType]}
+          </span>
+          <span className="inline-flex items-center rounded-md border border-border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tabular-nums tracking-[0.12em] text-subtle">
             {formatTimingLabel(session.timing)}
-          </p>
+          </span>
           {session.gym ? (
-            <p className="mt-1 text-sm text-muted-foreground">{session.gym}</p>
+            <span className="ml-auto font-mono text-[11px] tracking-[0.04em] text-faint">
+              {session.gym.toUpperCase()}
+            </span>
           ) : null}
         </div>
+        <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+          {session.sessionName}
+        </h2>
+        {session.workoutType === "lifting" && blockCount > 0 ? (
+          <p className="eyebrow">
+            {blockCount} {blockCount === 1 ? "block" : "blocks"}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent>
         {session.workoutType === "lifting" ? (

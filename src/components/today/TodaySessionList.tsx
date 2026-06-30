@@ -35,7 +35,8 @@ export function TodaySessionList({ sessions }: TodaySessionListProps) {
   const sortedSessions = [...sessions].sort(sortSessions);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      <p className="eyebrow">Today&apos;s sessions</p>
       {sortedSessions.map((session) => (
         <TodaySessionCard key={session.workoutId} session={session} />
       ))}

@@ -1,5 +1,7 @@
 import type { Enums } from "@/lib/supabase/types";
 import { TodayHeader } from "@/components/today/TodayHeader";
+import { TodayWeekStrip } from "@/components/today/TodayWeekStrip";
+import { FuelGlanceRow } from "@/components/today/FuelGlanceRow";
 import {
   TodaySessionList,
   type TodaySessionListItem,
@@ -225,11 +227,19 @@ export default async function TodayPage() {
   const dayOfWeek = getTodayDayOfWeek(today);
   const todaySchedule = await getTodaySessions(dayOfWeek);
 
+  const hasSessions = Boolean(
+    todaySchedule && todaySchedule.sessions.length > 0,
+  );
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <TodayHeader dayOfWeek={dayOfWeek} date={today} />
-      {todaySchedule && todaySchedule.sessions.length > 0 ? (
-        <TodaySessionList sessions={todaySchedule.sessions} />
+      <TodayWeekStrip dayOfWeek={dayOfWeek} />
+      {hasSessions && todaySchedule ? (
+        <>
+          <TodaySessionList sessions={todaySchedule.sessions} />
+          <FuelGlanceRow />
+        </>
       ) : (
         <RestDayEmpty />
       )}

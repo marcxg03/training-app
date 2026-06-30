@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { CheckCircle2, Trophy } from "lucide-react";
 
 import type { Enums } from "@/lib/supabase/types";
 import { formatWeight } from "@/lib/units";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils/cn";
 
 export type WorkoutSummaryProps = {
@@ -34,8 +34,16 @@ function formatCompletionDate(completedAt: string) {
   }).format(new Date(completedAt));
 }
 
-function formatPrType(prType: Enums<"pr_type_enum">) {
-  return prType === "weight" ? "Type A" : "Type B";
+function formatPrLabel(prType: Enums<"pr_type_enum">) {
+  return prType === "weight" ? "Weight PR" : "In-range rep PR";
+}
+
+function formatSetValue(setLog: WorkoutSummaryProps["setLogs"][number]) {
+  if (setLog.isBodyweight || setLog.weightKg === null) {
+    return `BW × ${setLog.reps}`;
+  }
+
+  return `${formatWeight(setLog.weightKg)} × ${setLog.reps}`;
 }
 
 export function WorkoutSummary({
@@ -46,102 +54,129 @@ export function WorkoutSummary({
   setLogs,
   wasEndedEarly,
 }: WorkoutSummaryProps) {
-  const totalReps = setLogs.reduce((sum, setLog) => sum + setLog.reps, 0);
-  const totalVolume = setLogs.reduce((sum, setLog) => {
-    if (setLog.isBodyweight || setLog.weightKg === null) {
-      return sum;
+  const groupedSetLogs = setLogs.reduce<
+    Array<{ exerciseName: string; values: string[] }>
+  >((groups, setLog) => {
+    const existing = groups.find(
+      (group) => group.exerciseName === setLog.exerciseName,
+    );
+
+    if (existing) {
+      existing.values.push(formatSetValue(setLog));
+    } else {
+      groups.push({
+        exerciseName: setLog.exerciseName,
+        values: [formatSetValue(setLog)],
+      });
     }
 
-    return sum + setLog.weightKg * setLog.reps;
-  }, 0);
+    return groups;
+  }, []);
 
   return (
-    <Card className="bg-card/80">
-      <CardHeader className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-          Workout Complete
+    <div className="space-y-6">
+      <div className="text-center">
+        <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
+        <h2 className="mt-2.5 text-2xl font-semibold tracking-tight text-foreground">
+          Session complete
+        </h2>
+        <p className="mt-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+          {workoutName} · {formatCompletionDate(completedAt)} ·{" "}
+          {wasEndedEarly ? "ended early" : "all blocks complete"}
         </p>
-        <CardTitle className="text-3xl tracking-tight">{workoutName}</CardTitle>
-        <div className="space-y-1 text-sm text-muted-foreground">
-          <p>{formatCompletionDate(completedAt)}</p>
-          {wasEndedEarly ? <p>Ended early</p> : <p>All blocks complete</p>}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {statusMessage ? (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground">
-            {statusMessage}
-          </div>
-        ) : null}
+      </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Total Sets
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">
-              {setLogs.length}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Total Reps
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">
-              {totalReps}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Volume
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">
-              {formatWeight(totalVolume)}
-            </p>
-          </div>
+      {statusMessage ? (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
+          {statusMessage}
         </div>
+      ) : null}
 
-        <div className="space-y-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            PRs This Workout
-          </p>
-          {prs.length > 0 ? (
-            <ul className="space-y-3">
-              {prs.map((pr) => (
+      <div className="space-y-3">
+        <p className="eyebrow">Personal records · {prs.length}</p>
+        {prs.length > 0 ? (
+          <ul className="space-y-2">
+            {prs.map((pr) => {
+              const isRepPr = pr.prType === "in_range_rep";
+
+              return (
                 <li
                   key={pr.prId}
-                  className="rounded-xl border border-border/70 bg-background/60 px-4 py-3"
+                  className={cn(
+                    "flex items-center gap-3 rounded-[13px] border px-3.5 py-3",
+                    isRepPr
+                      ? "border-success/30 bg-success/[0.08]"
+                      : "border-accent/40 bg-accent/10",
+                  )}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {pr.exerciseName}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {formatWeight(pr.weightKg)} × {pr.reps}
-                      </p>
-                    </div>
-                    <span className="text-xs uppercase tracking-[0.18em] text-accent">
-                      {formatPrType(pr.prType)}
-                    </span>
+                  <Trophy
+                    className={cn(
+                      "h-5 w-5 shrink-0",
+                      isRepPr ? "text-success" : "text-accent",
+                    )}
+                    fill="currentColor"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-foreground">
+                      {pr.exerciseName}
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em]",
+                        isRepPr ? "text-success" : "text-accent",
+                      )}
+                    >
+                      {formatPrLabel(pr.prType)}
+                    </p>
                   </div>
+                  <span className="font-mono text-[15px] font-semibold tabular-nums text-foreground">
+                    {formatWeight(pr.weightKg)} × {pr.reps}
+                  </span>
                 </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No PRs were recorded for this workout.
-            </p>
-          )}
-        </div>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No PRs were recorded for this workout.
+          </p>
+        )}
+      </div>
 
-        <Link
-          href="/today"
-          className={cn(buttonVariants(), "w-full sm:w-auto")}
-        >
-          Back to today
-        </Link>
-      </CardContent>
-    </Card>
+      <div className="space-y-3">
+        <p className="eyebrow">Logged sets</p>
+        {groupedSetLogs.length > 0 ? (
+          <ul className="space-y-2">
+            {groupedSetLogs.map((group) => (
+              <li
+                key={group.exerciseName}
+                className="rounded-xl border border-border bg-card px-3.5 py-3"
+              >
+                <p className="text-[12px] font-semibold text-subtle">
+                  {group.exerciseName}
+                </p>
+                <p className="mt-1 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
+                  {group.values.join(" · ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No sets were logged for this workout.
+          </p>
+        )}
+      </div>
+
+      <Link
+        href="/today"
+        className={cn(
+          buttonVariants(),
+          "w-full text-[13px] font-bold uppercase tracking-[0.08em]",
+        )}
+      >
+        Done
+      </Link>
+    </div>
   );
 }

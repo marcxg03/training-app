@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Minus, Plus } from "lucide-react";
 
 import type {
   LoggerExercise,
@@ -12,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isRetryable } from "@/lib/sync/classify";
 import { enqueue, type SetLogInsertPayload } from "@/lib/sync/queue";
 import { lbsToKg } from "@/lib/units";
+import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
 
 type SetEntryFormProps = {
@@ -26,11 +28,23 @@ type SetEntryFormProps = {
   onSaved: (setLog: LoggerSetLog) => void;
 };
 
-const inputClassName =
-  "flex min-h-11 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
-
 const textareaClassName =
-  "flex min-h-24 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
+  "flex min-h-20 w-full rounded-xl border border-border bg-input px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30";
+
+const WEIGHT_STEP = 5;
+const REPS_STEP = 1;
+
+function stepNumericValue(
+  current: string,
+  delta: number,
+  { min, decimals }: { min: number; decimals: number },
+) {
+  const parsed = Number(current);
+  const base = Number.isFinite(parsed) && current.trim() !== "" ? parsed : 0;
+  const next = Math.max(min, base + delta);
+
+  return decimals > 0 ? String(Number(next.toFixed(decimals))) : String(next);
+}
 
 function getQueueErrorMessage(error: unknown) {
   if (error instanceof DOMException && error.name === "QuotaExceededError") {
@@ -233,63 +247,146 @@ export function SetEntryForm({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-border/70 bg-background/60 p-4">
+    <div className="space-y-4 rounded-[18px] border border-border bg-card p-[18px]">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="text-sm font-semibold text-foreground">{label}</p>
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
           Set {setIndex}
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div
+        className={cn(
+          "grid gap-3.5",
+          exercise.is_bodyweight ? "grid-cols-1" : "grid-cols-2",
+        )}
+      >
         {!exercise.is_bodyweight ? (
-          <label className="space-y-2">
-            <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              WEIGHT (LBS)
-            </span>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              inputMode="decimal"
-              value={weight}
-              onChange={(event) => setWeight(event.target.value)}
-              className={inputClassName}
-            />
-          </label>
+          <div>
+            <p className="mb-2 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
+              Weight (lbs)
+            </p>
+            <div className="flex items-center justify-between gap-2 rounded-[13px] border border-border bg-input p-1.5">
+              <button
+                type="button"
+                aria-label="Decrease weight"
+                onClick={() =>
+                  setWeight((current) =>
+                    stepNumericValue(current, -WEIGHT_STEP, {
+                      min: 0,
+                      decimals: 1,
+                    }),
+                  )
+                }
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-border text-subtle transition hover:text-foreground"
+              >
+                <Minus className="h-5 w-5" />
+              </button>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                inputMode="decimal"
+                aria-label="Weight in pounds"
+                value={weight}
+                onChange={(event) => setWeight(event.target.value)}
+                className="w-full min-w-0 bg-transparent text-center font-mono text-[26px] font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                type="button"
+                aria-label="Increase weight"
+                onClick={() =>
+                  setWeight((current) =>
+                    stepNumericValue(current, WEIGHT_STEP, {
+                      min: 0,
+                      decimals: 1,
+                    }),
+                  )
+                }
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-border text-subtle transition hover:text-foreground"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         ) : null}
 
-        <label className="space-y-2">
-          <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            REPS
-          </span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            inputMode="numeric"
-            value={reps}
-            onChange={(event) => setReps(event.target.value)}
-            className={inputClassName}
-          />
-        </label>
+        <div>
+          <p className="mb-2 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
+            Reps · range {exercise.prescribed_min}–{exercise.prescribed_max}
+          </p>
+          <div className="flex items-center justify-between gap-2 rounded-[13px] border border-border bg-input p-1.5">
+            <button
+              type="button"
+              aria-label="Decrease reps"
+              onClick={() =>
+                setReps((current) =>
+                  stepNumericValue(current, -REPS_STEP, {
+                    min: 1,
+                    decimals: 0,
+                  }),
+                )
+              }
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-border text-subtle transition hover:text-foreground"
+            >
+              <Minus className="h-5 w-5" />
+            </button>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              aria-label="Reps"
+              value={reps}
+              onChange={(event) => setReps(event.target.value)}
+              className="w-full min-w-0 bg-transparent text-center font-mono text-[26px] font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button
+              type="button"
+              aria-label="Increase reps"
+              onClick={() =>
+                setReps((current) =>
+                  stepNumericValue(current, REPS_STEP, { min: 1, decimals: 0 }),
+                )
+              }
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-border text-subtle transition hover:text-foreground"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {showFailureCheckbox ? (
-        <label className="flex items-center gap-3 rounded-lg border border-border/70 px-3 py-3 text-sm text-foreground">
-          <input
-            type="checkbox"
-            checked={toFailure}
-            onChange={(event) => setToFailure(event.target.checked)}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent"
-          />
-          Mark this set as to failure
-        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={toFailure}
+          onClick={() => setToFailure((current) => !current)}
+          className="flex w-full items-center justify-between rounded-xl border border-border px-3.5 py-2.5"
+        >
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-subtle">
+            Taken to failure
+          </span>
+          <span
+            className={cn(
+              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+              toFailure ? "bg-accent" : "bg-border",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-5 w-5 rounded-full bg-foreground transition-transform",
+                toFailure ? "translate-x-[22px]" : "translate-x-0.5",
+              )}
+            />
+          </span>
+        </button>
       ) : null}
 
-      <label className="space-y-2">
-        <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-          NOTES
+      <label className="block space-y-2">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
+          Notes
         </span>
         <textarea
           value={notes}
@@ -300,8 +397,14 @@ export function SetEntryForm({
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
-      <Button type="button" onClick={handleSave} disabled={isSaving}>
-        {isSaving ? "Saving..." : "Save set"}
+      <Button
+        type="button"
+        onClick={handleSave}
+        disabled={isSaving}
+        className="w-full gap-2 text-[14px] font-bold uppercase tracking-[0.08em]"
+      >
+        <Check className="h-5 w-5" />
+        {isSaving ? "Saving…" : "Log Set"}
       </Button>
     </div>
   );

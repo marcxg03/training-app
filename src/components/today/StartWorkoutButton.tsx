@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Play } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
@@ -16,8 +17,12 @@ export function StartWorkoutButton({ workoutId }: StartWorkoutButtonProps) {
       onClick={(event) => {
         event.stopPropagation();
       }}
-      className={cn(buttonVariants({ size: "sm" }), "w-full sm:w-auto")}
+      className={cn(
+        buttonVariants(),
+        "w-full gap-2 text-[13px] font-bold uppercase tracking-[0.08em]",
+      )}
     >
+      <Play className="h-[18px] w-[18px]" fill="currentColor" />
       Start Workout
     </Link>
   );

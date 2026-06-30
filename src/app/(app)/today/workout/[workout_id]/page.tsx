@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
@@ -195,19 +196,24 @@ export default async function TodayWorkoutDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-3">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex items-center justify-between gap-3">
         <Link
           href="/today"
-          className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          aria-label="Back to today"
+          className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
         >
-          Back to today
+          <ArrowLeft className="h-5 w-5" />
         </Link>
-        {workout.workoutType === "lifting" ? (
-          <StartWorkoutButton workoutId={workout.workoutId} />
-        ) : null}
+        <span className="truncate text-sm font-semibold text-foreground">
+          {workout.sessionName}
+        </span>
+        <span className="h-9 w-9" aria-hidden="true" />
       </div>
       <SessionDetailPanel session={workout} />
+      {workout.workoutType === "lifting" ? (
+        <StartWorkoutButton workoutId={workout.workoutId} />
+      ) : null}
     </div>
   );
 }

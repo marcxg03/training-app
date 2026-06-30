@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Apple,
-  BarChart3,
-  Calendar,
+  CalendarDays,
   Home,
-  Library,
-  Settings,
+  LineChart,
+  UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,11 +20,9 @@ type TabDefinition = {
 
 const tabs: TabDefinition[] = [
   { href: "/today", label: "Today", icon: Home },
-  { href: "/plan", label: "Plan", icon: Calendar },
-  { href: "/library", label: "Library", icon: Library },
-  { href: "/history", label: "History", icon: BarChart3 },
-  { href: "/nutrition", label: "Nutrition", icon: Apple },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/plan", label: "Plan", icon: CalendarDays },
+  { href: "/nutrition", label: "Fuel", icon: UtensilsCrossed },
+  { href: "/history", label: "Progress", icon: LineChart },
 ];
 
 export function BottomTabBar() {
@@ -35,9 +31,9 @@ export function BottomTabBar() {
   return (
     <nav
       aria-label="Bottom navigation"
-      className="safe-pb fixed inset-x-0 bottom-0 border-t border-border bg-background/95 backdrop-blur"
+      className="safe-pb fixed inset-x-0 bottom-0 border-t border-border/70 bg-card-alt/95 backdrop-blur"
     >
-      <div className="mx-auto grid max-w-3xl grid-cols-6">
+      <div className="mx-auto flex max-w-3xl items-center justify-around px-3 pt-2.5">
         {tabs.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
@@ -45,15 +41,20 @@ export function BottomTabBar() {
             <Link
               key={href}
               href={href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex min-h-11 flex-col items-center justify-center gap-1 border-t-2 px-1 py-3 text-[10px] font-medium text-muted-foreground transition-colors",
-                isActive
-                  ? "border-accent text-accent"
-                  : "border-transparent hover:text-foreground",
+                "flex min-h-11 min-w-14 flex-col items-center justify-center gap-1.5 transition-colors",
+                isActive ? "text-accent" : "text-faint hover:text-subtle",
               )}
             >
-              <Icon className="h-4 w-4" />
-              <span>{label}</span>
+              <Icon
+                className="h-6 w-6"
+                strokeWidth={isActive ? 2.5 : 2}
+                fill={isActive ? "currentColor" : "none"}
+              />
+              <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em]">
+                {label}
+              </span>
             </Link>
           );
         })}

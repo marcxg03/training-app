@@ -60,9 +60,9 @@ export function FailureProtocol({
           return (
             <div
               key={step.setIndex}
-              className="rounded-xl border border-dashed border-border/70 px-4 py-5 text-sm text-muted-foreground"
+              className="rounded-xl border border-dashed border-border px-4 py-5 text-center font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-faint"
             >
-              {step.label} unlocks after the prior set is saved.
+              {step.label} unlocks after the prior set is saved
             </div>
           );
         }
