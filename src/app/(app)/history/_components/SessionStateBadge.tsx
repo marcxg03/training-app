@@ -5,13 +5,13 @@ type SessionStateBadgeProps = {
 };
 
 const stateClasses: Record<SessionStateBadgeProps["state"], string> = {
-  complete: "border-border bg-background/60 text-foreground",
-  in_progress: "border-border/70 bg-background/40 text-muted-foreground",
-  ended_early: "border-amber-500/40 bg-amber-500/10 text-amber-200",
+  complete: "bg-success/15 text-success",
+  in_progress: "bg-warning/15 text-warning",
+  ended_early: "bg-warning/15 text-warning",
 };
 
 const stateLabels: Record<SessionStateBadgeProps["state"], string> = {
-  complete: "Complete",
+  complete: "Completed",
   in_progress: "In progress",
   ended_early: "Ended early",
 };
@@ -20,7 +20,7 @@ export function SessionStateBadge({ state }: SessionStateBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 items-center rounded-full border px-2 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        "inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em]",
         stateClasses[state],
       )}
     >

@@ -1,3 +1,5 @@
+import { Trophy } from "lucide-react";
+
 import { formatWeight } from "@/lib/units";
 import type { PRTimelineRow as PRTimelineRowData } from "@/lib/history/projections";
 import { ExerciseLink } from "@/components/shared/ExerciseLink";
@@ -16,31 +18,39 @@ function formatPrValue(row: PRTimelineRowData): string {
   return `${formatWeight(row.weight_kg)} × ${row.reps}`;
 }
 
+const iconClasses: Record<PRTimelineRowData["pr_type"], string> = {
+  weight: "text-accent",
+  in_range_rep: "text-success",
+};
+
 export function PRTimelineRow({ row }: PRTimelineRowProps) {
   return (
-    <li className="rounded-xl border border-border/70 bg-background/60 px-4 py-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <ExerciseLink
-            exerciseId={row.exercise_id}
-            className="block min-h-11 text-base font-semibold text-foreground transition-colors hover:text-accent"
-          >
-            <span className="block truncate">{row.exercise_name}</span>
-          </ExerciseLink>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <PRTypeBadge prType={row.pr_type} />
-            <span className="text-sm text-foreground">
-              {formatPrValue(row)}
-            </span>
-          </div>
-          <WorkoutLink
-            completionId={row.completion_id}
-            className="mt-3 inline-flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-accent"
-          >
+    <li className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-card px-4 py-3.5">
+      <Trophy
+        aria-hidden
+        className={`h-[18px] w-[18px] shrink-0 ${iconClasses[row.pr_type]}`}
+        fill="currentColor"
+      />
+      <div className="min-w-0 flex-1">
+        <ExerciseLink
+          exerciseId={row.exercise_id}
+          className="block min-h-6 truncate text-sm font-semibold text-foreground transition-colors hover:text-accent"
+        >
+          {row.exercise_name}
+        </ExerciseLink>
+        <WorkoutLink
+          completionId={row.completion_id}
+          className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 transition-colors hover:opacity-80"
+        >
+          <PRTypeBadge prType={row.pr_type} />
+          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-faint">
             {row.workout_display_name}
-          </WorkoutLink>
-        </div>
+          </span>
+        </WorkoutLink>
       </div>
+      <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-foreground">
+        {formatPrValue(row)}
+      </span>
     </li>
   );
 }

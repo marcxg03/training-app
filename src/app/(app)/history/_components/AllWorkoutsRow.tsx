@@ -6,40 +6,59 @@ type AllWorkoutsRowProps = {
   row: AllWorkoutsRowData;
 };
 
-function formatWorkoutSummary(row: AllWorkoutsRowData): string {
-  return `${row.blocks_completed_count} of ${row.blocks_total_count} blocks`;
+// `workout_display_name` is "<name> · <date>" (see formatWorkoutDisplayName).
+// Split it for the design, which renders the name and date separately.
+function splitDisplayName(displayName: string): {
+  name: string;
+  date: string | null;
+} {
+  const separatorIndex = displayName.lastIndexOf(" · ");
+
+  if (separatorIndex === -1) {
+    return { name: displayName, date: null };
+  }
+
+  return {
+    name: displayName.slice(0, separatorIndex),
+    date: displayName.slice(separatorIndex + 3),
+  };
 }
 
 export function AllWorkoutsRow({ row }: AllWorkoutsRowProps) {
+  const { name, date } = splitDisplayName(row.workout_display_name);
+
   return (
     <li>
       <WorkoutLink
         completionId={row.completion_id}
-        className="block rounded-xl border border-border/70 bg-background/60 px-4 py-4 transition-colors hover:border-accent/40"
+        className="block rounded-[var(--radius)] border border-border bg-card px-4 py-3.5 transition-colors hover:border-accent/40"
       >
-        <div className="flex min-h-11 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p
-              className={
-                row.state === "in_progress"
-                  ? "truncate text-base font-semibold text-foreground/70"
-                  : "truncate text-base font-semibold text-foreground"
-              }
-            >
-              {row.workout_display_name}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <SessionStateBadge state={row.state} />
-              <span className="text-sm text-muted-foreground">
-                {formatWorkoutSummary(row)}
-              </span>
-              {row.pr_count > 0 ? (
-                <span className="text-sm text-accent">
-                  {row.pr_count} PR{row.pr_count === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
-          </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={
+              row.state === "in_progress"
+                ? "truncate text-sm font-semibold text-foreground/70"
+                : "truncate text-sm font-semibold text-foreground"
+            }
+          >
+            {name}
+          </span>
+          {row.pr_count > 0 ? (
+            <span className="inline-flex items-center rounded-md bg-accent/15 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-accent">
+              {row.pr_count} PR
+            </span>
+          ) : null}
+          {date ? (
+            <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tabular-nums text-faint">
+              {date}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tabular-nums tracking-[0.08em] text-muted-foreground">
+            {row.blocks_completed_count} / {row.blocks_total_count} blocks
+          </span>
+          <SessionStateBadge state={row.state} />
         </div>
       </WorkoutLink>
     </li>
