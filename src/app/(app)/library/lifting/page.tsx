@@ -12,7 +12,7 @@ export default async function LiftingLibraryPage() {
       <div className="space-y-1">
         <p className="eyebrow">Library</p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Lifting
+          Blocks
         </h1>
       </div>
 

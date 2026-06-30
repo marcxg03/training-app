@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 const tabs = [
-  { href: liftingHref(), label: "Lifting", value: "lifting" },
+  { href: liftingHref(), label: "Blocks", value: "lifting" },
   { href: workoutsHref(), label: "Workouts", value: "workouts" },
   { href: exercisesHref(), label: "Exercises", value: "exercises" },
   { href: cardioHref(), label: "Cardio", value: "cardio" },

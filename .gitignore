@@ -54,3 +54,4 @@ supabase/seed/wiki/*.md
 
 # Vercel
 .vercel
+.env*
