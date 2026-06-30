@@ -100,7 +100,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           <Zap className="h-5 w-5 fill-current" />
         </span>
         <span className="text-xl font-bold tracking-tight text-foreground">
-          Instrument
+          Training
         </span>
       </div>
 
