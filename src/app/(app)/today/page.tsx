@@ -1,13 +1,19 @@
 import type { Enums } from "@/lib/supabase/types";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { TodayWeekStrip } from "@/components/today/TodayWeekStrip";
-import { FuelGlanceRow } from "@/components/today/FuelGlanceRow";
+import { TodayFuelCard } from "@/components/today/TodayFuelCard";
 import {
   TodaySessionList,
   type TodaySessionListItem,
 } from "@/components/today/TodaySessionList";
 import { RestDayEmpty } from "@/components/today/RestDayEmpty";
 import { getTodayDayOfWeek } from "@/lib/methodology/today";
+import {
+  getMealsForDate,
+  getNutritionTargets,
+  getTodayDateString,
+} from "@/lib/nutrition/queries";
+import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
 import { createClient } from "@/lib/supabase/server";
 
 const timingOrder: Record<Enums<"timing_enum">, number> = {
@@ -225,24 +231,27 @@ async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
 export default async function TodayPage() {
   const today = new Date();
   const dayOfWeek = getTodayDayOfWeek(today);
-  const todaySchedule = await getTodaySessions(dayOfWeek);
+  const [todaySchedule, targets, meals] = await Promise.all([
+    getTodaySessions(dayOfWeek),
+    getNutritionTargets(),
+    getMealsForDate(getTodayDateString()),
+  ]);
 
   const hasSessions = Boolean(
     todaySchedule && todaySchedule.sessions.length > 0,
   );
+  const fuelBars = buildMacroBars(targets, sumMealTotals(meals));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <TodayHeader dayOfWeek={dayOfWeek} date={today} />
       <TodayWeekStrip dayOfWeek={dayOfWeek} />
       {hasSessions && todaySchedule ? (
-        <>
-          <TodaySessionList sessions={todaySchedule.sessions} />
-          <FuelGlanceRow />
-        </>
+        <TodaySessionList sessions={todaySchedule.sessions} />
       ) : (
         <RestDayEmpty />
       )}
+      <TodayFuelCard bars={fuelBars} />
     </div>
   );
 }

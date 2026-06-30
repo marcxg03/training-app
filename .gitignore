@@ -51,3 +51,6 @@ supabase/.temp
 
 # Slice 2 — wiki source files (parsed by seed script, not tracked)
 supabase/seed/wiki/*.md
+
+# Vercel
+.vercel
