@@ -3,20 +3,15 @@ import { Settings } from "lucide-react";
 
 import { PersonaSwitcher } from "@/components/coach/PersonaSwitcher";
 import type { Enums } from "@/lib/supabase/types";
+import { dayOfWeekLabel } from "@/lib/methodology/today";
 
 type TodayHeaderProps = {
+  /** The day currently being viewed. */
   dayOfWeek: Enums<"day_of_week_enum">;
+  /** Real calendar date (used for the eyebrow on the current day). */
   date: Date;
-};
-
-const dayLabels: Record<Enums<"day_of_week_enum">, string> = {
-  mon: "Monday",
-  tue: "Tuesday",
-  wed: "Wednesday",
-  thu: "Thursday",
-  fri: "Friday",
-  sat: "Saturday",
-  sun: "Sunday",
+  /** False when viewing another day of the plan (read-only). */
+  isToday: boolean;
 };
 
 function formatDateEyebrow(date: Date) {
@@ -29,7 +24,9 @@ function formatDateEyebrow(date: Date) {
     .replace(",", " ·");
 }
 
-export function TodayHeader({ dayOfWeek, date }: TodayHeaderProps) {
+export function TodayHeader({ dayOfWeek, date, isToday }: TodayHeaderProps) {
+  const dayLabel = dayOfWeekLabel(dayOfWeek);
+
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
@@ -37,12 +34,12 @@ export function TodayHeader({ dayOfWeek, date }: TodayHeaderProps) {
           <PersonaSwitcher active="training" />
         </div>
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
-          {formatDateEyebrow(date)}
+          {isToday ? formatDateEyebrow(date) : "Plan preview · read-only"}
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-          Today
+          {isToday ? "Today" : dayLabel}
         </h1>
-        <p className="sr-only">{dayLabels[dayOfWeek]}</p>
+        <p className="sr-only">{dayLabel}</p>
       </div>
       <Link
         href="/settings"

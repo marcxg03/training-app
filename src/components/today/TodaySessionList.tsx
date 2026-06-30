@@ -13,6 +13,12 @@ export type TodaySessionListItem = {
 
 type TodaySessionListProps = {
   sessions: TodaySessionListItem[];
+  /** The day these sessions belong to (carried into detail/back links). */
+  day: Enums<"day_of_week_enum">;
+  /** When true, hide logging entry points — viewing a non-current day. */
+  readOnly?: boolean;
+  /** Section heading; defaults to today's wording. */
+  heading?: string;
 };
 
 const timingOrder: Record<Enums<"timing_enum">, number> = {
@@ -31,14 +37,24 @@ function sortSessions(left: TodaySessionListItem, right: TodaySessionListItem) {
   return left.displayOrder - right.displayOrder;
 }
 
-export function TodaySessionList({ sessions }: TodaySessionListProps) {
+export function TodaySessionList({
+  sessions,
+  day,
+  readOnly = false,
+  heading = "Today's sessions",
+}: TodaySessionListProps) {
   const sortedSessions = [...sessions].sort(sortSessions);
 
   return (
     <div className="space-y-3">
-      <p className="eyebrow">Today&apos;s sessions</p>
+      <p className="eyebrow">{heading}</p>
       {sortedSessions.map((session) => (
-        <TodaySessionCard key={session.workoutId} session={session} />
+        <TodaySessionCard
+          key={session.workoutId}
+          session={session}
+          day={day}
+          readOnly={readOnly}
+        />
       ))}
     </div>
   );

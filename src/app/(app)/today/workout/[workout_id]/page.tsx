@@ -5,13 +5,17 @@ import { ArrowLeft } from "lucide-react";
 import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
 import { StartWorkoutButton } from "@/components/today/StartWorkoutButton";
-import { getTodayDayOfWeek } from "@/lib/methodology/today";
+import {
+  getTodayDayOfWeek,
+  parseDayOfWeek,
+} from "@/lib/methodology/today";
 import { createClient } from "@/lib/supabase/server";
 
 type TodayWorkoutDetailPageProps = {
   params: Promise<{
     workout_id: string;
   }>;
+  searchParams: Promise<{ day?: string }>;
 };
 
 type WorkoutDetail = {
@@ -186,20 +190,26 @@ async function getTodayWorkoutDetail(
 
 export default async function TodayWorkoutDetailPage({
   params,
+  searchParams,
 }: TodayWorkoutDetailPageProps) {
   const { workout_id: workoutId } = await params;
-  const dayOfWeek = getTodayDayOfWeek();
-  const workout = await getTodayWorkoutDetail(workoutId, dayOfWeek);
+  const { day: dayParam } = await searchParams;
+  const actualDay = getTodayDayOfWeek();
+  const selectedDay = parseDayOfWeek(dayParam) ?? actualDay;
+  const isToday = selectedDay === actualDay;
+  const workout = await getTodayWorkoutDetail(workoutId, selectedDay);
 
   if (!workout) {
-    redirect("/today");
+    redirect(isToday ? "/today" : `/today?day=${selectedDay}`);
   }
+
+  const backHref = isToday ? "/today" : `/today?day=${selectedDay}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href="/today"
+          href={backHref}
           aria-label="Back to today"
           className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
         >
@@ -211,7 +221,7 @@ export default async function TodayWorkoutDetailPage({
         <span className="h-9 w-9" aria-hidden="true" />
       </div>
       <SessionDetailPanel session={workout} />
-      {workout.workoutType === "lifting" ? (
+      {workout.workoutType === "lifting" && isToday ? (
         <StartWorkoutButton workoutId={workout.workoutId} />
       ) : null}
     </div>
