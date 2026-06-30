@@ -389,9 +389,14 @@ NOT animations (licensing + coverage gaps for unconventional lifts, and it
 fights the fast-logging UX). Deliberately deferred; revisit post-redesign as a
 separate slice. Keeps exercises free-text and unconstrained.
 
-## Coaching backend (2026-06-30)
+## Coaching removed (2026-06-30)
 
-### 🔴 Critical — Coaching is NOT verified against a live database
+Coaching was removed from this app — it is now personal-only, and client-facing
+coaching will be a separate app. The issues below are **obsolete** (no coaching
+code ships); retained struck-through for history. There is nothing to verify or
+enable.
+
+### ~~🔴 Critical — Coaching is NOT verified against a live database~~ (obsolete — removed)
 
 Migration `021_coaching.sql` has not been applied here, types were
 hand-extended (not regenerated), and RLS / multi-tenant access has not been

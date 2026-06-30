@@ -1584,3 +1584,25 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
 - `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass clean.
 - NOT yet tested on a device against live Supabase — needs the template edit,
   then the install-to-home-screen sign-in test (stays in the app → `/today`).
+
+## Remove coaching — this app is personal-only (2026-06-30)
+
+### What changed
+
+- Removed the entire coaching surface from this app. Client-facing coaching
+  will live in a separate, dedicated app. This app is now strictly the owner's
+  personal training tool (Today / Plan / Library / Fuel / Progress).
+- Deleted: the `/coach/**` route tree, `src/components/coach/`, `src/lib/coach/`,
+  `src/lib/supabase/admin.ts`, and migration `021_coaching.sql` (never applied to
+  the remote, so safe to drop). Reverted the coaching tables/enums/function from
+  `src/lib/supabase/types.ts` and the `NEXT_PUBLIC_COACHING_ENABLED` flag from
+  `.env.example`.
+- Removed the now-orphaned `PersonaSwitcher` usage from `TodayHeader` and the
+  dead `/coach` guard in `BottomTabBar`.
+- The earlier "Coaching backend" entry above is retained as historical record;
+  none of that code ships anymore.
+
+### Verification
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass clean; no `coach`
+  references remain in `src/`.

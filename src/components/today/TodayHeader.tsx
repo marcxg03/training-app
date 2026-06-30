@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 
-import { PersonaSwitcher } from "@/components/coach/PersonaSwitcher";
 import type { Enums } from "@/lib/supabase/types";
 import { dayOfWeekLabel } from "@/lib/methodology/today";
 
@@ -30,9 +29,6 @@ export function TodayHeader({ dayOfWeek, date, isToday }: TodayHeaderProps) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <div className="mb-3.5">
-          <PersonaSwitcher active="training" />
-        </div>
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
           {isToday ? formatDateEyebrow(date) : "Plan preview · read-only"}
         </p>

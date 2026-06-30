@@ -39,133 +39,6 @@ export type Database = {
   };
   public: {
     Tables: {
-      coach_clients: {
-        Row: {
-          relationship_id: string;
-          coach_user_id: string;
-          client_user_id: string | null;
-          invite_email: string;
-          invite_name: string | null;
-          status: Database["public"]["Enums"]["coach_relationship_status"];
-          goal_mode: Database["public"]["Enums"]["goal_mode_enum"] | null;
-          assigned_plan_id: string | null;
-          assigned_plan_name: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          relationship_id?: string;
-          coach_user_id: string;
-          client_user_id?: string | null;
-          invite_email: string;
-          invite_name?: string | null;
-          status?: Database["public"]["Enums"]["coach_relationship_status"];
-          goal_mode?: Database["public"]["Enums"]["goal_mode_enum"] | null;
-          assigned_plan_id?: string | null;
-          assigned_plan_name?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          relationship_id?: string;
-          coach_user_id?: string;
-          client_user_id?: string | null;
-          invite_email?: string;
-          invite_name?: string | null;
-          status?: Database["public"]["Enums"]["coach_relationship_status"];
-          goal_mode?: Database["public"]["Enums"]["goal_mode_enum"] | null;
-          assigned_plan_id?: string | null;
-          assigned_plan_name?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      coach_notes: {
-        Row: {
-          note_id: string;
-          relationship_id: string;
-          author: Database["public"]["Enums"]["coach_note_author"];
-          body: string;
-          client_visible: boolean;
-          created_at: string;
-        };
-        Insert: {
-          note_id?: string;
-          relationship_id: string;
-          author: Database["public"]["Enums"]["coach_note_author"];
-          body: string;
-          client_visible?: boolean;
-          created_at?: string;
-        };
-        Update: {
-          note_id?: string;
-          relationship_id?: string;
-          author?: Database["public"]["Enums"]["coach_note_author"];
-          body?: string;
-          client_visible?: boolean;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "coach_notes_relationship_id_fkey";
-            columns: ["relationship_id"];
-            isOneToOne: false;
-            referencedRelation: "coach_clients";
-            referencedColumns: ["relationship_id"];
-          },
-        ];
-      };
-      coach_client_targets: {
-        Row: {
-          relationship_id: string;
-          goal_mode: Database["public"]["Enums"]["goal_mode_enum"];
-          cal_min: number;
-          cal_max: number;
-          protein_min_g: number;
-          protein_max_g: number;
-          carbs_min_g: number;
-          carbs_max_g: number;
-          fat_min_g: number;
-          fat_max_g: number;
-          updated_at: string;
-        };
-        Insert: {
-          relationship_id: string;
-          goal_mode?: Database["public"]["Enums"]["goal_mode_enum"];
-          cal_min: number;
-          cal_max: number;
-          protein_min_g: number;
-          protein_max_g: number;
-          carbs_min_g: number;
-          carbs_max_g: number;
-          fat_min_g: number;
-          fat_max_g: number;
-          updated_at?: string;
-        };
-        Update: {
-          relationship_id?: string;
-          goal_mode?: Database["public"]["Enums"]["goal_mode_enum"];
-          cal_min?: number;
-          cal_max?: number;
-          protein_min_g?: number;
-          protein_max_g?: number;
-          carbs_min_g?: number;
-          carbs_max_g?: number;
-          fat_min_g?: number;
-          fat_max_g?: number;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "coach_client_targets_relationship_id_fkey";
-            columns: ["relationship_id"];
-            isOneToOne: true;
-            referencedRelation: "coach_clients";
-            referencedColumns: ["relationship_id"];
-          },
-        ];
-      };
       activity_completions: {
         Row: {
           activity_id: string;
@@ -991,15 +864,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      link_pending_coach_invites: {
-        Args: Record<string, never>;
-        Returns: number;
-      };
+      [_ in never]: never;
     };
     Enums: {
       block_category_enum: "lifting" | "cardio" | "recovery";
-      coach_relationship_status: "invited" | "active" | "paused";
-      coach_note_author: "coach" | "client";
       block_type_enum: "failure" | "mobility" | "corrective";
       cardio_format_enum: "speed_run" | "endurance_run" | "basketball";
       cardio_target_zone_enum: "sprint" | "zone_2" | "anaerobic" | "game_pace";

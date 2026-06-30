@@ -1307,3 +1307,18 @@ into the client's account. The denormalised name lets the client display
 the assignment without read access to the coach's `training_plans`.
 Materialising the plan into the client's loggable surface is deferred (see
 KNOWN_ISSUES.md) to avoid a large, untestable deep-copy in this pass.
+
+## Coaching removed — this app is personal-only (2026-06-30)
+
+All of the coaching work above was removed shortly after it was built. The
+owner decided this app should be a single-user personal training tool, and that
+client-facing coaching will be a separate, dedicated app.
+
+**Reasoning:** A multi-tenant coach/client model (cross-user access, invitations,
+client logins, the RLS surface that comes with it) is a poor fit for a
+personal-first app and adds risk and maintenance for a capability that now lives
+elsewhere. Removing it keeps this codebase focused and the auth/data model
+strictly own-data. The coaching design and data model remain captured in
+`spec/REDESIGN_BRIEF.md` §8 and in git history (commit that added the backend)
+for reuse when the separate app is built. Migration 021 was never applied to the
+remote, so dropping it left no schema drift.
