@@ -14,6 +14,11 @@ type LoginFormProps = {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Supabase email OTP length is configurable (6–10). Accept the full range so a
+// dashboard length change never silently truncates the code and breaks sign-in.
+const MIN_CODE_LENGTH = 6;
+const MAX_CODE_LENGTH = 10;
+
 export function LoginForm({ initialError = null }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -64,9 +69,9 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
 
     const trimmedCode = code.trim();
 
-    if (trimmedCode.length < 6) {
+    if (trimmedCode.length < MIN_CODE_LENGTH) {
       setStatus("error");
-      setMessage("Enter the 6-digit code from your email.");
+      setMessage("Enter the code from your email.");
       return;
     }
 
@@ -126,7 +131,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
         </div>
 
         <p className="mt-5 text-sm leading-relaxed text-subtle">
-          We emailed a 6-digit code to
+          We emailed a sign-in code to
           <br />
           <span className="font-mono text-foreground">{email.trim()}</span>
         </p>
@@ -134,18 +139,22 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
         <form className="mt-6 space-y-3.5" onSubmit={handleVerify}>
           <div className="space-y-2">
             <label className="eyebrow" htmlFor="code">
-              6-digit code
+              Verification code
             </label>
             <input
               id="code"
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={6}
+              maxLength={MAX_CODE_LENGTH}
               value={code}
               autoFocus
               onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, ""));
+                setCode(
+                  event.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, MAX_CODE_LENGTH),
+                );
                 if (status === "error") {
                   setStatus("code");
                   setMessage(null);
@@ -158,7 +167,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           <button
             type="submit"
             className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
-            disabled={isBusy || code.trim().length < 6}
+            disabled={isBusy || code.trim().length < MIN_CODE_LENGTH}
           >
             {status === "verifying" ? "Verifying..." : "Verify & sign in"}
           </button>
@@ -191,7 +200,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
         Sign in
       </h1>
       <p className="mt-2 text-sm leading-relaxed text-subtle">
-        We&apos;ll email you a 6-digit code — no password to remember.
+        We&apos;ll email you a sign-in code — no password to remember.
       </p>
 
       <form className="mt-7 space-y-3.5" onSubmit={handleSubmit}>
