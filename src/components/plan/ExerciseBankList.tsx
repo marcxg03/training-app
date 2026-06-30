@@ -17,24 +17,40 @@ function formatMuscleGroups(muscleGroups: string[]) {
 }
 
 export function ExerciseBankList({ exercises }: ExerciseBankListProps) {
+  const primaryMuscle = exercises
+    .map((exercise) => formatMuscleGroups(exercise.muscleGroups))
+    .find(Boolean);
+
   return (
-    <ul className="space-y-3">
-      {exercises.map((exercise) => (
-        <li
-          key={exercise.exerciseId}
-          className="rounded-xl border border-border/70 bg-background/60 px-4 py-3"
-        >
-          <p className="text-sm font-medium text-foreground">{exercise.name}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            {formatMuscleGroups(exercise.muscleGroups)}
-          </p>
-          {exercise.notes ? (
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {exercise.notes}
-            </p>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-2.5">
+      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
+        Bank{primaryMuscle ? ` · ${primaryMuscle}` : ""}
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {exercises.map((exercise) => (
+          <li
+            key={exercise.exerciseId}
+            className="rounded-md bg-input px-2.5 py-1.5 text-[11px] font-medium text-subtle"
+          >
+            {exercise.name}
+          </li>
+        ))}
+      </ul>
+      {exercises.some((exercise) => exercise.notes) ? (
+        <ul className="space-y-1 pt-0.5">
+          {exercises
+            .filter((exercise) => exercise.notes)
+            .map((exercise) => (
+              <li
+                key={`${exercise.exerciseId}-note`}
+                className="text-[12px] leading-5 text-muted-foreground"
+              >
+                <span className="text-subtle">{exercise.name}:</span>{" "}
+                {exercise.notes}
+              </li>
+            ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

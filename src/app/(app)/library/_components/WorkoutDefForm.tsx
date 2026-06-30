@@ -132,12 +132,10 @@ export function WorkoutDefForm({
           {mode === "edit" ? "Back to workout" : "Back to library"}
         </button>
 
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Library
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {mode === "create" ? "Create workout" : "Edit workout"}
+        <div className="space-y-1">
+          <p className="eyebrow">Library</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {mode === "create" ? "New Workout" : "Edit Workout"}
           </h1>
         </div>
 
@@ -149,13 +147,13 @@ export function WorkoutDefForm({
               void form.handleSubmit(handleSubmit)(event);
             }}
           >
-            <div className="space-y-5 rounded-2xl border border-border/70 bg-card/60 p-4">
+            <div className="space-y-5 rounded-[var(--radius)] border border-border bg-card p-4">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Workout name</FormLabel>
+                    <FormLabel>Name</FormLabel>
                     <FormControl>
                       <Input
                         {...field}

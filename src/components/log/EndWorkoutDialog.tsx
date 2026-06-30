@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -60,30 +61,42 @@ export function EndWorkoutDialog({
         <button
           type="button"
           disabled={disabled}
-          className="text-sm font-medium text-accent transition hover:text-accent/80 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center rounded-[10px] border border-danger/40 bg-danger/[0.08] px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-danger transition hover:bg-danger/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          End workout early
+          End
         </button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>End workout now?</DialogTitle>
-          <DialogDescription>
-            Any incomplete blocks will be marked as skipped.
+        <DialogHeader className="items-start text-left">
+          <span className="flex h-12 w-12 items-center justify-center rounded-[13px] bg-danger/10 text-danger">
+            <LogOut className="h-6 w-6" />
+          </span>
+          <DialogTitle className="pt-3 text-[19px]">
+            End workout early?
+          </DialogTitle>
+          <DialogDescription className="leading-6">
+            Everything you&apos;ve logged is already saved — incomplete blocks
+            will be marked as skipped and you can pick this up from History.
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
-        <DialogFooter>
+        <DialogFooter className="gap-2.5 sm:gap-2.5">
           <Button
             type="button"
             variant="outline"
             onClick={() => setIsOpen(false)}
             disabled={isSubmitting}
+            className="flex-1 uppercase tracking-[0.05em]"
           >
-            Keep logging
+            Keep going
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={isSubmitting}>
-            {isSubmitting ? "Ending..." : "End workout"}
+          <Button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isSubmitting}
+            className="flex-1 bg-danger uppercase tracking-[0.05em] text-background hover:bg-danger/90"
+          >
+            {isSubmitting ? "Ending…" : "End now"}
           </Button>
         </DialogFooter>
       </DialogContent>

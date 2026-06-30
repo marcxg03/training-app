@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft, Pencil } from "lucide-react";
 
 import { BlockTypeBadge } from "@/app/(app)/library/_components/BlockTypeBadge";
 import { DeleteLibraryItemButton } from "@/app/(app)/library/_components/DeleteLibraryItemButton";
-import { buttonVariants } from "@/components/ui/button";
 import { workoutEditHref, workoutsHref } from "@/lib/library/crossLinks";
-import { formatExerciseCount } from "@/lib/library/displayName";
 import { getWorkoutDefDetail } from "@/lib/library/queries";
 
 type WorkoutDetailPageProps = {
@@ -25,68 +24,67 @@ export default async function WorkoutDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-4">
-        <a
-          href={workoutsHref()}
-          className="inline-flex min-h-11 items-center text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          Back to library
-        </a>
-
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Library
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {workout.name}
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href={workoutEditHref(workoutDefId)}
-            className={buttonVariants({ variant: "outline" })}
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-3">
+          <a
+            href={workoutsHref()}
+            aria-label="Back to library"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-border bg-input text-subtle transition-colors hover:text-foreground"
           >
-            Edit
-          </Link>
-          <DeleteLibraryItemButton
-            kind="workout"
-            id={workoutDefId}
-            name={workout.name}
-            redirectTo={workoutsHref()}
-          />
+            <ArrowLeft className="h-5 w-5" />
+          </a>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {workout.name}
+            </h1>
+            <p className="font-mono text-[11px] uppercase tabular-nums tracking-[0.1em] text-faint">
+              {workout.blocks.length}{" "}
+              {workout.blocks.length === 1 ? "block" : "blocks"} · in order
+            </p>
+          </div>
         </div>
+        <Link
+          href={workoutEditHref(workoutDefId)}
+          className="inline-flex min-h-11 items-center gap-1.5 pt-12 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent transition-colors hover:text-accent/80"
+        >
+          <Pencil className="h-[17px] w-[17px]" />
+          Edit
+        </Link>
       </div>
 
       {workout.blocks.length > 0 ? (
-        <ul className="space-y-3">
-          {workout.blocks.map((block) => (
+        <ul className="space-y-2">
+          {workout.blocks.map((block, index) => (
             <li
               key={`${block.block_id}:${block.display_order}`}
-              className="rounded-2xl border border-border/70 bg-card/80 px-4 py-4"
+              className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3.5"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-foreground">
-                    {block.block_name}
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {formatExerciseCount(block.exercise_count)}
-                  </p>
-                </div>
-                {block.block_type ? (
-                  <BlockTypeBadge blockType={block.block_type} />
-                ) : null}
-              </div>
+              <span className="w-3.5 flex-none font-mono text-xs font-semibold tabular-nums text-faint">
+                {index + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                {block.block_name}
+              </span>
+              {block.block_type ? (
+                <BlockTypeBadge blockType={block.block_type} />
+              ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+        <p className="rounded-[var(--radius)] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
           No blocks in this workout yet. Edit to add some.
         </p>
       )}
+
+      <DeleteLibraryItemButton
+        kind="workout"
+        id={workoutDefId}
+        name={workout.name}
+        redirectTo={workoutsHref()}
+        variant="bar"
+      />
     </div>
   );
 }

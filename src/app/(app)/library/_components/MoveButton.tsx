@@ -2,8 +2,6 @@
 
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-
 type MoveButtonProps = {
   direction: "up" | "down";
   disabled: boolean;
@@ -14,15 +12,14 @@ export function MoveButton({ direction, disabled, onClick }: MoveButtonProps) {
   const Icon = direction === "up" ? ArrowUp : ArrowDown;
 
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      size="icon"
       disabled={disabled}
       onClick={onClick}
       aria-label={direction === "up" ? "Move up" : "Move down"}
+      className="flex h-9 w-9 items-center justify-center rounded-lg text-faint transition-colors hover:bg-input hover:text-subtle disabled:pointer-events-none disabled:opacity-30"
     >
-      <Icon className="h-4 w-4" />
-    </Button>
+      <Icon className="h-[18px] w-[18px]" />
+    </button>
   );
 }

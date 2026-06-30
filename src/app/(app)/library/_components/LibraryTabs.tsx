@@ -10,15 +10,21 @@ import {
   recoveryHref,
   workoutsHref,
 } from "@/lib/library/crossLinks";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils/cn";
 
 const tabs = [
-  { href: liftingHref(), label: "Lifting", value: "lifting" },
+  { href: liftingHref(), label: "Blocks", value: "lifting" },
   { href: workoutsHref(), label: "Workouts", value: "workouts" },
   { href: exercisesHref(), label: "Exercises", value: "exercises" },
   { href: cardioHref(), label: "Cardio", value: "cardio" },
   { href: recoveryHref(), label: "Recovery", value: "recovery" },
 ] as const;
+
+// Cardio adopts the teal accent when active; every other tab stays purple.
+const activeChipClass: Record<string, string> = {
+  cardio: "border-cardio bg-input text-cardio",
+};
+const defaultActiveChipClass = "border-accent bg-input text-accent";
 
 function getActiveValue(pathname: string) {
   if (pathname.startsWith(workoutsHref())) {
@@ -42,21 +48,29 @@ function getActiveValue(pathname: string) {
 
 export function LibraryTabs() {
   const pathname = usePathname();
+  const activeValue = getActiveValue(pathname);
 
   return (
-    <Tabs value={getActiveValue(pathname)} className="w-full">
-      <TabsList className="grid h-auto w-full grid-cols-5 rounded-2xl bg-card/80 p-1">
-        {tabs.map((tab) => (
-          <TabsTrigger
+    <nav className="flex gap-1.5 overflow-x-auto pb-0.5">
+      {tabs.map((tab) => {
+        const isActive = tab.value === activeValue;
+
+        return (
+          <Link
             key={tab.href}
-            value={tab.value}
-            asChild
-            className="min-h-11 rounded-xl px-2 text-[10px] sm:text-sm"
+            href={tab.href}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex-none rounded-lg border px-3 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors",
+              isActive
+                ? (activeChipClass[tab.value] ?? defaultActiveChipClass)
+                : "border-border text-faint hover:text-subtle",
+            )}
           >
-            <Link href={tab.href}>{tab.label}</Link>
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

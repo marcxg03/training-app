@@ -7,27 +7,23 @@ type ExerciseListItemProps = {
 
 export function ExerciseListItem({ exercise }: ExerciseListItemProps) {
   return (
-    <li className="rounded-2xl border border-border/70 bg-card/80 px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-foreground">
-            {exercise.name}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {formatRepRange(exercise)}
-          </p>
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            {formatMuscleGroups(exercise.muscle_groups)}
-          </p>
-        </div>
+    <li className="rounded-[13px] border border-border bg-card px-[15px] py-3.5">
+      <div className="flex items-center gap-2">
+        <span className="truncate text-sm font-semibold text-foreground">
+          {exercise.name}
+        </span>
         {exercise.is_bodyweight ? (
-          <span className="inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Bodyweight
+          <span className="inline-flex items-center rounded-md border border-cardio/40 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-[0.1em] text-cardio">
+            BW
           </span>
         ) : null}
       </div>
+      <p className="mt-1 font-mono text-[10px] font-medium uppercase tabular-nums tracking-[0.1em] text-muted-foreground">
+        {formatMuscleGroups(exercise.muscle_groups)} ·{" "}
+        {formatRepRange(exercise)}
+      </p>
       {exercise.notes ? (
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
           {exercise.notes}
         </p>
       ) : null}

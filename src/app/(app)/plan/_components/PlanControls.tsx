@@ -128,28 +128,23 @@ export function PlanControls({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
-        Plan Tab
-      </p>
+      <Select value={activePlanId ?? undefined} onValueChange={handleActivate}>
+        <SelectTrigger className="h-auto w-full justify-between rounded-xl border-border bg-card px-[14px] py-3 text-[13px] font-semibold text-foreground">
+          <SelectValue placeholder="Select a plan" />
+        </SelectTrigger>
+        <SelectContent>
+          {plans.map((plan) => (
+            <SelectItem key={plan.plan_id} value={plan.plan_id}>
+              {plan.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={activePlanId ?? undefined}
-          onValueChange={handleActivate}
-        >
-          <SelectTrigger className="h-12 min-w-[12rem] flex-1 text-lg font-semibold">
-            <SelectValue placeholder="Select a plan" />
-          </SelectTrigger>
-          <SelectContent>
-            {plans.map((plan) => (
-              <SelectItem key={plan.plan_id} value={plan.plan_id}>
-                {plan.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={openRename}
           disabled={activePlanId === null}
         >
@@ -158,6 +153,7 @@ export function PlanControls({
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={() => {
             setError(null);
             setDeleteOpen(true);
@@ -166,7 +162,7 @@ export function PlanControls({
         >
           Delete
         </Button>
-        <Button type="button" onClick={openCreate}>
+        <Button type="button" size="sm" onClick={openCreate}>
           New plan
         </Button>
       </div>

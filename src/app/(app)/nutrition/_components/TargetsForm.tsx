@@ -2,18 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type Control } from "react-hook-form";
 
 import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
-import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -35,17 +32,68 @@ type TargetsFormProps = {
 
 type FieldName = keyof TargetsFormValues;
 
-const FIELD_GROUPS: {
+const CALORIES_GROUP: { min: FieldName; max: FieldName } = {
+  min: "cal_min",
+  max: "cal_max",
+};
+
+const MACRO_GROUPS: {
   label: string;
-  unit: string;
   min: FieldName;
   max: FieldName;
 }[] = [
-  { label: "Calories", unit: "kcal", min: "cal_min", max: "cal_max" },
-  { label: "Protein", unit: "g", min: "protein_min_g", max: "protein_max_g" },
-  { label: "Carbs", unit: "g", min: "carbs_min_g", max: "carbs_max_g" },
-  { label: "Fat", unit: "g", min: "fat_min_g", max: "fat_max_g" },
+  { label: "Protein", min: "protein_min_g", max: "protein_max_g" },
+  { label: "Carbs", min: "carbs_min_g", max: "carbs_max_g" },
+  { label: "Fat", min: "fat_min_g", max: "fat_max_g" },
 ];
+
+const GOAL_MODES: { value: GoalMode; label: string }[] = [
+  { value: "cut", label: "Cut" },
+  { value: "maintain", label: "Maintain" },
+  { value: "lean_bulk", label: "Lean bulk" },
+];
+
+/** A single numeric range input (one bound). Centered mono value with the
+ * accessible label; shares styling between the calorie and macro rows. */
+function RangeField({
+  control,
+  name,
+  label,
+  inputClassName,
+}: {
+  control: Control<TargetsFormValues>;
+  name: FieldName;
+  label: string;
+  inputClassName?: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className="flex-1">
+          <FormControl>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              aria-label={label}
+              className={`h-auto text-center font-mono font-semibold tabular-nums ${inputClassName ?? ""}`}
+              value={Number.isNaN(field.value) ? "" : field.value}
+              onBlur={field.onBlur}
+              name={field.name}
+              ref={field.ref}
+              onChange={(event) =>
+                field.onChange(event.currentTarget.valueAsNumber)
+              }
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
 
 export function TargetsForm({
   userId,
@@ -100,88 +148,113 @@ export function TargetsForm({
 
   return (
     <>
-      <div className="space-y-6">
-        <button
-          type="button"
-          onClick={() => requestConfirmation(goBack)}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to nutrition
-        </button>
-
-        <header className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Nutrition
-          </p>
-          <h1 className="text-3xl font-semibold text-foreground">
-            Daily targets
-          </h1>
-          {seeded ? (
-            <p className="text-sm text-muted-foreground">
-              Pre-filled with {goalMode.replace("_", " ")} defaults — adjust to
-              your numbers and save.
-            </p>
-          ) : null}
+      <div className="mx-auto max-w-4xl space-y-6">
+        <header className="flex items-center justify-between gap-4 border-b border-border pb-3">
+          <button
+            type="button"
+            onClick={() => requestConfirmation(goBack)}
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <h1 className="text-sm font-semibold text-foreground">Targets</h1>
+          <button
+            type="submit"
+            form="targets-form"
+            disabled={form.formState.isSubmitting}
+            className="text-sm font-bold text-accent transition-colors hover:text-accent/80 disabled:opacity-50"
+          >
+            Save
+          </button>
         </header>
+
+        {seeded ? (
+          <p className="text-sm text-muted-foreground">
+            Pre-filled with {goalMode.replace("_", " ")} defaults — adjust to
+            your numbers and save.
+          </p>
+        ) : null}
 
         <Form {...form}>
           <form
+            id="targets-form"
             className="space-y-6"
             onSubmit={(event) => {
               event.preventDefault();
               void form.handleSubmit(handleSubmit)(event);
             }}
           >
-            <div className="space-y-5 rounded-2xl border border-border bg-card p-5">
-              {FIELD_GROUPS.map((group) => (
-                <div key={group.label} className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">
-                    {group.label}{" "}
-                    <span className="text-muted-foreground">
-                      ({group.unit})
+            <div className="space-y-2">
+              <p className="eyebrow tracking-[0.16em]">Goal mode</p>
+              <div className="flex gap-1.5 rounded-xl border border-border bg-input p-1.5">
+                {GOAL_MODES.map((mode) => (
+                  <span
+                    key={mode.value}
+                    aria-current={mode.value === goalMode ? "true" : undefined}
+                    className={
+                      mode.value === goalMode
+                        ? "flex-1 rounded-lg bg-accent py-2.5 text-center font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-black"
+                        : "flex-1 rounded-lg py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
+                    }
+                  >
+                    {mode.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="eyebrow tracking-[0.16em]">
+                Daily calories · range
+              </p>
+              <div className="flex items-center gap-2.5">
+                <RangeField
+                  control={form.control}
+                  name={CALORIES_GROUP.min}
+                  label="Calories minimum"
+                  inputClassName="py-3 text-lg"
+                />
+                <span className="font-mono text-sm font-semibold text-faint">
+                  –
+                </span>
+                <RangeField
+                  control={form.control}
+                  name={CALORIES_GROUP.max}
+                  label="Calories maximum"
+                  inputClassName="py-3 text-lg"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="eyebrow tracking-[0.16em]">Macros · range (g)</p>
+              <div className="space-y-2.5">
+                {MACRO_GROUPS.map((group) => (
+                  <div key={group.label} className="flex items-center gap-3">
+                    <span className="w-16 flex-none text-xs font-semibold text-subtle">
+                      {group.label}
                     </span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(["min", "max"] as const).map((bound) => {
-                      const name = group[bound];
-                      return (
-                        <FormField
-                          key={name}
-                          control={form.control}
-                          name={name}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">
-                                {bound === "min" ? "Min" : "Max"}
-                              </FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
-                                  min={0}
-                                  value={
-                                    Number.isNaN(field.value) ? "" : field.value
-                                  }
-                                  onBlur={field.onBlur}
-                                  name={field.name}
-                                  ref={field.ref}
-                                  onChange={(event) =>
-                                    field.onChange(
-                                      event.currentTarget.valueAsNumber,
-                                    )
-                                  }
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      );
-                    })}
+                    <RangeField
+                      control={form.control}
+                      name={group.min}
+                      label={`${group.label} minimum`}
+                      inputClassName="py-2.5 text-sm"
+                    />
+                    <span className="font-mono text-sm font-semibold text-faint">
+                      –
+                    </span>
+                    <RangeField
+                      control={form.control}
+                      name={group.max}
+                      label={`${group.label} maximum`}
+                      inputClassName="py-2.5 text-sm"
+                    />
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <p className="font-mono text-[11px] tracking-[0.04em] text-faint">
+                Day-type frameworks derive from these + goal mode.
+              </p>
             </div>
 
             {consistency ? (
@@ -201,19 +274,6 @@ export function TargetsForm({
                 {submitError}
               </div>
             ) : null}
-
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => requestConfirmation(goBack)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                Save targets
-              </Button>
-            </div>
           </form>
         </Form>
       </div>

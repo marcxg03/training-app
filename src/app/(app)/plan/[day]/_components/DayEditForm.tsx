@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { ArrowUp, ArrowDown, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
@@ -18,13 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { validateSchedule } from "@/lib/methodology/plan-schedule";
 import { saveDay } from "@/lib/plan/mutations";
 import type { DayEditData } from "@/lib/plan/projections";
@@ -128,28 +121,32 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
 
   return (
     <>
-      <div className="mx-auto max-w-2xl space-y-6">
-        <button
-          type="button"
-          onClick={() => requestConfirmation(goBack)}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent transition-colors hover:text-accent/80"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to {dayLabel}
-        </button>
-
-        <header className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Plan
-          </p>
-          <h1 className="text-3xl font-semibold text-foreground">
+      <div className="mx-auto max-w-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+          <button
+            type="button"
+            onClick={() => requestConfirmation(goBack)}
+            className="text-[13px] font-medium text-subtle transition-colors hover:text-foreground"
+          >
+            Cancel
+          </button>
+          <h1 className="text-sm font-semibold text-foreground">
             Edit {dayLabel}
           </h1>
-        </header>
+          <button
+            type="submit"
+            form="day-edit-form"
+            disabled={blocked || form.formState.isSubmitting}
+            className="font-mono text-[13px] font-bold uppercase tracking-[0.03em] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
 
         <Form {...form}>
           <form
-            className="space-y-6"
+            id="day-edit-form"
+            className="space-y-6 pt-[18px]"
             onSubmit={(event) => {
               event.preventDefault();
               void form.handleSubmit(handleSubmit)(event);
@@ -160,7 +157,10 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
               name="is_rest_day"
               render={({ field }) => (
                 <FormItem>
-                  <label className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-[14px] py-[13px]">
+                    <span className="text-[13px] font-semibold text-foreground">
+                      Rest day
+                    </span>
                     <FormControl>
                       <Checkbox
                         checked={field.value}
@@ -169,25 +169,27 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                         }
                       />
                     </FormControl>
-                    <span className="font-medium text-foreground">
-                      Rest day
-                    </span>
                   </label>
                 </FormItem>
               )}
             />
 
-            <div className="space-y-3">
+            <div className="space-y-2">
+              <p className="eyebrow">Sessions</p>
               {fields.map((row, index) => (
                 <div
                   key={row.id}
-                  className="space-y-3 rounded-2xl border border-border bg-card p-4"
+                  className="space-y-3 rounded-xl border border-border bg-card p-[14px]"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full border border-border px-2.5 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
+                  <div className="flex items-center gap-2.5">
+                    <GripVertical
+                      className="h-[18px] w-[18px] shrink-0 text-faint"
+                      aria-hidden="true"
+                    />
+                    <span className="rounded-md border border-border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-subtle">
                       {TYPE_LABEL[row.workout_type] ?? row.workout_type}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="ml-auto flex items-center gap-1">
                       <Button
                         type="button"
                         variant="outline"
@@ -208,10 +210,8 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                       >
                         <ArrowDown className="h-4 w-4" />
                       </Button>
-                      <Button
+                      <button
                         type="button"
-                        variant="outline"
-                        size="icon"
                         disabled={row.has_history}
                         onClick={() => remove(index)}
                         aria-label="Remove session"
@@ -220,9 +220,10 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                             ? "This session has logged history and can't be removed"
                             : "Remove session"
                         }
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-danger transition-colors hover:bg-danger/10 disabled:pointer-events-none disabled:opacity-40"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        <Trash2 className="h-[18px] w-[18px]" />
+                      </button>
                     </div>
                   </div>
 
@@ -231,7 +232,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     name={`workouts.${index}.workout_name`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Session name</FormLabel>
+                        <FormLabel className="eyebrow">Session name</FormLabel>
                         <FormControl>
                           <Input {...field} autoComplete="off" />
                         </FormControl>
@@ -240,61 +241,63 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name={`workouts.${index}.timing`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Timing</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {TIMINGS.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>
+                  <FormField
+                    control={form.control}
+                    name={`workouts.${index}.timing`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="eyebrow">Timing</FormLabel>
+                        <FormControl>
+                          <div className="flex gap-1.5">
+                            {TIMINGS.map((t) => {
+                              const active = field.value === t.value;
+                              return (
+                                <button
+                                  key={t.value}
+                                  type="button"
+                                  onClick={() => field.onChange(t.value)}
+                                  aria-pressed={active}
+                                  className={
+                                    active
+                                      ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                      : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
+                                  }
+                                >
                                   {t.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                    <FormField
-                      control={form.control}
-                      name={`workouts.${index}.gym`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Gym</FormLabel>
-                          <FormControl>
-                            <Input {...field} autoComplete="off" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name={`workouts.${index}.gym`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="eyebrow">Gym</FormLabel>
+                        <FormControl>
+                          <Input {...field} autoComplete="off" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   {row.has_history ? (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-faint">
                       Has logged history — can be edited but not removed.
                     </p>
                   ) : null}
                 </div>
               ))}
 
-              <Button
+              <button
                 type="button"
-                variant="outline"
                 onClick={() =>
                   append({
                     workout_id: null,
@@ -306,9 +309,11 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     has_history: false,
                   })
                 }
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-3.5 text-[13px] font-semibold text-subtle transition-colors hover:border-faint hover:text-foreground"
               >
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Add lifting session
-              </Button>
+              </button>
             </div>
 
             {blocked ? (
@@ -333,7 +338,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
               </div>
             ) : null}
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"

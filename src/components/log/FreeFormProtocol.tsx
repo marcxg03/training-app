@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Plus } from "lucide-react";
 
 import type {
   LoggerBlock,
@@ -84,15 +85,22 @@ export function FreeFormProtocol({
           type="button"
           variant="outline"
           onClick={() => setIsAddingSet(true)}
+          className="w-full gap-2 uppercase tracking-[0.06em]"
         >
+          <Plus className="h-4 w-4" />
           Add set
         </Button>
       )}
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
-      <Button type="button" onClick={handleComplete} disabled={isCompleting}>
-        {isCompleting ? "Saving..." : "Done with this block"}
+      <Button
+        type="button"
+        onClick={handleComplete}
+        disabled={isCompleting}
+        className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
+      >
+        {isCompleting ? "Saving…" : "Done with this block"}
       </Button>
     </div>
   );

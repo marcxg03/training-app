@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ArrowDownUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -120,10 +121,18 @@ export function GoalModeRecommendationSheet({
         }
       }}
     >
-      <SheetContent side="bottom" className="mx-auto max-w-2xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{MODE_LABEL[newMode]} targets</SheetTitle>
-          <SheetDescription>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-w-2xl overflow-y-auto rounded-t-[var(--radius)] bg-card"
+      >
+        <SheetHeader className="space-y-3 text-left">
+          <span className="bg-accent/12 flex h-12 w-12 items-center justify-center rounded-xl text-accent">
+            <ArrowDownUp className="h-6 w-6" />
+          </span>
+          <SheetTitle className="text-xl font-semibold tracking-tight">
+            Switch to {MODE_LABEL[newMode]}?
+          </SheetTitle>
+          <SheetDescription className="text-sm leading-relaxed text-subtle">
             {currentTargets
               ? "Choose which ranges to update to the recommended defaults for your new goal mode. Unchecked rows keep their current values."
               : "You don't have targets yet — applying creates them from the recommended defaults."}
@@ -136,7 +145,7 @@ export function GoalModeRecommendationSheet({
             return (
               <label
                 key={group.label}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4"
+                className="flex items-center gap-3 rounded-xl border border-border bg-card-alt p-4"
               >
                 <Checkbox
                   checked={checked}
@@ -148,13 +157,13 @@ export function GoalModeRecommendationSheet({
                   }
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-foreground">
+                  <span className="block text-sm font-semibold text-foreground">
                     {group.label}{" "}
-                    <span className="text-muted-foreground">
+                    <span className="font-mono text-xs text-subtle">
                       ({group.unit})
                     </span>
                   </span>
-                  <span className="block text-sm tabular-nums text-muted-foreground">
+                  <span className="block font-mono text-xs tabular-nums text-subtle">
                     {currentTargets
                       ? `${currentTargets[group.min]}–${currentTargets[group.max]}`
                       : "—"}{" "}
@@ -174,11 +183,21 @@ export function GoalModeRecommendationSheet({
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={handleSkip}>
+        <div className="mt-6 flex gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={handleSkip}
+          >
             Keep current
           </Button>
-          <Button type="button" onClick={handleApply} disabled={submitting}>
+          <Button
+            type="button"
+            className="flex-[1.3]"
+            onClick={handleApply}
+            disabled={submitting}
+          >
             Apply selected
           </Button>
         </div>

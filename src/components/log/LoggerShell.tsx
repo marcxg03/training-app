@@ -335,15 +335,7 @@ export function LoggerShell({
   if (completedSummary) {
     return (
       <div className="mx-auto max-w-4xl space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
-              Workout Logger
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              {session.workout_name}
-            </h1>
-          </div>
+        <div className="flex items-center justify-end">
           <QueueIndicator userId={userId} />
         </div>
 
@@ -354,13 +346,14 @@ export function LoggerShell({
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
-          Workout Logger
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          {session.workout_name}
-        </h1>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="eyebrow">In session</p>
+          <h1 className="mt-1 text-[19px] font-semibold tracking-tight text-foreground">
+            {session.workout_name}
+          </h1>
+        </div>
+        <QueueIndicator userId={userId} />
       </div>
 
       {actionError ? (
@@ -379,7 +372,7 @@ export function LoggerShell({
           <Card
             key={block.block_id}
             className={cn(
-              "bg-card/80",
+              "bg-card",
               index > currentBlockIndex && !isComplete ? "opacity-70" : "",
             )}
           >
@@ -391,14 +384,11 @@ export function LoggerShell({
                 totalBlocks={blocksState.length}
                 endSessionAction={
                   isCurrent ? (
-                    <div className="flex items-center gap-2">
-                      <QueueIndicator userId={userId} />
-                      <EndWorkoutDialog
-                        onConfirm={() =>
-                          completeSession(true, completedBlockIdsRef.current)
-                        }
-                      />
-                    </div>
+                    <EndWorkoutDialog
+                      onConfirm={() =>
+                        completeSession(true, completedBlockIdsRef.current)
+                      }
+                    />
                   ) : null
                 }
               />
@@ -466,8 +456,8 @@ export function LoggerShell({
                 </>
               ) : selectedExercise ? (
                 <>
-                  <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">
+                  <div className="rounded-xl border border-border bg-card px-4 py-3">
+                    <p className="text-sm font-semibold text-foreground">
                       {selectedExercise.name}
                     </p>
                   </div>

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Check, RefreshCw } from "lucide-react";
 
 import { QueuePanel } from "@/components/log/QueuePanel";
+import { cn } from "@/lib/utils/cn";
 import { useQueueState } from "@/lib/sync/useQueueState";
 
 type QueueIndicatorProps = {
@@ -13,27 +15,43 @@ export function QueueIndicator({ userId }: QueueIndicatorProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const { drainState, pendingCount } = useQueueState(userId);
 
-  const dotClassName = drainState.inProgress
-    ? "bg-[#9b7fd4] animate-queue-pulse"
-    : pendingCount > 0
-      ? "bg-amber-500"
-      : "bg-zinc-500";
+  const isSyncing = drainState.inProgress;
+  const isPending = !isSyncing && pendingCount > 0;
+  const isSynced = !isSyncing && pendingCount === 0;
+
+  const label = isSyncing
+    ? "Syncing"
+    : isPending
+      ? `${pendingCount} pending`
+      : "Synced";
 
   return (
     <div className="relative">
       <button
         type="button"
         aria-label={
-          drainState.inProgress
+          isSyncing
             ? "Sync queue is draining"
-            : pendingCount > 0
+            : isPending
               ? `${pendingCount} queued writes pending`
               : "All queued writes synced"
         }
         onClick={() => setIsPanelOpen((current) => !current)}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-background/80 transition hover:border-accent/50 hover:bg-background"
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] transition",
+          isSynced
+            ? "border-success/40 text-success"
+            : "border-warning/40 text-warning",
+        )}
       >
-        <span className={`h-2.5 w-2.5 rounded-full ${dotClassName}`} />
+        {isSynced ? (
+          <Check className="h-3.5 w-3.5" />
+        ) : (
+          <RefreshCw
+            className={cn("h-3.5 w-3.5", isSyncing ? "animate-synpulse" : "")}
+          />
+        )}
+        <span>{label}</span>
       </button>
 
       {isPanelOpen ? (
@@ -49,22 +67,6 @@ export function QueueIndicator({ userId }: QueueIndicatorProps) {
           </div>
         </>
       ) : null}
-
-      <style jsx>{`
-        @keyframes queue-pulse {
-          0%,
-          100% {
-            opacity: 0.4;
-          }
-          50% {
-            opacity: 1;
-          }
-        }
-
-        .animate-queue-pulse {
-          animation: queue-pulse 1s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 }

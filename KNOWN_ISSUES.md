@@ -352,3 +352,39 @@ would wrap `savePlan` in a Postgres RPC/transaction. (Reviewer Medium-2.)
 read-modify-write updates, not a DB constraint. Concurrent activations (multi-tab)
 could momentarily leave zero or two active plans. Academic for single-user,
 single-tab use. (Reviewer Low-2.)
+
+## Redesign — "Instrument" (2026-06-30)
+
+### 🔴 Critical — Coaching is UI-only; no backend exists yet
+
+The coach + coached-client surfaces (Frames 38–48, routes under `/coach`) render
+entirely from `src/lib/coach/*` **mock** data. There are no `coach_clients` /
+`coach_notes` / assignment tables, no roles, no RLS, and the persona switcher
+does not change any real auth/permission state. Onboard/assign/targets/notes
+forms do not persist. This is intentional (deferred to a Codex backend slice),
+but the coaching feature is **not functional** until that slice lands. Do not
+ship coaching to real users before the backend exists. Replace each mock getter
+in `src/lib/coach/mock.ts` with a Supabase-backed query when wiring it up.
+
+### 🟡 Medium — Redesign not yet visually QA'd in a running browser
+
+The redesign passed the static gate (format/typecheck/lint/build) after every
+phase, but has not been run against live Supabase data in a browser. Layout/
+spacing fidelity vs. the frames, real-data overflow (long names, many sessions,
+empty states), and the logger's live PR-toast/sync micro-interactions should be
+manually verified before merging `redesign/instrument` to `main`.
+
+### 🟢 Low — Persona switcher hides the athlete BottomTabBar on `/coach`
+
+`BottomTabBar` early-returns `null` on `/coach` paths so the coach shell's own
+tab bar doesn't stack with it. Presentation-only and athlete routes are
+unaffected, but it couples a shared layout component to a route prefix; revisit
+when the real coach shell/layout is built with the backend slice.
+
+### 🟢 Low — Deferred: optional open-licensed exercise "seed" library
+
+Considered integrating an open exercise dataset (e.g. yuhonas/free-exercise-db,
+public domain) as an opt-in autocomplete/seed source when creating exercises —
+NOT animations (licensing + coverage gaps for unconventional lifts, and it
+fights the fast-logging UX). Deliberately deferred; revisit post-redesign as a
+separate slice. Keeps exercises free-text and unconstrained.

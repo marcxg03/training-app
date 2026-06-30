@@ -8,13 +8,11 @@ export default async function LiftingLibraryPage() {
   const blocks = await getLiftingBlocks();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-          Library
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Lifting
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="space-y-1">
+        <p className="eyebrow">Library</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Blocks
         </h1>
       </div>
 
@@ -22,12 +20,12 @@ export default async function LiftingLibraryPage() {
 
       {blocks.length > 0 ? (
         <div className="space-y-4">
-          <AddBlockButton />
-          <ul className="space-y-3">
+          <ul className="space-y-2.5">
             {blocks.map((block) => (
               <BlockListCard key={block.block_id} block={block} />
             ))}
           </ul>
+          <AddBlockButton />
         </div>
       ) : (
         <div className="space-y-4">

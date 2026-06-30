@@ -1114,10 +1114,10 @@ KNOWN_ISSUES). A future migration could add RESTRICT as defense-in-depth.
 
 ### Block when it's logged history; warn when it's catalog/schedule
 
-set_logs, pr_history, and activity_completions are *logged history* — deleting
+set*logs, pr_history, and activity_completions are *logged history* — deleting
 through them loses real data, so the guard blocks. Bank links
-(`block_*_items`) and schedule links (`workout_blocks`, including its presets)
-are *configuration* — deleting cascades or orphans them harmlessly, so the guard
+(`block**\_items`) and schedule links (`workout_blocks`, including its presets)
+are *configuration\* — deleting cascades or orphans them harmlessly, so the guard
 allows and warns ("this will also remove it from N banks / N scheduled
 workouts"). This keeps delete usable (you can always remove an unused item)
 while making the history-protecting refusal unambiguous.
@@ -1198,3 +1198,55 @@ active plan) and, when the deleted plan was active, activates the most-recent
 remaining plan so exactly one stays active. Chosen over hard-blocking active-plan
 deletion because the user wanted "delete any plan with confirmation"; the
 last-plan guard is the minimum needed to avoid a broken zero-plan state.
+
+## Redesign — "Instrument" (2026-06-30)
+
+### "Swap the skin, preserve the wiring" as the redesign contract
+
+The full redesign restyled/relaid-out every existing surface while treating
+the data layer as frozen: mutation signatures, projection/prop shapes, Zod
+field names, DB columns/enums, PR-detection, and the offline queue were
+unchanged on existing screens. Enforced per phase by a diff check that no
+existing `src/lib/**` file was modified.
+
+**Options considered:** (1) restyle-in-place against a frozen contract
+(chosen); (2) rebuild components fresh from the design HTML.
+
+**Reasoning:** Option 2 would have re-derived working, tested logic (PR rules,
+range nutrition math, queue sync) from a prototype whose own README says its
+runtime is throwaway — high risk of behavioral regressions for purely visual
+gain. Option 1 keeps the verified backend and makes re-integration mechanical.
+
+### A "ralph loop" verify gate per phase (`scripts/ralph-verify.sh`)
+
+Each redesign phase was gated by a script running format → typecheck → lint →
+build, re-run (fix → re-run) until GREEN before committing.
+
+**Reasoning:** With most screen work delegated to sub-agents, an automated,
+deterministic correctness gate after each phase catches type/lint/build
+regressions immediately and keeps `main`-quality at every commit. typecheck
+against the typed Supabase client doubles as a schema-drift check for any new
+query (used to validate the Phase 5 history queries).
+
+### Icons: lucide-react instead of Material Symbols
+
+The design specifies Material Symbols; we map each glyph to its lucide
+equivalent instead.
+
+**Reasoning:** The handoff README explicitly says "map glyphs to the
+codebase's icon set." lucide is already a dependency and composes as React
+components (no icon-font load, no FOUT, no `.ms` class hacks). Pure win.
+
+### Coaching shipped as UI-only against a mock data layer
+
+The coach + coached-client surfaces (Frames 38–48) were built against
+`src/lib/coach/*` mock getters, with no Supabase, no auth/roles, and no RLS.
+
+**Options considered:** (1) UI-only on mock data now, backend later (chosen);
+(2) build the coaching backend too; (3) skip coaching.
+
+**Reasoning:** Per `CLAUDE.md`, Claude Code does not author net-new feature
+slices from scratch — that's Codex's job. Coaching needs new tables, a
+coach↔client sharing model, roles, and RLS, which is exactly such a slice.
+Building the UI against a clearly-marked mock unblocks the design now and
+leaves a clean seam for the backend slice to replace the mock getters.

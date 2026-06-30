@@ -8,12 +8,10 @@ export default async function ExercisesLibraryPage() {
   const exercises = await getExercises();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-          Library
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="space-y-1">
+        <p className="eyebrow">Library</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Exercises
         </h1>
       </div>
@@ -22,8 +20,7 @@ export default async function ExercisesLibraryPage() {
 
       {exercises.length > 0 ? (
         <div className="space-y-4">
-          <AddExerciseButton />
-          <ul className="space-y-3">
+          <ul className="space-y-2.5">
             {exercises.map((exercise) => (
               <ExerciseListCard
                 key={exercise.exercise_id}
@@ -31,6 +28,7 @@ export default async function ExercisesLibraryPage() {
               />
             ))}
           </ul>
+          <AddExerciseButton />
         </div>
       ) : (
         <div className="space-y-4">

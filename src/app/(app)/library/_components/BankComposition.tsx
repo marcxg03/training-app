@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { BankItemRow } from "@/app/(app)/library/_components/BankItemRow";
 import { ExercisePicker } from "@/app/(app)/library/_components/ExercisePicker";
-import { Button } from "@/components/ui/button";
 import type { ExerciseListItem } from "@/lib/library/projections";
 import type { BlockFormValues } from "@/lib/library/schemas";
 
@@ -39,18 +39,23 @@ export function BankComposition({ exercises }: BankCompositionProps) {
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold text-foreground">
-          Bank composition
+    <div className="space-y-3 rounded-[var(--radius)] border border-border bg-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">
+          Bank — pick-from exercises
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Reorder, remove, or add exercises. Changes save with the block.
-        </p>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-accent transition-colors hover:text-accent/80"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add
+        </button>
       </div>
 
       {bank.length > 0 ? (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {bank.map((item, index) => (
             <BankItemRow
               key={`${item.exercise_id}:${index}`}
@@ -90,18 +95,22 @@ export function BankComposition({ exercises }: BankCompositionProps) {
           ))}
         </ul>
       ) : (
-        <p className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
           No exercises in this bank yet.
         </p>
       )}
 
-      <Button
+      <button
         type="button"
-        variant="outline"
         onClick={() => setPickerOpen(true)}
+        className="w-full rounded-xl border border-dashed border-ghost px-4 py-3.5 text-center text-[13px] font-semibold text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
       >
-        Add exercise to bank
-      </Button>
+        + Add exercise to bank
+      </button>
+
+      <p className="text-center font-mono text-[11px] uppercase tracking-[0.04em] text-faint">
+        Checked = in the bank · use the arrows to reorder
+      </p>
 
       <ExercisePicker
         exercises={exercises}

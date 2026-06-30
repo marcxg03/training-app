@@ -6,7 +6,6 @@ import { Pencil } from "lucide-react";
 import { CardioActivityEditSheet } from "@/app/(app)/library/_components/CardioActivityEditSheet";
 import { ExerciseEditSheet } from "@/app/(app)/library/_components/ExerciseEditSheet";
 import { RecoveryActivityEditSheet } from "@/app/(app)/library/_components/RecoveryActivityEditSheet";
-import { Button } from "@/components/ui/button";
 import type {
   CardioActivity,
   ExerciseListItem,
@@ -32,15 +31,14 @@ export function EditPencilButton(props: EditPencilButtonProps) {
 
   return (
     <>
-      <Button
+      <button
         type="button"
-        variant="outline"
-        size="icon"
         onClick={() => setOpen(true)}
         aria-label="Edit"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-faint transition-colors hover:bg-input hover:text-subtle"
       >
-        <Pencil className="h-4 w-4" />
-      </Button>
+        <Pencil className="h-[18px] w-[18px]" />
+      </button>
 
       {props.kind === "exercise" ? (
         <ExerciseEditSheet

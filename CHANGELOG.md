@@ -1305,7 +1305,7 @@ cover`.
   Slice 7b): lifting blocks, exercises, cardio activities, recovery activities.
 - Non-destructive guard `getDeletionImpact(supabase, kind, id)` in
   `library/mutations.ts`. The FKs from history tables onto blocks/exercises are
-  `ON DELETE CASCADE`, so the database would *silently destroy* logged history
+  `ON DELETE CASCADE`, so the database would _silently destroy_ logged history
   on delete rather than raise an error — the app guard is the only protection,
   so it fails safe (any count error refuses the delete). Per kind:
   - exercise → blocked if `set_logs` or `pr_history` reference it; else warns if
@@ -1436,3 +1436,66 @@ cover`.
   the day's workout (snapshot retained); removed + saved to restore. Delete-plans
   (17a) verified separately (auto-activate on deleting the active plan). All test
   data cleaned up; no console errors. Reviewer pass: no Critical; Medium-1 fixed.
+
+## Redesign — "Instrument" full UI/UX overhaul (2026-06-30)
+
+A full visual + UX redesign of the entire app, recoded from an approved
+Claude Design handoff ("Instrument" — dark, data-dense, built for the rack;
+48 frames). Executed on branch `redesign/instrument` in 8 phases, each gated
+by `scripts/ralph-verify.sh` (format → typecheck → lint → build) run as a
+"ralph loop" until green, plus a wiring-contract review per phase. The
+guiding rule throughout: **swap the skin, preserve the wiring** — no business
+logic, mutation signatures, projection shapes, Zod field names, DB columns,
+PR-detection, or offline-queue behavior were changed on existing surfaces.
+
+### What was built
+
+- **Phase 0 — Foundation:** Instrument palette retokenized in
+  `globals.css` (#0A0A0B base, #131316 cards, refined text ramp, cardio
+  teal; added `card-alt`/`subtle`/`faint`/`ghost`/`cardio` tokens). Fonts
+  swapped Inter → **Space Grotesk** (display) + **JetBrains Mono** (mono) via
+  `next/font`; added `.eyebrow`/`.font-mono` utilities and `prpop`/`synpulse`
+  keyframes. Primitives restyled (Card 18px flat, filled 12px inputs).
+- **Phase 1 — Today + Logger:** bottom nav → 4 tabs (Today/Plan/Fuel/Progress);
+  persona pill, 7-day dot strip, restyled session cards; logger reskinned
+  (bank chips, set-slot steppers, to-failure toggle, PR toast, sync indicator)
+  with all existing PR-detection/queue logic intact.
+- **Phase 2 — Plan:** weekly view, day detail/edit (segmented AM/Anytime/PM),
+  plan edit. `savePlan`/`saveDay` preserved.
+- **Phase 3 — Nutrition/Fuel:** day-type card, range-vs-range macro bars,
+  meal logging, photo→`/api/estimate-macros` editable-draft flow, targets.
+- **Phase 4 — Library:** scrollable tab chips, list/detail/builder screens
+  (block-as-bank framing, protocol toggle), delete-impact warning dialog.
+- **Phase 5 — History:** PR timeline + all-workouts restyled; **built out the
+  two deferred stub screens** (exercise progression with a dependency-free SVG
+  chart; completed-session recap) via new additive read-only history queries.
+- **Phase 6 — Settings/Profile/Auth/Offline:** grouped settings, goal-mode
+  segmented control + recommendation sheet, magic-link + check-email view,
+  offline fallback. Auth/profile wiring untouched.
+- **Phase 7 — Coaching (UI only):** new coach + coached-client surfaces
+  (Frames 38–48: roster, onboard, client detail, assign, targets, review
+  charts, notes, activity feed, client-today, my-coach) built against a
+  clearly-marked **mock** data layer (`src/lib/coach/*`). Persona switcher on
+  the Today header. **No coaching backend** — deferred to a Codex slice.
+
+### Deviations from the handoff
+
+- Icons use **lucide-react** (mapped from the design's Material Symbols), per
+  the README's "map glyphs to the codebase's icon set."
+- `meal_type` kept as free text (not fixed pills) and muscle-group select kept
+  as a Popover/Command — to avoid changing the data contract / validation.
+- `block_type` segmented control exposes all three enum values
+  (failure/mobility/corrective), not just the design's 2-way toggle.
+- Product name left as "Training" (manifest); the login screen shows an
+  "Instrument" working brand mark — rename at will.
+
+### Verification
+
+- `scripts/ralph-verify.sh` GREEN (format, typecheck, lint, production build)
+  after every phase and at completion.
+- Per-phase diff review confirmed zero changes under `src/lib/**` on existing
+  surfaces (only additive `src/lib/history/*` queries in Phase 5 and the new
+  `src/lib/coach/*` mock in Phase 7); typed Supabase client validates the new
+  history queries against the live schema at typecheck.
+- NOT yet verified in a running browser against live Supabase data — that
+  manual visual QA pass is the recommended next step before merge.

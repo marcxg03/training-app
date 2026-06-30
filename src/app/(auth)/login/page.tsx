@@ -37,17 +37,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const errorMessage = getErrorMessage(resolvedSearchParams.error);
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Login</h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in with a magic link.
-          </p>
-        </div>
-        <div className="mt-6">
-          <LoginForm initialError={errorMessage} />
-        </div>
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
+      <div className="w-full max-w-md">
+        <LoginForm initialError={errorMessage} />
       </div>
     </main>
   );
