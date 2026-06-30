@@ -1114,10 +1114,10 @@ KNOWN_ISSUES). A future migration could add RESTRICT as defense-in-depth.
 
 ### Block when it's logged history; warn when it's catalog/schedule
 
-set_logs, pr_history, and activity_completions are *logged history* — deleting
+set*logs, pr_history, and activity_completions are *logged history* — deleting
 through them loses real data, so the guard blocks. Bank links
-(`block_*_items`) and schedule links (`workout_blocks`, including its presets)
-are *configuration* — deleting cascades or orphans them harmlessly, so the guard
+(`block**\_items`) and schedule links (`workout_blocks`, including its presets)
+are *configuration\* — deleting cascades or orphans them harmlessly, so the guard
 allows and warns ("this will also remove it from N banks / N scheduled
 workouts"). This keeps delete usable (you can always remove an unused item)
 while making the history-protecting refusal unambiguous.

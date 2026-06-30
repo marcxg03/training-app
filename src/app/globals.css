@@ -4,20 +4,27 @@
 
 @layer base {
   :root {
-    --background: 0 0 0;
-    --foreground: 255 255 255;
-    --accent: 155 127 212;
-    --border: 38 38 38;
-    --input: 17 17 17;
+    /* Instrument palette — exact hex from the design system (Frame 01),
+       stored as space-separated RGB for Tailwind's rgb(var(--x) / <alpha>). */
+    --background: 10 10 11; /* #0A0A0B app base */
+    --foreground: 244 244 245; /* #F4F4F5 primary text */
+    --accent: 155 127 212; /* #9B7FD4 purple — CTAs, active nav, weight PR, lift */
+    --card: 19 19 22; /* #131316 card surface */
+    --card-alt: 13 13 15; /* #0d0d0f recessed / secondary card */
+    --card-foreground: 244 244 245;
+    --input: 30 30 35; /* #1E1E23 input / current-slot fill */
+    --border: 35 35 42; /* #23232A borders, dividers */
     --ring: 155 127 212;
-    --muted: 12 12 12;
-    --muted-foreground: 163 163 163;
-    --card: 8 8 8;
-    --card-foreground: 255 255 255;
-    --success: 74 222 128;
-    --warning: 251 191 36;
-    --danger: 248 113 113;
-    --radius: 0.875rem;
+    --muted: 13 13 15; /* recessed surface (tabs, secondary) */
+    --muted-foreground: 138 138 146; /* #8a8a92 tertiary text (text-3) */
+    --subtle: 207 207 212; /* #cfcfd4 secondary text (text-2) */
+    --faint: 106 106 114; /* #6A6A72 labels / muted (text-4) */
+    --ghost: 69 69 77; /* #45454d faint / captions (text-5) */
+    --success: 74 222 128; /* #4ADE80 synced, in-range, rep PR */
+    --warning: 251 191 36; /* #FBBF24 under target, syncing */
+    --danger: 248 113 113; /* #F87171 over target, destructive */
+    --cardio: 94 200 200; /* #5EC8C8 cardio sessions */
+    --radius: 1.125rem; /* 18px — cards/containers */
   }
 
   * {
@@ -29,7 +36,13 @@
   }
 
   body {
-    @apply min-h-screen bg-background text-foreground;
+    @apply min-h-screen bg-background text-foreground antialiased;
+    font-family: var(--font-display), "Space Grotesk", sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
   }
 }
 
@@ -40,5 +53,24 @@
 
   .safe-pb {
     padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .safe-pt {
+    padding-top: calc(env(safe-area-inset-top) + 0.5rem);
+  }
+
+  /* Mono uppercase eyebrow/label used pervasively across the design. */
+  .eyebrow {
+    font-family: var(--font-mono), "JetBrains Mono", monospace;
+    font-weight: 600;
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(var(--faint));
+  }
+
+  .font-mono {
+    font-family: var(--font-mono), "JetBrains Mono", monospace;
   }
 }

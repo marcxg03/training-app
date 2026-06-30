@@ -1305,7 +1305,7 @@ cover`.
   Slice 7b): lifting blocks, exercises, cardio activities, recovery activities.
 - Non-destructive guard `getDeletionImpact(supabase, kind, id)` in
   `library/mutations.ts`. The FKs from history tables onto blocks/exercises are
-  `ON DELETE CASCADE`, so the database would *silently destroy* logged history
+  `ON DELETE CASCADE`, so the database would _silently destroy_ logged history
   on delete rather than raise an error — the app guard is the only protection,
   so it fails safe (any count error refuses the delete). Per kind:
   - exercise → blocked if `set_logs` or `pr_history` reference it; else warns if

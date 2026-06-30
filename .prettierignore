@@ -1,6 +1,8 @@
 .next
 node_modules
 pnpm-lock.yaml
+design-reference
+scripts
 AGENTS.md
 CLAUDE.md
 spec

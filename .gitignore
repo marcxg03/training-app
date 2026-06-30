@@ -29,6 +29,9 @@ Thumbs.db
 # AI tools
 .claude/
 
+# Design handoff reference (regeneratable from the Claude Design project)
+design-reference/
+
 # Test files
 test_slice_*.py
 
