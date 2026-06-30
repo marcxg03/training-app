@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Plus } from "lucide-react";
 
+import { assignTraining } from "@/lib/coach/actions";
 import { cn } from "@/lib/utils/cn";
 import type { ClientAssignment } from "@/lib/coach/types";
 
@@ -23,8 +24,8 @@ const DAY_LABELS: Record<string, string> = {
   sun: "SUN",
 };
 
-/** Assign Training picker (Frame 42). UI-only selection; "Assign" returns to the
- * client workspace without persisting (no backend yet). */
+/** Assign Training picker (Frame 42). Persists the chosen plan to the client
+ * relationship, then returns to the client workspace. */
 export function AssignTrainingForm({
   clientId,
   clientName,
@@ -34,8 +35,26 @@ export function AssignTrainingForm({
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
     assignment.selectedPlanId,
   );
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const goBack = () => router.push(`/coach/clients/${clientId}`);
+
+  const handleAssign = () => {
+    if (pending) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await assignTraining(clientId, selectedPlanId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.push(`/coach/clients/${clientId}`);
+      router.refresh();
+    });
+  };
 
   return (
     <div className="-mx-6 -my-8 flex min-h-[calc(100vh-0px)] flex-col">
@@ -52,12 +71,19 @@ export function AssignTrainingForm({
         </h1>
         <button
           type="button"
-          onClick={goBack}
-          className="text-sm font-bold text-accent transition-colors hover:text-accent/80"
+          onClick={handleAssign}
+          disabled={pending}
+          className="text-sm font-bold text-accent transition-colors hover:text-accent/80 disabled:opacity-50"
         >
           Assign
         </button>
       </header>
+
+      {error ? (
+        <p className="px-6 pt-3 text-[12px] font-medium text-warning">
+          {error}
+        </p>
+      ) : null}
 
       <div className="flex-1 space-y-6 px-6 py-5">
         <div className="space-y-2.5">

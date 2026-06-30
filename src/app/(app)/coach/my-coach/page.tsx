@@ -1,22 +1,46 @@
-import Link from "next/link";
-import {
-  ClipboardList,
-  Eye,
-  MessageSquare,
-  UtensilsCrossed,
-} from "lucide-react";
+import { ClipboardList, Eye, UserX, UtensilsCrossed } from "lucide-react";
 
 import { ClientAvatar } from "@/components/coach/ClientAvatar";
-import { getMyCoach } from "@/lib/coach/mock";
+import { MyCoachMessage } from "@/components/coach/MyCoachMessage";
+import { getMyCoach, linkPendingInvites } from "@/lib/coach/queries";
 
 /**
- * Client · My Coach (Frame 48) — the coached client's view of the relationship.
- * The design HTML for this frame was truncated/missing, so the layout follows
- * REDESIGN_BRIEF §8.2 (who's-my-coach, assigned plan/targets, client-visible
- * notes, message entry). Static mock; "Message coach" is UI-only.
+ * Client · My Coach (Frame 48) — the coached client's view of the relationship:
+ * who's-my-coach, assigned plan/targets, client-visible coach notes, and a
+ * message composer (REDESIGN_BRIEF §8.2).
  */
-export default function MyCoachPage() {
-  const coach = getMyCoach();
+export default async function MyCoachPage() {
+  // Attach any invite addressed to this user's email before reading.
+  await linkPendingInvites();
+  const coach = await getMyCoach();
+
+  if (!coach) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
+            Your coach
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            My Coach
+          </h1>
+        </div>
+        <div className="flex flex-col items-center justify-center rounded-[var(--radius)] border border-dashed border-border px-6 py-16 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-[16px] border border-border bg-card-alt">
+            <UserX className="h-7 w-7 text-faint" />
+          </span>
+          <h2 className="mt-4 text-lg font-semibold text-foreground">
+            No coach yet
+          </h2>
+          <p className="mt-2 max-w-xs text-[13px] leading-relaxed text-subtle">
+            When a coach invites you by email, accept and they&apos;ll appear
+            here with your assigned plan and targets.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const coachNotes = coach.notes.filter((note) => !note.fromClient);
 
   return (
@@ -94,13 +118,7 @@ export default function MyCoachPage() {
         </div>
       </div>
 
-      <Link
-        href="/coach/my-coach"
-        className="flex items-center justify-center gap-2 rounded-[13px] bg-accent px-4 py-3.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90"
-      >
-        <MessageSquare className="h-5 w-5" />
-        Message coach
-      </Link>
+      <MyCoachMessage />
 
       <p className="text-center font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
         You own your data · your coach can view &amp; assign

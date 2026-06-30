@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, Copy, Link2, Mail, Send, UserPlus } from "lucide-react";
 
+import { onboardClient } from "@/lib/coach/actions";
 import { cn } from "@/lib/utils/cn";
 import type { CoachGoalMode } from "@/lib/coach/types";
 
@@ -15,22 +17,34 @@ const GOAL_MODES: { value: CoachGoalMode; label: string }[] = [
 
 const JOIN_LINK = "instrument.app/join/9fx2…";
 
-/** Onboard / invite-a-client form (Frame 40). UI-only: submitting flips to a
- * local success state; nothing is persisted (no backend yet). */
+/** Onboard / invite-a-client form (Frame 40). Persists an invite (status
+ * "invited") to the coach's roster, then shows the sent confirmation. */
 export function OnboardClientForm() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [goalMode, setGoalMode] = useState<CoachGoalMode | null>(null);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  const canSend = email.trim().length > 0;
+  const canSend = email.trim().length > 0 && !pending;
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSend) {
       return;
     }
-    setSent(true);
+    setError(null);
+    startTransition(async () => {
+      const result = await onboardClient({ name, email, goalMode });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSent(true);
+      router.refresh();
+    });
   };
 
   if (sent) {
@@ -147,12 +161,16 @@ export function OnboardClientForm() {
         </div>
       </div>
 
+      {error ? (
+        <p className="text-[12px] font-medium text-warning">{error}</p>
+      ) : null}
+
       <button
         type="submit"
         disabled={!canSend}
         className="flex w-full items-center justify-center gap-2 rounded-[13px] bg-accent px-4 py-4 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90 disabled:opacity-50"
       >
-        {canSend ? (
+        {email.trim().length > 0 ? (
           <Send className="h-5 w-5" />
         ) : (
           <UserPlus className="h-5 w-5" />

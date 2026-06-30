@@ -5,7 +5,7 @@ import { CoachTabBar } from "@/components/coach/CoachTabBar";
 import { PersonaSwitcher } from "@/components/coach/PersonaSwitcher";
 import { RosterCard } from "@/components/coach/RosterCard";
 import { RosterEmptyState } from "@/components/coach/RosterEmptyState";
-import { EMPTY_ROSTER, getRoster } from "@/lib/coach/mock";
+import { getRoster } from "@/lib/coach/queries";
 
 type CoachRosterPageProps = {
   searchParams: Promise<{ empty?: string }>;
@@ -16,7 +16,7 @@ export default async function CoachRosterPage({
 }: CoachRosterPageProps) {
   // `?empty=1` renders the first-run empty state (Frame 39) on demand.
   const params = await searchParams;
-  const roster = params.empty === "1" ? EMPTY_ROSTER : getRoster();
+  const roster = params.empty === "1" ? [] : await getRoster();
 
   const needsAttention = roster.filter(
     (client) => client.needsAttention,

@@ -5,7 +5,7 @@ import { AdherenceBarChart } from "@/components/coach/AdherenceBarChart";
 import { CoachPageHeader } from "@/components/coach/CoachPageHeader";
 import { StatTile } from "@/components/coach/StatTile";
 import { cn } from "@/lib/utils/cn";
-import { getClient, getClientProgress } from "@/lib/coach/mock";
+import { getClient, getClientProgress } from "@/lib/coach/queries";
 
 type ClientReviewPageProps = {
   params: Promise<{ clientId: string }>;
@@ -15,13 +15,13 @@ export default async function ClientReviewPage({
   params,
 }: ClientReviewPageProps) {
   const { clientId } = await params;
-  const client = getClient(clientId);
+  const client = await getClient(clientId);
 
   if (!client) {
     notFound();
   }
 
-  const progress = getClientProgress(clientId);
+  const progress = await getClientProgress(clientId);
   const firstName = client.name.split(" ")[0];
   const peakSessions = Math.max(
     client.sessionsAssigned,

@@ -1499,3 +1499,62 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
   history queries against the live schema at typecheck.
 - NOT yet verified in a running browser against live Supabase data — that
   manual visual QA pass is the recommended next step before merge.
+
+## Today day-picker (2026-06-30)
+
+### What was built
+
+- The Today week strip (`TodayWeekStrip`) is now interactive: tapping a day
+  navigates to that day's plan. The real calendar day links to `/today`; other
+  days carry a `?day=<dow>` param and render **read-only** (no Start Workout
+  CTA, no logging entry points). The actual day keeps a ring marker so it stays
+  identifiable when another day is selected.
+- `TodayPage` resolves the selected day from the `?day` param (validated by the
+  new `parseDayOfWeek` guard), defaulting to today. Fuel/nutrition only renders
+  on the real day (nutrition is anchored to the calendar date).
+- `TodayHeader`, `TodaySessionList`, `TodaySessionCard` thread a `readOnly`/
+  `day` flag; the read-only workout detail page accepts `?day` and hides its
+  Start Workout CTA off-day. Logging (`/log/[workout_id]`) was already gated to
+  the current day, so read-only is enforced end-to-end.
+- New pure helpers in `src/lib/methodology/today.ts`: `DAYS_OF_WEEK`,
+  `dayOfWeekLabel`, `parseDayOfWeek`.
+
+## Coaching backend (2026-06-30)
+
+### What was built
+
+- Replaced the coaching **mock** (`src/lib/coach/mock.ts`, deleted) with a real
+  Supabase-backed data layer. Migration `021_coaching.sql` adds `coach_clients`
+  (relationship + invite + assigned plan), `coach_notes` (append-only thread),
+  and `coach_client_targets`, plus the `link_pending_coach_invites()`
+  SECURITY DEFINER function and RLS on all three tables.
+- `src/lib/coach/queries.ts` (server reads) and `src/lib/coach/actions.ts`
+  (server-action mutations: `onboardClient`, `addCoachNote`, `addClientNote`,
+  `saveClientTargets`, `assignTraining`, `acceptPendingInvites`) returning the
+  `{ ok, data?, error? }` contract. `src/lib/supabase/admin.ts` adds the
+  service-role client used only for relationship-gated client analytics.
+- Rewired every coach page (roster, client detail, notes, targets, assign,
+  review, activity, my-coach, client-today) and the four interactive forms to
+  real data + actions. Added `MyCoachMessage` (client reply composer) and empty
+  states for no-roster / no-coach / no-activity.
+- Coaching stays gated behind `NEXT_PUBLIC_COACHING_ENABLED` (default off).
+  Enable only after applying migration 021 and verifying RLS live.
+
+### Deviations / scope notes
+
+- "Assign training" records the chosen plan (id + denormalised name) on the
+  relationship; it does **not** yet deep-copy the coach's plan into the client's
+  account. Roster/review metrics (last active, adherence, PR counts, fuel %) are
+  computed from the client's real logs via the service-role client after the
+  coach↔client relationship is verified; fuel adherence is a days-logged proxy.
+- Types in `src/lib/supabase/types.ts` were hand-extended for the three new
+  tables + the RPC so the typed client compiles; regenerate from the live DB
+  after applying migration 021.
+
+### Verification
+
+- `pnpm typecheck`, `pnpm lint`, and `pnpm build` all pass clean.
+- NOT verified against a live Supabase instance: migration 021 has not been
+  applied here and RLS / multi-tenant access has not been exercised as two
+  users. See KNOWN_ISSUES.md for the required live-DB verification checklist
+  before enabling coaching in production.

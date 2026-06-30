@@ -1250,3 +1250,60 @@ slices from scratch — that's Codex's job. Coaching needs new tables, a
 coach↔client sharing model, roles, and RLS, which is exactly such a slice.
 Building the UI against a clearly-marked mock unblocks the design now and
 leaves a clean seam for the backend slice to replace the mock getters.
+
+## Coaching backend (2026-06-30)
+
+> Authored by Claude Code at the user's explicit request, overriding the
+> "Codex authors new slices" rule in `CLAUDE.md` for this work.
+
+### Coach reads of client data go through a service-role client, not cross-user RLS
+
+Athlete tables (`set_logs`, `pr_history`, `workouts`, `meal_entries`,
+`workout_completions`, …) keep their existing strictly-own-data RLS,
+unchanged. A coach never reads a client's private logs through those
+policies. Instead, coach analytics use the service-role client
+(`src/lib/supabase/admin.ts`) **after** the coach↔client relationship is
+verified on the RLS-protected session client (`assertCoachClient`).
+
+**Options considered**
+
+1. Service-role reads gated by an app-level relationship check (chosen).
+2. Add cross-user SELECT policies to every athlete table for coaches.
+3. SECURITY DEFINER SQL functions returning per-client aggregates.
+
+**Reasoning**
+Option 2 spreads a multi-tenant access decision across ~8 already-applied
+migrations (each needing a new migration to amend) and widens the RLS
+surface that has to be audited on every table forever. Option 3 keeps the
+gate in SQL but means a large amount of analytics logic in untestable
+PL/pgSQL. Option 1 keeps a single, centralised, reviewable gate in
+TypeScript (`assertCoachClient` → relationship row from the session client),
+leaves athlete-table RLS untouched, and respects the migration-immutability
+rule. The cost is discipline: every service-role query in the coach data
+layer must filter by a `client_user_id` that came from a verified
+relationship — which they do.
+
+### Coaching tables get their own relationship-gated RLS; notes are append-only
+
+`coach_clients`, `coach_notes`, `coach_client_targets` are read/written with
+the session client under RLS: the coach manages rows they own; the client
+reads their own relationship, visible notes, and targets. `coach_notes` has
+SELECT + INSERT policies only (no UPDATE/DELETE) — coaching history
+accumulates like `set_logs`/`pr_history`.
+
+### Invites link by verified email via a SECURITY DEFINER function
+
+`link_pending_coach_invites()` attaches the caller's `auth.uid()` to any
+pending invite whose `invite_email` matches the caller's own verified email.
+It is the only place a client gets attached to a relationship, and it can
+only ever touch rows addressed to the caller's own email, so a user cannot
+join an arbitrary coach.
+
+### Assign-training records the plan, does not yet clone it
+
+`assignTraining` stores the chosen plan's id + denormalised name on the
+relationship rather than deep-copying the coach's plan/schedules/workouts
+into the client's account. The denormalised name lets the client display
+the assignment without read access to the coach's `training_plans`.
+Materialising the plan into the client's loggable surface is deferred (see
+KNOWN_ISSUES.md) to avoid a large, untestable deep-copy in this pass.

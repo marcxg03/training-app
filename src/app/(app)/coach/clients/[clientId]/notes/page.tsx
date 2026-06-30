@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { CoachNotesThread } from "@/components/coach/CoachNotesThread";
 import { CoachPageHeader } from "@/components/coach/CoachPageHeader";
-import { getClient, getClientNotes } from "@/lib/coach/mock";
+import { getClient, getClientNotes } from "@/lib/coach/queries";
 
 type CoachNotesPageProps = {
   params: Promise<{ clientId: string }>;
@@ -10,13 +10,13 @@ type CoachNotesPageProps = {
 
 export default async function CoachNotesPage({ params }: CoachNotesPageProps) {
   const { clientId } = await params;
-  const client = getClient(clientId);
+  const client = await getClient(clientId);
 
   if (!client) {
     notFound();
   }
 
-  const notes = getClientNotes(clientId);
+  const notes = await getClientNotes(clientId);
   const firstName = client.name.split(" ")[0];
 
   return (

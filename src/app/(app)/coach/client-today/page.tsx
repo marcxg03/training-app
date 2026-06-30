@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, Dumbbell, ShieldCheck } from "lucide-react";
 
-import { getClientTodaySession, getMyCoach } from "@/lib/coach/mock";
+import {
+  getClientTodaySession,
+  getMyCoach,
+  linkPendingInvites,
+} from "@/lib/coach/queries";
 
 // Visual-only week rhythm mirroring the athlete TodayWeekStrip (Wed active).
 const weekDays: { label: string; tone: "lift" | "cardio" | "rest" }[] = [
@@ -23,14 +28,21 @@ const dotToneClass: Record<"lift" | "cardio" | "rest", string> = {
 const ACTIVE_INDEX = 2;
 
 /**
- * Client · Today (Frame 47) — STATIC MOCK PREVIEW. Reuses the athlete Today
- * visual patterns (week strip + session card) scoped to a coach-authored plan.
- * NOT wired to real Today data; the design HTML for this frame was truncated,
- * so layout is inferred from the athlete Today components + REDESIGN_BRIEF §8.2.
+ * Client · Today (Frame 47) — preview of the coach-assigned plan from the
+ * client side. Clients follow and log their real session on the athlete Today
+ * tab; this surfaces who assigned the plan. Layout reuses the athlete Today
+ * patterns (REDESIGN_BRIEF §8.2).
  */
-export default function ClientTodayPage() {
-  const session = getClientTodaySession();
-  const coach = getMyCoach();
+export default async function ClientTodayPage() {
+  await linkPendingInvites();
+  const [coach, session] = await Promise.all([
+    getMyCoach(),
+    getClientTodaySession(),
+  ]);
+
+  if (!coach) {
+    redirect("/coach/my-coach");
+  }
 
   return (
     <div className="space-y-6">
@@ -43,13 +55,13 @@ export default function ClientTodayPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
-          Mock preview
+          Plan preview
         </span>
       </div>
 
       <div>
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
-          Wed · Jun 30
+          Assigned plan
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
           Today
@@ -91,34 +103,40 @@ export default function ClientTodayPage() {
         })}
       </div>
 
-      <div className="rounded-[var(--radius)] border border-border bg-card p-[18px]">
-        <div className="flex items-start gap-3.5">
-          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[11px] bg-accent/15">
-            <Dumbbell className="h-[22px] w-[22px] text-accent" />
-          </span>
-          <div className="flex-1">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
-              {session.timing}
-              {session.gym ? ` · ${session.gym}` : ""}
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-foreground">
-              {session.name}
-            </h2>
-            <p className="mt-1 text-[13px] text-subtle">{session.summary}</p>
+      {session ? (
+        <div className="rounded-[var(--radius)] border border-border bg-card p-[18px]">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-[11px] bg-accent/15">
+              <Dumbbell className="h-[22px] w-[22px] text-accent" />
+            </span>
+            <div className="flex-1">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
+                {session.timing}
+                {session.gym ? ` · ${session.gym}` : ""}
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">
+                {session.name}
+              </h2>
+              <p className="mt-1 text-[13px] text-subtle">{session.summary}</p>
+            </div>
           </div>
+          <div className="mt-4 flex gap-1.5">
+            <span className="h-1 flex-1 rounded-full bg-accent" />
+            <span className="h-1 flex-1 rounded-full bg-accent opacity-55" />
+            <span className="h-1 flex-1 rounded-full bg-accent opacity-30" />
+          </div>
+          <Link
+            href="/today"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90"
+          >
+            Go to Today
+          </Link>
         </div>
-        <div className="mt-4 flex gap-1.5">
-          <span className="h-1 flex-1 rounded-full bg-accent" />
-          <span className="h-1 flex-1 rounded-full bg-accent opacity-55" />
-          <span className="h-1 flex-1 rounded-full bg-accent opacity-30" />
+      ) : (
+        <div className="rounded-[var(--radius)] border border-dashed border-border px-4 py-10 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
+          No plan assigned yet
         </div>
-        <button
-          type="button"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90"
-        >
-          Start workout
-        </button>
-      </div>
+      )}
 
       <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-faint">
         Read-only preview · clients log on their own device

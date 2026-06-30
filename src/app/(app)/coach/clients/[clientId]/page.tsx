@@ -16,7 +16,7 @@ import {
   getClientNotes,
   getClientProgress,
   getClientTargets,
-} from "@/lib/coach/mock";
+} from "@/lib/coach/queries";
 import { clientStatusLine } from "@/lib/coach/labels";
 
 type ClientDetailPageProps = {
@@ -27,15 +27,18 @@ export default async function ClientDetailPage({
   params,
 }: ClientDetailPageProps) {
   const { clientId } = await params;
-  const client = getClient(clientId);
+  const client = await getClient(clientId);
 
   if (!client) {
     notFound();
   }
 
-  const progress = getClientProgress(clientId);
-  const targets = getClientTargets(clientId);
-  const noteCount = getClientNotes(clientId).length;
+  const [progress, targets, notes] = await Promise.all([
+    getClientProgress(clientId),
+    getClientTargets(clientId),
+    getClientNotes(clientId),
+  ]);
+  const noteCount = notes.length;
 
   const base = `/coach/clients/${clientId}`;
   const firstName = client.name.split(" ")[0];

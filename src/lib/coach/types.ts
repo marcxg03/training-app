@@ -1,15 +1,16 @@
 // =============================================================================
-// MOCK DATA — coaching backend not yet built.
-// To be replaced by a Supabase-backed slice (Codex). Do NOT use as a real
-// data source. These types describe the *shape* the coaching UI expects; the
-// real schema/RLS will be designed in a later phase (see REDESIGN_BRIEF §8).
+// Coaching view-model shapes — the projection contract between the Supabase
+// data layer (src/lib/coach/queries.ts, actions.ts) and the coaching UI. Pure
+// types only; no Supabase client or React imports.
 // =============================================================================
 
-/** Goal modes mirror the athlete nutrition goal modes for reuse when wired. */
-export type CoachGoalMode = "cut" | "maintain" | "lean_bulk";
+import type { Enums } from "@/lib/supabase/types";
 
-/** Relationship state of a client to the coach. */
-export type CoachClientStatus = "active" | "invited" | "paused";
+/** Goal modes mirror the athlete nutrition goal modes (goal_mode_enum). */
+export type CoachGoalMode = Enums<"goal_mode_enum">;
+
+/** Relationship state of a client to the coach (coach_relationship_status). */
+export type CoachClientStatus = Enums<"coach_relationship_status">;
 
 export type CoachClient = {
   id: string;
