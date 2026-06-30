@@ -17,7 +17,7 @@ const labels: Record<BlockTypeBadgeProps["blockType"], string> = {
 
 export function BlockTypeBadge({ blockType }: BlockTypeBadgeProps) {
   return (
-    <span className="inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+    <span className="inline-flex items-center rounded-md border border-border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-subtle">
       {labels[blockType]}
     </span>
   );

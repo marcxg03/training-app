@@ -24,20 +24,14 @@ export default async function BlockDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-4">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex items-start justify-between gap-3">
         <BlockDetailHeader block={block} />
-        <div className="flex items-center gap-2">
+        <div className="pt-12">
           <EditBlockButton blockId={blockId} />
-          <DeleteLibraryItemButton
-            kind="block"
-            id={blockId}
-            name={block.block_name}
-            redirectTo={liftingHref()}
-          />
         </div>
       </div>
-      <ul className="space-y-3">
+      <ul className="space-y-2.5">
         {block.exercises.map((exercise) => (
           <ExerciseListItem
             key={`${exercise.exercise_id}:${exercise.display_order}`}
@@ -45,6 +39,13 @@ export default async function BlockDetailPage({
           />
         ))}
       </ul>
+      <DeleteLibraryItemButton
+        kind="block"
+        id={blockId}
+        name={block.block_name}
+        redirectTo={liftingHref()}
+        variant="bar"
+      />
     </div>
   );
 }

@@ -12,18 +12,13 @@ export function CardioActivityCard({ activity }: CardioActivityCardProps) {
   const summary = formatCardioSummary(activity);
 
   return (
-    <li className="rounded-2xl border border-border/70 bg-card/80 px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-semibold text-foreground">
-            {activity.name}
-          </p>
-          {summary ? (
-            <p className="mt-2 text-sm text-muted-foreground">{summary}</p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <CardioFormatBadge cardioFormat={activity.cardio_format} />
+    <li className="rounded-[13px] border border-border bg-card px-[15px] py-4">
+      <div className="flex items-center gap-2">
+        <span className="truncate text-[15px] font-semibold text-foreground">
+          {activity.name}
+        </span>
+        <CardioFormatBadge cardioFormat={activity.cardio_format} />
+        <div className="ml-auto flex flex-none items-center gap-2">
           <EditPencilButton kind="cardio" activity={activity} />
           <DeleteLibraryItemButton
             kind="cardio"
@@ -32,8 +27,13 @@ export function CardioActivityCard({ activity }: CardioActivityCardProps) {
           />
         </div>
       </div>
+      {summary ? (
+        <p className="mt-1.5 font-mono text-[11px] uppercase tabular-nums tracking-[0.06em] text-muted-foreground">
+          {summary}
+        </p>
+      ) : null}
       {activity.description ? (
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
           {activity.description}
         </p>
       ) : null}

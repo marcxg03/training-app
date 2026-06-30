@@ -8,30 +8,30 @@ type ExerciseListCardProps = {
 
 export function ExerciseListCard({ exercise }: ExerciseListCardProps) {
   return (
-    <li className="rounded-2xl border border-border/70 bg-card/80 px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-foreground">
-            {exercise.name}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {exercise.primary_muscle_group_label ?? "Uncategorized"} ·{" "}
-            {exercise.prescribed_min}–{exercise.prescribed_max} reps
-          </p>
-        </div>
+    <li className="flex items-center gap-3 rounded-[13px] border border-border bg-card px-[15px] py-3.5">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-foreground">
+            {exercise.name}
+          </span>
           {exercise.is_bodyweight ? (
-            <span className="inline-flex rounded-full border border-border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Bodyweight
+            <span className="inline-flex items-center rounded-md border border-cardio/40 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-[0.1em] text-cardio">
+              BW
             </span>
           ) : null}
-          <EditPencilButton kind="exercise" exercise={exercise} />
-          <DeleteLibraryItemButton
-            kind="exercise"
-            id={exercise.exercise_id}
-            name={exercise.name}
-          />
         </div>
+        <p className="mt-1 font-mono text-[10px] font-medium uppercase tabular-nums tracking-[0.1em] text-muted-foreground">
+          {exercise.primary_muscle_group_label ?? "Uncategorized"} ·{" "}
+          {exercise.prescribed_min}&ndash;{exercise.prescribed_max} reps
+        </p>
+      </div>
+      <div className="flex flex-none items-center gap-2">
+        <EditPencilButton kind="exercise" exercise={exercise} />
+        <DeleteLibraryItemButton
+          kind="exercise"
+          id={exercise.exercise_id}
+          name={exercise.name}
+        />
       </div>
     </li>
   );

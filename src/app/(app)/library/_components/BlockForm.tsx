@@ -18,18 +18,18 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { blockDetailHref, liftingHref } from "@/lib/library/crossLinks";
 import { createBlock, updateBlock } from "@/lib/library/mutations";
 import type { ExerciseListItem } from "@/lib/library/projections";
 import { blockSchema, type BlockFormValues } from "@/lib/library/schemas";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils/cn";
+
+const PROTOCOL_OPTIONS = [
+  { value: "failure", label: "Failure" },
+  { value: "mobility", label: "Mobility" },
+  { value: "corrective", label: "Corrective" },
+] as const;
 
 type BlockFormProps = {
   mode: "create" | "edit";
@@ -161,12 +161,10 @@ export function BlockForm({
           {mode === "edit" ? "Back to block" : "Back to library"}
         </button>
 
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Library
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {mode === "create" ? "Create block" : "Edit block"}
+        <div className="space-y-1">
+          <p className="eyebrow">Library</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {mode === "create" ? "New Block" : "Edit Block"}
           </h1>
         </div>
 
@@ -178,13 +176,13 @@ export function BlockForm({
               void form.handleSubmit(handleSubmit)(event);
             }}
           >
-            <div className="space-y-5 rounded-2xl border border-border/70 bg-card/60 p-4">
+            <div className="space-y-5 rounded-[var(--radius)] border border-border bg-card p-4">
               <FormField
                 control={form.control}
                 name="block_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Block name</FormLabel>
+                    <FormLabel>Name</FormLabel>
                     <FormControl>
                       <Input {...field} autoComplete="off" />
                     </FormControl>
@@ -193,32 +191,40 @@ export function BlockForm({
                 )}
               />
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Category</p>
-                <p className="text-sm text-muted-foreground">Lifting block</p>
-              </div>
-
               <FormField
                 control={form.control}
                 name="block_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Protocol</FormLabel>
-                    <Select
-                      value={field.value ?? undefined}
-                      onValueChange={(value) => field.onChange(value)}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pick a protocol" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="failure">Failure</SelectItem>
-                        <SelectItem value="mobility">Mobility</SelectItem>
-                        <SelectItem value="corrective">Corrective</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Set protocol</FormLabel>
+                    <FormControl>
+                      <div className="flex gap-1 rounded-xl border border-border bg-input p-1">
+                        {PROTOCOL_OPTIONS.map((option) => {
+                          const isActive = field.value === option.value;
+
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => field.onChange(option.value)}
+                              aria-pressed={isActive}
+                              className={cn(
+                                "flex-1 rounded-[9px] px-3 py-2.5 text-center text-xs font-semibold tracking-[0.04em] transition-colors",
+                                isActive
+                                  ? "bg-accent text-black"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </FormControl>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-faint">
+                      Lifting block · the bank athletes pick from at session
+                      time
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
