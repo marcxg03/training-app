@@ -1558,3 +1558,29 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
   applied here and RLS / multi-tenant access has not been exercised as two
   users. See KNOWN_ISSUES.md for the required live-DB verification checklist
   before enabling coaching in production.
+
+## Auth: fix magic-link sign-in on installed PWA (2026-06-30)
+
+### What was built
+
+- `LoginForm` is now a two-step flow: request a code by email
+  (`signInWithOtp`, unchanged) → enter the **6-digit code** in-app
+  (`verifyOtp({ type: "email" })`). On success it navigates to `/auth/callback`,
+  which upserts the profile (idempotent) and redirects to `/today`.
+- Fixes the reported bug: on a standalone PWA the magic link opened the system
+  browser (separate cookie jar + missing PKCE verifier), so the user ended up
+  signed in only in the browser, never the app. Code entry keeps the whole flow
+  inside the PWA. The magic link still works as a same-device/desktop fallback.
+- Code input uses `autoComplete="one-time-code"` so iOS can autofill from Mail.
+
+### Required manual step (Supabase dashboard)
+
+- Authentication → Email Templates → **Magic Link**: include `{{ .Token }}`
+  so the email contains the 6-digit code (the default template only renders
+  the link). Without this the code step has nothing to verify.
+
+### Verification
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass clean.
+- NOT yet tested on a device against live Supabase — needs the template edit,
+  then the install-to-home-screen sign-in test (stays in the app → `/today`).

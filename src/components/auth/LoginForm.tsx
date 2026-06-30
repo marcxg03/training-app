@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, MailCheck, Zap } from "lucide-react";
+import { ArrowLeft, Clock, ShieldCheck, Zap } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 
-type LoginState = "idle" | "sending" | "sent" | "error";
+type LoginState = "idle" | "sending" | "code" | "verifying" | "error";
 
 type LoginFormProps = {
   initialError?: string | null;
@@ -16,6 +16,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginForm({ initialError = null }: LoginFormProps) {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [status, setStatus] = useState<LoginState>(
     initialError ? "error" : "idle",
   );
@@ -39,56 +40,138 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmedEmail,
       options: {
+        // Kept so the same-device / desktop magic link still works as a
+        // fallback. On an installed PWA the link opens the system browser
+        // (separate session storage), so the emailed code below is the
+        // reliable path — it keeps the whole flow inside the app.
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
     if (error) {
-      setStatus("idle");
+      setStatus("error");
       setMessage(error.message);
       return;
     }
 
-    setStatus("sent");
-    setMessage(`Check your email — link sent to ${trimmedEmail}`);
-  }
-
-  const isBusy = status === "sending";
-  const hasError =
-    status === "error" || (status === "idle" && message !== null);
-
-  function handleResend() {
-    setStatus("idle");
+    setCode("");
+    setStatus("code");
     setMessage(null);
   }
 
-  if (status === "sent") {
+  async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedCode = code.trim();
+
+    if (trimmedCode.length < 6) {
+      setStatus("error");
+      setMessage("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setStatus("verifying");
+    setMessage(null);
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: trimmedCode,
+      type: "email",
+    });
+
+    if (error) {
+      setStatus("error");
+      setMessage(error.message);
+      return;
+    }
+
+    // Full navigation so the freshly-set auth cookies reach the server. The
+    // callback upserts the profile (idempotent) and redirects to /today.
+    window.location.assign("/auth/callback");
+  }
+
+  const isVerifyStep = status === "code" || status === "verifying";
+  const isBusy = status === "sending" || status === "verifying";
+  // After a verify error we stay on the code step; otherwise an error means the
+  // email step.
+  const hasError =
+    status === "error" || (status === "idle" && message !== null);
+  const errorOnCodeStep = status === "error" && code.length > 0;
+
+  function handleStartOver() {
+    setStatus("idle");
+    setMessage(null);
+    setCode("");
+  }
+
+  if (isVerifyStep || errorOnCodeStep) {
     return (
-      <div className="flex flex-col items-center text-center">
-        <span className="bg-accent/12 flex h-[60px] w-[60px] items-center justify-center rounded-2xl text-accent">
-          <MailCheck className="h-7 w-7" />
-        </span>
-        <h1 className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
-          Check your email
-        </h1>
-        <p className="mt-2.5 text-sm leading-relaxed text-subtle">
-          We sent a sign-in link to
+      <div>
+        <button
+          type="button"
+          onClick={handleStartOver}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Use a different email
+        </button>
+
+        <div className="mt-6 flex items-center gap-3">
+          <span className="bg-accent/12 flex h-10 w-10 items-center justify-center rounded-xl text-accent">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
+          <span className="text-xl font-bold tracking-tight text-foreground">
+            Enter your code
+          </span>
+        </div>
+
+        <p className="mt-5 text-sm leading-relaxed text-subtle">
+          We emailed a 6-digit code to
           <br />
           <span className="font-mono text-foreground">{email.trim()}</span>
         </p>
-        <div className="mt-6 flex w-full items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/[0.07] px-3.5 py-3 text-left">
+
+        <form className="mt-6 space-y-3.5" onSubmit={handleVerify}>
+          <div className="space-y-2">
+            <label className="eyebrow" htmlFor="code">
+              6-digit code
+            </label>
+            <input
+              id="code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              autoFocus
+              onChange={(event) => {
+                setCode(event.target.value.replace(/\D/g, ""));
+                if (status === "error") {
+                  setStatus("code");
+                  setMessage(null);
+                }
+              }}
+              className="flex h-12 w-full rounded-xl border border-border bg-input px-3.5 py-2 text-center font-mono text-lg tracking-[0.4em] text-foreground outline-none transition-colors placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"
+              placeholder="000000"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
+            disabled={isBusy || code.trim().length < 6}
+          >
+            {status === "verifying" ? "Verifying..." : "Verify & sign in"}
+          </button>
+          {message ? <p className="text-sm text-danger">{message}</p> : null}
+        </form>
+
+        <div className="mt-6 flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/[0.07] px-3.5 py-3">
           <Clock className="h-5 w-5 shrink-0 text-warning" />
           <span className="text-xs leading-snug text-warning">
-            Links expire after 15 min. Expired? Request a new one.
+            Codes expire after a few minutes. On this device you can also tap
+            the link in the email.
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleResend}
-          className="mt-3.5 w-full rounded-xl border border-border bg-transparent px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-card-alt"
-        >
-          Resend link
-        </button>
       </div>
     );
   }
@@ -108,7 +191,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
         Sign in
       </h1>
       <p className="mt-2 text-sm leading-relaxed text-subtle">
-        We&apos;ll email you a secure link — no password to remember.
+        We&apos;ll email you a 6-digit code — no password to remember.
       </p>
 
       <form className="mt-7 space-y-3.5" onSubmit={handleSubmit}>
@@ -135,7 +218,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
           disabled={isBusy}
         >
-          {isBusy ? "Sending..." : "Send magic link"}
+          {isBusy ? "Sending..." : "Send code"}
         </button>
         {message ? (
           <p
