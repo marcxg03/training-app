@@ -388,3 +388,57 @@ public domain) as an opt-in autocomplete/seed source when creating exercises —
 NOT animations (licensing + coverage gaps for unconventional lifts, and it
 fights the fast-logging UX). Deliberately deferred; revisit post-redesign as a
 separate slice. Keeps exercises free-text and unconstrained.
+
+## Coaching removed (2026-06-30)
+
+Coaching was removed from this app — it is now personal-only, and client-facing
+coaching will be a separate app. The issues below are **obsolete** (no coaching
+code ships); retained struck-through for history. There is nothing to verify or
+enable.
+
+### ~~🔴 Critical — Coaching is NOT verified against a live database~~ (obsolete — removed)
+
+Migration `021_coaching.sql` has not been applied here, types were
+hand-extended (not regenerated), and RLS / multi-tenant access has not been
+exercised as two users. Do NOT set `NEXT_PUBLIC_COACHING_ENABLED=true` in
+production until the checklist below passes. Build, typecheck, and lint are
+green, but those do not prove RLS correctness.
+
+**Required live-DB verification before enabling coaching:**
+
+1. Apply `supabase/migrations/021_coaching.sql` to the remote.
+2. Regenerate `src/lib/supabase/types.ts` from the live schema and diff it
+   against the hand-written additions (the three coaching tables + the
+   `link_pending_coach_invites` function) to confirm they match.
+3. As coach A, onboard an invite; as user B (with that email), open
+   `/coach/my-coach` and confirm the invite links and the relationship
+   activates.
+4. Confirm coach A sees B's roster card, notes, targets, and review metrics;
+   confirm a third user C sees NONE of B's data through any coach route or
+   direct query.
+5. Confirm `coach_notes` rejects UPDATE/DELETE (append-only), and that a
+   client can read only `client_visible` coach notes + their own.
+6. Confirm the service-role admin reads in `src/lib/coach/queries.ts` are
+   never reachable without a verified relationship (spot-check
+   `assertCoachClient`).
+
+### 🟡 Medium — Assign-training does not materialise the plan into the client account
+
+`assignTraining` records the selected plan's id + name on the relationship
+but does not deep-copy the coach's plan/schedules/workouts into the client's
+own `training_plans`. The client sees the assigned plan's name but follows/
+logs from their own plan. Deep-copy-on-assign is the next coaching slice.
+
+### 🟢 Low — Fuel adherence is a days-logged proxy
+
+`getClientProgress` computes fuel adherence as the share of the last 14 days
+with any meal logged, not true in-range macro adherence. Swap for a
+range-vs-target computation (reuse `src/lib/nutrition/*`) when wiring the
+client's nutrition history into coach review.
+
+### 🟢 Low — Invite linking writes during a GET render
+
+`/coach/my-coach` and `/coach/client-today` call `linkPendingInvites()`
+(an idempotent UPDATE) during render to attach pending invites. It is safe
+and idempotent but performs a write on a read path; consider moving it to an
+explicit accept action or login hook if it becomes noisy.

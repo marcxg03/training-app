@@ -7,7 +7,11 @@ import {
   type TodaySessionListItem,
 } from "@/components/today/TodaySessionList";
 import { RestDayEmpty } from "@/components/today/RestDayEmpty";
-import { getTodayDayOfWeek } from "@/lib/methodology/today";
+import {
+  dayOfWeekLabel,
+  getTodayDayOfWeek,
+  parseDayOfWeek,
+} from "@/lib/methodology/today";
 import {
   getMealsForDate,
   getNutritionTargets,
@@ -228,30 +232,51 @@ async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
   };
 }
 
-export default async function TodayPage() {
+type TodayPageProps = {
+  searchParams: Promise<{ day?: string }>;
+};
+
+export default async function TodayPage({ searchParams }: TodayPageProps) {
   const today = new Date();
-  const dayOfWeek = getTodayDayOfWeek(today);
-  const [todaySchedule, targets, meals] = await Promise.all([
-    getTodaySessions(dayOfWeek),
-    getNutritionTargets(),
-    getMealsForDate(getTodayDateString()),
+  const actualDay = getTodayDayOfWeek(today);
+  const { day: dayParam } = await searchParams;
+  const selectedDay = parseDayOfWeek(dayParam) ?? actualDay;
+  const isToday = selectedDay === actualDay;
+
+  // Nutrition tracking is anchored to the real calendar date, so only fetch and
+  // show fuel on today's view; other days are a read-only plan preview.
+  const [selectedSchedule, targets, meals] = await Promise.all([
+    getTodaySessions(selectedDay),
+    isToday ? getNutritionTargets() : Promise.resolve(null),
+    isToday ? getMealsForDate(getTodayDateString()) : Promise.resolve([]),
   ]);
 
   const hasSessions = Boolean(
-    todaySchedule && todaySchedule.sessions.length > 0,
+    selectedSchedule && selectedSchedule.sessions.length > 0,
   );
-  const fuelBars = buildMacroBars(targets, sumMealTotals(meals));
+  const fuelBars = isToday
+    ? buildMacroBars(targets, sumMealTotals(meals))
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <TodayHeader dayOfWeek={dayOfWeek} date={today} />
-      <TodayWeekStrip dayOfWeek={dayOfWeek} />
-      {hasSessions && todaySchedule ? (
-        <TodaySessionList sessions={todaySchedule.sessions} />
+      <TodayHeader dayOfWeek={selectedDay} date={today} isToday={isToday} />
+      <TodayWeekStrip selectedDay={selectedDay} actualDay={actualDay} />
+      {hasSessions && selectedSchedule ? (
+        <TodaySessionList
+          sessions={selectedSchedule.sessions}
+          day={selectedDay}
+          readOnly={!isToday}
+          heading={
+            isToday
+              ? "Today's sessions"
+              : `${dayOfWeekLabel(selectedDay)} sessions`
+          }
+        />
       ) : (
         <RestDayEmpty />
       )}
-      <TodayFuelCard bars={fuelBars} />
+      {fuelBars ? <TodayFuelCard bars={fuelBars} /> : null}
     </div>
   );
 }
