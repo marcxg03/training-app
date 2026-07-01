@@ -36,6 +36,11 @@ export const viewport: Viewport = {
   themeColor: "#0A0A0B",
   width: "device-width",
   initialScale: 1,
+  // Lock zoom so the page never rescales — in particular, iOS Safari won't
+  // zoom in when a form field is focused, and pinch-zoom stays disabled for a
+  // native-app feel.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
