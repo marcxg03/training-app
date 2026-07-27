@@ -39,3 +39,7 @@ export type AcceptedImageType = (typeof ACCEPTED_IMAGE_TYPES)[number];
 // Cap the upload so a large phone photo can't blow the request limit. Anthropic
 // accepts up to ~5MB per image; we stay under it and reject earlier client-side.
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+// Optional user note fed into the estimate (ingredients, portions, prep). Capped
+// to bound prompt tokens; the route trims/truncates before sending to the model.
+export const MAX_NOTE_LENGTH = 1000;

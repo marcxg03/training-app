@@ -299,6 +299,12 @@ function inferBlockType(
     return "mobility";
   }
 
+  // The v3.0 Saturday "Prehab" day is a recovery/mobility session — its blocks
+  // are restorative, so keep them out of the push/pull + 48h strength gates.
+  if (/prehab/i.test(workoutName)) {
+    return "mobility";
+  }
+
   if (/corrective/i.test(blockName)) {
     return "corrective";
   }
@@ -509,7 +515,8 @@ export function parseWeeklySchedule(
           workoutName,
           workoutType:
             lowerWorkoutName.includes("run") ||
-            lowerWorkoutName.includes("basketball")
+            lowerWorkoutName.includes("basketball") ||
+            lowerWorkoutName.includes("hyrox")
               ? "cardio"
               : "lifting",
           timing: inferTiming(entry),
@@ -640,14 +647,20 @@ export function inferMuscleGroupsForExercise(
   let tags: string[] = [];
 
   if (
-    /upper chest|mid chest|bench press focus|lower chest/.test(normalizedBlock)
+    /upper chest|mid chest|bench press focus|lower chest|chest/.test(
+      normalizedBlock,
+    )
   ) {
     tags = ["chest"];
   } else if (
     /shoulder press|lateral raise|shoulder burnout/.test(normalizedBlock)
   ) {
     tags = ["shoulders"];
+  } else if (/shoulder prehab/.test(normalizedBlock)) {
+    tags = ["shoulders", "back"];
   } else if (/vertical pull|horizontal pull/.test(normalizedBlock)) {
+    tags = ["back"];
+  } else if (/pull.?ups?/.test(normalizedBlock)) {
     tags = ["back"];
   } else if (/rear delts/.test(normalizedBlock)) {
     tags = ["shoulders", "back"];
@@ -669,7 +682,7 @@ export function inferMuscleGroupsForExercise(
     tags = ["core"];
   } else if (/atg split squat/.test(normalizedBlock)) {
     tags = ["legs"];
-  } else if (/jefferson curl|seated good mornings/.test(normalizedBlock)) {
+  } else if (/jefferson curl|good mornings/.test(normalizedBlock)) {
     tags = ["back", "core"];
   } else if (/tib raises/.test(normalizedBlock)) {
     tags = ["legs", "tibialis"];
@@ -735,29 +748,53 @@ export function parseCardioActivities(
 
   const activities: ParsedCardioActivity[] = [];
 
+  // v3.0 hybrid plan runs: track (1km repeats), easy, long. Matched by the
+  // "### <Day> — <Name> Run" subsection titles. Formats reuse existing enums
+  // (speed_run / endurance_run) to avoid a schema migration — the activity name
+  // and description carry the real detail.
   for (const { title, content } of sections) {
-    if (/Monday AM/i.test(title)) {
+    if (/track/i.test(title)) {
       activities.push({
-        name: "Speed Run",
+        name: "Track Run",
         timing: "am",
         cardioFormat: "speed_run",
-        cardioDistance: "5×100m",
-        cardioTargetZone: "sprint",
+        cardioDistance: "4–6 × 1 km repeats",
+        cardioTargetZone: "anaerobic",
         description: buildRunningDescription(content),
       });
-    }
-
-    if (/Saturday AM/i.test(title)) {
+    } else if (/easy/i.test(title)) {
       activities.push({
-        name: "Endurance Run",
+        name: "Easy Run",
+        timing: "pm",
+        cardioFormat: "endurance_run",
+        cardioDistance: "2–3 mi",
+        cardioTargetZone: "zone_2",
+        description: summarizeMarkdownLines(content.split("\n")),
+      });
+    } else if (/long/i.test(title)) {
+      activities.push({
+        name: "Long Run",
         timing: "am",
         cardioFormat: "endurance_run",
-        cardioDistance: "3 miles",
+        cardioDistance: "6–8 mi",
         cardioTargetZone: "zone_2",
         description: summarizeMarkdownLines(content.split("\n")),
       });
     }
   }
+
+  // HYROX is a compromised full-course circuit (Thursdays), not in Running
+  // Sessions. Logged as a lightweight cardio entry; full station detail + race
+  // weights live in the plan doc. Reuses endurance_run to avoid a migration.
+  activities.push({
+    name: "HYROX",
+    timing: "anytime",
+    cardioFormat: "endurance_run",
+    cardioDistance: "Full course, scalable % (25→50→100)",
+    cardioTargetZone: "anaerobic",
+    description:
+      "Full HYROX course as one continuous compromised circuit (run → station → run): 8 runs + 8 stations (SkiErg, sled push/pull, burpee broad jumps, row, farmers carry, sandbag lunges, wall balls), scaled ~25%→50%→100% across the block. Station distances and official Doubles Mixed race weights are in the plan doc.",
+  });
 
   activities.push({
     name: "Basketball",
@@ -1397,7 +1434,7 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
   const liftingBlocks = parseLiftingBlocksGlobal(orderedDays);
 
   return {
-    name: "Marcus base plan v1",
+    name: "Marcus Hybrid HYROX v3.0",
     overviewTitle: extractDocumentTitle(files.overview),
     masterPlanTitle: extractDocumentTitle(files.masterPlan),
     days: orderedDays,
