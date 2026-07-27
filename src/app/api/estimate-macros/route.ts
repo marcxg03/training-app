@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
+  MAX_NOTE_LENGTH,
   macroEstimateSchema,
   type AcceptedImageType,
   type MacroEstimate,
@@ -19,6 +20,8 @@ import { createClient } from "@/lib/supabase/server";
 const SYSTEM_PROMPT = `You estimate the macronutrients of a meal from a photo.
 
 Identify the foods and their likely portion sizes, then estimate protein, carbohydrates, and fat in grams. Express each as a low–high gram range that honestly reflects portion uncertainty — wider when the photo is ambiguous, tighter when portions are clear. Do not estimate calories; they are derived from the macros elsewhere.
+
+The user may add a note describing the meal (ingredients, portions, or prep). When present, treat it as ground truth for what the food is and how much there is — let it narrow your ranges and correct anything the photo alone would get wrong.
 
 Give the meal a short descriptive name. In notes, list the foods you identified in one sentence and flag any major assumption. If the image contains no food, return zeros for every macro and say so in notes.`;
 
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { image?: unknown; mediaType?: unknown };
+  let body: { image?: unknown; mediaType?: unknown; note?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -89,6 +92,12 @@ export async function POST(request: Request) {
   }
 
   const { image, mediaType } = body;
+  // Optional free-text note from the user (ingredients, portions, prep). Trim +
+  // truncate to bound prompt tokens; non-strings are ignored.
+  const note =
+    typeof body.note === "string"
+      ? body.note.trim().slice(0, MAX_NOTE_LENGTH)
+      : "";
   if (typeof image !== "string" || typeof mediaType !== "string") {
     return NextResponse.json({ error: "Missing image data." }, { status: 400 });
   }
@@ -126,7 +135,9 @@ export async function POST(request: Request) {
             },
             {
               type: "text",
-              text: "Estimate the macros for this meal.",
+              text: note
+                ? `Estimate the macros for this meal.\n\nThe user's note about it:\n"${note}"`
+                : "Estimate the macros for this meal.",
             },
           ],
         },

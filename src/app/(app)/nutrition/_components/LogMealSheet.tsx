@@ -260,7 +260,13 @@ export function LogMealSheet({
       const response = await fetch("/api/estimate-macros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64, mediaType: file.type }),
+        // Send whatever note the user has typed so Claude can use it to refine
+        // the estimate (ingredients, portions, prep). Empty is fine.
+        body: JSON.stringify({
+          image: base64,
+          mediaType: file.type,
+          note: form.getValues("note"),
+        }),
       });
       const data = (await response.json()) as MacroEstimate | { error: string };
       if (!response.ok) {
@@ -318,8 +324,8 @@ export function LogMealSheet({
                       {estimating ? "Estimating…" : "Estimate from photo"}
                     </button>
                     <p className="text-xs text-muted-foreground">
-                      Sends the photo to Claude for a macro estimate you can
-                      adjust before saving.
+                      Sends the photo (and your note below, if any) to Claude
+                      for a macro estimate you can adjust before saving.
                     </p>
                     {estimateError ? (
                       <p className="text-sm text-danger">{estimateError}</p>
