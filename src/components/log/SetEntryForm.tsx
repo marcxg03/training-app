@@ -74,6 +74,7 @@ export function SetEntryForm({
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isBodyweight, setIsBodyweight] = useState(exercise.is_bodyweight);
   const [notes, setNotes] = useState("");
   const [reps, setReps] = useState("");
   const [toFailure, setToFailure] = useState(defaultFailureChecked);
@@ -89,7 +90,7 @@ export function SetEntryForm({
 
     let parsedWeightLbs: number | null = null;
 
-    if (!exercise.is_bodyweight) {
+    if (!isBodyweight) {
       if (/^-?\d+\.\d{2,}$/.test(weight.trim())) {
         setError("Enter a weight with no more than 1 decimal place.");
         return;
@@ -99,7 +100,7 @@ export function SetEntryForm({
 
       if (!weight || Number.isNaN(parsedWeightLbs) || parsedWeightLbs <= 0) {
         setError(
-          "Enter a weight or mark this exercise as bodyweight in your plan.",
+          "Enter a weight, or turn on Bodyweight for this set.",
         );
         return;
       }
@@ -117,7 +118,7 @@ export function SetEntryForm({
       block_id: blockId,
       exercise_id: exercise.exercise_id,
       set_index: setIndex,
-      weight_kg: exercise.is_bodyweight
+      weight_kg: isBodyweight
         ? 0
         : parsedWeightLbs === null
           ? null
@@ -183,7 +184,7 @@ export function SetEntryForm({
 
     let prTypes: LoggerSetLog["prTypes"] = [];
 
-    if (!exercise.is_bodyweight) {
+    if (!isBodyweight) {
       const { data: prHistory, error: prHistoryError } = await supabase
         .from("pr_history")
         .select("pr_type, reps, weight_kg")
@@ -210,7 +211,7 @@ export function SetEntryForm({
           >((highest, row) => (highest === null || row.reps > highest ? row.reps : highest), null);
 
         const detectedPRs = detectPRs(insertedSetLog, {
-          isBodyweight: exercise.is_bodyweight,
+          isBodyweight,
           maxRepsAtWeight,
           maxWeightKg,
         });
@@ -255,13 +256,38 @@ export function SetEntryForm({
         </p>
       </div>
 
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isBodyweight}
+        onClick={() => setIsBodyweight((current) => !current)}
+        className="flex w-full items-center justify-between rounded-xl border border-border px-3.5 py-2.5"
+      >
+        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-subtle">
+          Bodyweight
+        </span>
+        <span
+          className={cn(
+            "inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors",
+            isBodyweight ? "bg-accent" : "bg-border",
+          )}
+        >
+          <span
+            className={cn(
+              "h-5 w-5 shrink-0 rounded-full bg-foreground transition-transform",
+              isBodyweight ? "translate-x-5" : "translate-x-0",
+            )}
+          />
+        </span>
+      </button>
+
       <div
         className={cn(
           "grid gap-3.5",
-          exercise.is_bodyweight ? "grid-cols-1" : "grid-cols-2",
+          isBodyweight ? "grid-cols-1" : "grid-cols-2",
         )}
       >
-        {!exercise.is_bodyweight ? (
+        {!isBodyweight ? (
           <div>
             <p className="mb-2 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
               Weight (lbs)
@@ -370,14 +396,14 @@ export function SetEntryForm({
           </span>
           <span
             className={cn(
-              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+              "inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors",
               toFailure ? "bg-accent" : "bg-border",
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-foreground transition-transform",
-                toFailure ? "translate-x-[22px]" : "translate-x-0.5",
+                "h-5 w-5 shrink-0 rounded-full bg-foreground transition-transform",
+                toFailure ? "translate-x-5" : "translate-x-0",
               )}
             />
           </span>
