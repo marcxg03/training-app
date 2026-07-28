@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <main className="flex-1 px-6 pb-24 pt-[calc(env(safe-area-inset-top)_+_2rem)]">
+      <main className="flex-1 px-6 pb-[calc(env(safe-area-inset-bottom)_+_7rem)] pt-[calc(env(safe-area-inset-top)_+_2rem)]">
         {children}
       </main>
       <BottomTabBar />

@@ -8,6 +8,8 @@ export type TodaySessionListItem = {
   timing: Enums<"timing_enum">;
   gym: string | null;
   displayOrder: number;
+  /** True when a lifting workout has a finished completion logged today. */
+  completed: boolean;
   summary: string;
 };
 
