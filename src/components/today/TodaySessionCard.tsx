@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 
 import { SessionSummaryRow } from "@/components/plan/SessionSummaryRow";
 import { StartWorkoutButton } from "@/components/today/StartWorkoutButton";
@@ -47,12 +48,24 @@ export function TodaySessionCard({
       </CardContent>
       {isLift && !readOnly ? (
         <CardFooter className="flex-col items-stretch gap-4 px-[18px] pb-[18px] pt-0">
-          <div className="flex gap-1.5">
-            {liftPips.map((tone, index) => (
-              <span key={index} className={`h-1 flex-1 rounded-full ${tone}`} />
-            ))}
-          </div>
-          <StartWorkoutButton workoutId={session.workoutId} />
+          {session.completed ? (
+            <div className="flex items-center justify-center gap-2 rounded-[var(--radius)] border border-success/40 bg-success/10 py-2.5 text-xs font-bold uppercase tracking-[0.06em] text-success">
+              <Check className="h-4 w-4" />
+              Completed today
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-1.5">
+                {liftPips.map((tone, index) => (
+                  <span
+                    key={index}
+                    className={`h-1 flex-1 rounded-full ${tone}`}
+                  />
+                ))}
+              </div>
+              <StartWorkoutButton workoutId={session.workoutId} />
+            </>
+          )}
         </CardFooter>
       ) : null}
     </Card>

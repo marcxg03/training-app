@@ -17,13 +17,25 @@ import { createClient } from "@/lib/supabase/server";
 // LogMealSheet. Env-gated on ANTHROPIC_API_KEY: degrades to manual entry (503)
 // when the key is absent. The photo is sent to Anthropic per the user's request.
 
-const SYSTEM_PROMPT = `You estimate the macronutrients of a meal from a photo.
+const SYSTEM_PROMPT = `You estimate the macronutrients of a meal from a photo, a written description, or both.
 
-Identify the foods and their likely portion sizes, then estimate protein, carbohydrates, and fat in grams. Express each as a low–high gram range that honestly reflects portion uncertainty — wider when the photo is ambiguous, tighter when portions are clear. Do not estimate calories; they are derived from the macros elsewhere.
+Identify the foods and their likely portion sizes, then estimate protein, carbohydrates, and fat in grams. Express each as a low–high gram range that honestly reflects portion uncertainty — wider when the input is ambiguous, tighter when portions are clear. Do not estimate calories; they are derived from the macros elsewhere.
 
-The user may add a note describing the meal (ingredients, portions, or prep). When present, treat it as ground truth for what the food is and how much there is — let it narrow your ranges and correct anything the photo alone would get wrong.
+When a written description is provided, treat it as the primary source of truth for what the food is and how much there is; use any photo to refine it.
 
-Give the meal a short descriptive name. In notes, list the foods you identified in one sentence and flag any major assumption. If the image contains no food, return zeros for every macro and say so in notes.`;
+Give the meal a short descriptive name. In notes, list the foods you identified in one sentence and flag any major assumption. If neither the photo nor the description contains any food, return zeros for every macro and say so in notes.`;
+
+// The user instruction depends on which inputs were provided (photo / description
+// / both). The note is guaranteed non-empty by the route when no image is sent.
+function buildInstruction(hasImage: boolean, note: string) {
+  if (hasImage && note) {
+    return `Estimate the macros for this meal.\n\nThe user's description of it:\n"${note}"`;
+  }
+  if (hasImage) {
+    return "Estimate the macros for this meal.";
+  }
+  return `Estimate the macros for this meal from this description:\n"${note}"`;
+}
 
 // Round to whole grams: a photo estimate has no meaningful sub-gram precision,
 // and the form/DB (numeric, 0–1000) accept the result. Caps mirror gramsField
@@ -92,26 +104,38 @@ export async function POST(request: Request) {
   }
 
   const { image, mediaType } = body;
-  // Optional free-text note from the user (ingredients, portions, prep). Trim +
-  // truncate to bound prompt tokens; non-strings are ignored.
+  // Optional free-text description from the user (ingredients, portions, prep).
+  // Trim + truncate to bound prompt tokens; non-strings are ignored.
   const note =
     typeof body.note === "string"
       ? body.note.trim().slice(0, MAX_NOTE_LENGTH)
       : "";
-  if (typeof image !== "string" || typeof mediaType !== "string") {
-    return NextResponse.json({ error: "Missing image data." }, { status: 400 });
+
+  // Photo is now OPTIONAL — the user can estimate from a photo, a description,
+  // or both. Validate the image only when one was actually sent.
+  const hasImage = typeof image === "string" && image.length > 0;
+  if (hasImage) {
+    if (
+      typeof mediaType !== "string" ||
+      !ACCEPTED_IMAGE_TYPES.includes(mediaType as AcceptedImageType)
+    ) {
+      return NextResponse.json(
+        { error: "Use a JPEG, PNG, WebP, or GIF photo." },
+        { status: 400 },
+      );
+    }
+    // base64 is ~4/3 of the byte size; reject oversized uploads before the call.
+    if (image.length > Math.ceil(MAX_IMAGE_BYTES * 1.37)) {
+      return NextResponse.json(
+        { error: "That photo is too large. Try one under 4 MB." },
+        { status: 413 },
+      );
+    }
   }
-  if (!ACCEPTED_IMAGE_TYPES.includes(mediaType as AcceptedImageType)) {
+  if (!hasImage && !note) {
     return NextResponse.json(
-      { error: "Use a JPEG, PNG, WebP, or GIF photo." },
+      { error: "Add a photo or a description of the meal." },
       { status: 400 },
-    );
-  }
-  // base64 is ~4/3 of the byte size; reject oversized uploads before the call.
-  if (image.length > Math.ceil(MAX_IMAGE_BYTES * 1.37)) {
-    return NextResponse.json(
-      { error: "That photo is too large. Try one under 4 MB." },
-      { status: 413 },
     );
   }
 
@@ -125,19 +149,21 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: [
+            ...(hasImage
+              ? [
+                  {
+                    type: "image" as const,
+                    source: {
+                      type: "base64" as const,
+                      media_type: mediaType as AcceptedImageType,
+                      data: image as string,
+                    },
+                  },
+                ]
+              : []),
             {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType as AcceptedImageType,
-                data: image,
-              },
-            },
-            {
-              type: "text",
-              text: note
-                ? `Estimate the macros for this meal.\n\nThe user's note about it:\n"${note}"`
-                : "Estimate the macros for this meal.",
+              type: "text" as const,
+              text: buildInstruction(hasImage, note),
             },
           ],
         },

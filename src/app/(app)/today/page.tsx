@@ -54,6 +54,14 @@ function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+// Match the logger's "today" boundary so a completion written during today's
+// session is recognized here (see log/[workout_id]/page.tsx getTodayStartIso).
+function getTodayStartIso() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today.toISOString();
+}
+
 function sortWorkouts(left: TodayWorkoutRow, right: TodayWorkoutRow) {
   const timingDelta = timingOrder[left.timing] - timingOrder[right.timing];
 
@@ -215,6 +223,27 @@ async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
     ]),
   );
 
+  // Which of today's workouts have a finished completion (completed_at set) from
+  // a session started today — so the card can show "Completed" instead of Start.
+  const { data: completions, error: completionsError } = workoutIds.length
+    ? await supabase
+        .from("workout_completions")
+        .select("workout_id")
+        .in("workout_id", workoutIds)
+        .not("completed_at", "is", null)
+        .gte("started_at", getTodayStartIso())
+    : { data: [], error: null };
+
+  if (completionsError) {
+    throw new Error(
+      `Failed to load today's completions: ${completionsError.message}`,
+    );
+  }
+
+  const completedWorkoutIds = new Set(
+    (completions ?? []).map((completion) => completion.workout_id),
+  );
+
   return {
     isRestDay: schedule.is_rest_day,
     sessions: sortedWorkouts.map<TodaySessionListItem>((workout) => ({
@@ -224,6 +253,7 @@ async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
       timing: workout.timing,
       gym: workout.gym,
       displayOrder: workout.display_order,
+      completed: completedWorkoutIds.has(workout.workout_id),
       summary: buildWorkoutSummary(
         workout,
         presetByWorkoutId.get(workout.workout_id) ?? null,

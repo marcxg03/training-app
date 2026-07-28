@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera } from "lucide-react";
+import { Camera, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -238,6 +238,34 @@ export function LogMealSheet({
     }
   };
 
+  // Shared estimate call — works with a photo, a description, or both. Always
+  // sends the current description; the route requires at least one input.
+  const runEstimate = async (image?: { base64: string; mediaType: string }) => {
+    setEstimateError(null);
+    setEstimating(true);
+    try {
+      const response = await fetch("/api/estimate-macros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: image?.base64,
+          mediaType: image?.mediaType,
+          note: form.getValues("note"),
+        }),
+      });
+      const data = (await response.json()) as MacroEstimate | { error: string };
+      if (!response.ok) {
+        setEstimateError("error" in data ? data.error : "Estimation failed.");
+        return;
+      }
+      applyEstimate(data as MacroEstimate);
+    } catch {
+      setEstimateError("Estimation failed. Enter macros manually.");
+    } finally {
+      setEstimating(false);
+    }
+  };
+
   const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = ""; // allow re-selecting the same file
@@ -253,32 +281,17 @@ export function LogMealSheet({
       setEstimateError("That photo is too large. Try one under 4 MB.");
       return;
     }
-    setEstimating(true);
-    try {
-      const dataUrl = await readAsDataUrl(file);
-      const base64 = dataUrl.split(",")[1] ?? "";
-      const response = await fetch("/api/estimate-macros", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Send whatever note the user has typed so Claude can use it to refine
-        // the estimate (ingredients, portions, prep). Empty is fine.
-        body: JSON.stringify({
-          image: base64,
-          mediaType: file.type,
-          note: form.getValues("note"),
-        }),
-      });
-      const data = (await response.json()) as MacroEstimate | { error: string };
-      if (!response.ok) {
-        setEstimateError("error" in data ? data.error : "Estimation failed.");
-        return;
-      }
-      applyEstimate(data as MacroEstimate);
-    } catch {
-      setEstimateError("Estimation failed. Enter macros manually.");
-    } finally {
-      setEstimating(false);
+    const dataUrl = await readAsDataUrl(file);
+    const base64 = dataUrl.split(",")[1] ?? "";
+    await runEstimate({ base64, mediaType: file.type });
+  };
+
+  const handleDescribe = async () => {
+    if (!form.getValues("note")?.trim()) {
+      setEstimateError("Write a description of the meal first.");
+      return;
     }
+    await runEstimate();
   };
 
   return (
@@ -304,35 +317,6 @@ export function LogMealSheet({
                   void form.handleSubmit(handleSubmit)(event);
                 }}
               >
-                {aiEnabled ? (
-                  <div className="space-y-1.5">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={handlePhoto}
-                    />
-                    <button
-                      type="button"
-                      disabled={estimating}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cardio bg-cardio/10 px-4 py-3.5 text-xs font-bold uppercase tracking-[0.06em] text-cardio transition-colors hover:bg-cardio/15 disabled:pointer-events-none disabled:opacity-60"
-                    >
-                      <Camera className="h-5 w-5" />
-                      {estimating ? "Estimating…" : "Estimate from photo"}
-                    </button>
-                    <p className="text-xs text-muted-foreground">
-                      Sends the photo (and your note below, if any) to Claude
-                      for a macro estimate you can adjust before saving.
-                    </p>
-                    {estimateError ? (
-                      <p className="text-sm text-danger">{estimateError}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-
                 <FormField
                   control={form.control}
                   name="meal_type"
@@ -350,6 +334,70 @@ export function LogMealSheet({
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="note"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="eyebrow">
+                        Description{aiEnabled ? "" : " (optional)"}
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder={
+                            aiEnabled
+                              ? "e.g. 8 oz grilled chicken, 1.5 cups rice, drizzle of olive oil"
+                              : "Optional note"
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {aiEnabled ? (
+                  <div className="space-y-1.5">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePhoto}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={estimating}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-cardio bg-cardio/10 px-3 py-3 text-xs font-bold uppercase tracking-[0.06em] text-cardio transition-colors hover:bg-cardio/15 disabled:pointer-events-none disabled:opacity-60"
+                      >
+                        <Camera className="h-5 w-5" />
+                        Photo
+                      </button>
+                      <button
+                        type="button"
+                        disabled={estimating}
+                        onClick={handleDescribe}
+                        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-cardio bg-cardio/10 px-3 py-3 text-xs font-bold uppercase tracking-[0.06em] text-cardio transition-colors hover:bg-cardio/15 disabled:pointer-events-none disabled:opacity-60"
+                      >
+                        <Sparkles className="h-5 w-5" />
+                        Description
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {estimating
+                        ? "Estimating…"
+                        : "Estimate macros from a photo, your description, or both — Claude fills the fields for you to review. Or enter them manually below."}
+                    </p>
+                    {estimateError ? (
+                      <p className="text-sm text-danger">{estimateError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Checkbox
@@ -445,20 +493,6 @@ export function LogMealSheet({
                     {calLabel} kcal
                   </span>
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="note"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="eyebrow">Note (optional)</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 {submitError ? (
                   <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
