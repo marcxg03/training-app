@@ -16,7 +16,9 @@ const buttonVariants = cva(
         default: "h-11",
         sm: "h-10 px-3",
         lg: "h-12 px-8",
-        icon: "h-11 w-11",
+        // p-0: the base px-4 py-2 would leave a squeezed (or, under h-8 w-8
+        // overrides, zero-width) content box that renders icons invisible.
+        icon: "h-11 w-11 p-0",
       },
     },
     defaultVariants: {

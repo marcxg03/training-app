@@ -112,3 +112,46 @@ export function buildMacroBars(
     },
   ];
 }
+
+export type MealDaySummary = {
+  date: string;
+  mealCount: number;
+  calMin: number;
+  calMax: number;
+  /** Day's calories vs target zone; null when no targets are set. */
+  status: ReturnType<typeof rangeStatusForRange> | null;
+};
+
+/** Group a date-range of meals into per-day summaries, newest first — the
+ * meal-log analog of the workout history list. */
+export function buildMealDaySummaries(
+  meals: (MealEntry & { date: string })[],
+  targets: NutritionTargets | null,
+): MealDaySummary[] {
+  const byDate = new Map<string, { count: number; calMin: number; calMax: number }>();
+
+  for (const meal of meals) {
+    const bucket = byDate.get(meal.date) ?? { count: 0, calMin: 0, calMax: 0 };
+    bucket.count += 1;
+    bucket.calMin += meal.cal_min;
+    bucket.calMax += meal.cal_max;
+    byDate.set(meal.date, bucket);
+  }
+
+  return [...byDate.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, bucket]) => ({
+      date,
+      mealCount: bucket.count,
+      calMin: bucket.calMin,
+      calMax: bucket.calMax,
+      status: targets
+        ? rangeStatusForRange(
+            bucket.calMin,
+            bucket.calMax,
+            targets.cal_min,
+            targets.cal_max,
+          )
+        : null,
+    }));
+}

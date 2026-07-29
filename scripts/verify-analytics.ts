@@ -419,6 +419,31 @@ check("bodyweight: chronological, invalid rows skipped",
 check("bodyweight: empty input -> empty series",
   buildBodyweightTrend([]).length, 0);
 
+// --- buildMealDaySummaries (meal history list) ---
+import { buildMealDaySummaries } from "../src/lib/nutrition/summary";
+const daySummaries = buildMealDaySummaries(
+  [
+    { meal_id: "a", meal_type: "Breakfast", date: "2026-07-27", cal_min: 500, cal_max: 500, protein_min_g: 0, protein_max_g: 0, carbs_min_g: 0, carbs_max_g: 0, fat_min_g: 0, fat_max_g: 0, note: null, logged_at: "2026-07-27T14:00:00Z" },
+    { meal_id: "b", meal_type: "Dinner", date: "2026-07-27", cal_min: 900, cal_max: 1100, protein_min_g: 0, protein_max_g: 0, carbs_min_g: 0, carbs_max_g: 0, fat_min_g: 0, fat_max_g: 0, note: null, logged_at: "2026-07-27T23:00:00Z" },
+    { meal_id: "c", meal_type: "Lunch", date: "2026-07-28", cal_min: 2500, cal_max: 2600, protein_min_g: 0, protein_max_g: 0, carbs_min_g: 0, carbs_max_g: 0, fat_min_g: 0, fat_max_g: 0, note: null, logged_at: "2026-07-28T18:00:00Z" },
+  ],
+  { cal_min: 2400, cal_max: 2700, protein_min_g: 160, protein_max_g: 190, carbs_min_g: 250, carbs_max_g: 320, fat_min_g: 60, fat_max_g: 85 },
+);
+check("meal days: newest first, counts and cal sums",
+  daySummaries.map((d) => ({ date: d.date, n: d.mealCount, min: d.calMin, max: d.calMax })),
+  [
+    { date: "2026-07-28", n: 1, min: 2500, max: 2600 },
+    { date: "2026-07-27", n: 2, min: 1400, max: 1600 },
+  ]);
+check("meal days: status vs target zone",
+  daySummaries.map((d) => d.status), ["in", "under"]);
+check("meal days: null targets -> null status",
+  buildMealDaySummaries(
+    [{ meal_id: "a", meal_type: "M", date: "2026-07-27", cal_min: 1, cal_max: 1, protein_min_g: 0, protein_max_g: 0, carbs_min_g: 0, carbs_max_g: 0, fat_min_g: 0, fat_max_g: 0, note: null, logged_at: "x" }],
+    null,
+  )[0].status,
+  null);
+
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
