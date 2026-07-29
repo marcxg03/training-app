@@ -734,6 +734,41 @@ function pickBestInRangePr(
     }, null);
 }
 
+// PostgREST caps responses at max_rows (1000). A staple lift crosses 1000
+// lifetime sets in ~2 years, and an unpaginated ascending fetch silently
+// drops the NEWEST rows — the chart would freeze in the past. Page through
+// explicitly (set_index tiebreaker keeps the page seams stable).
+async function fetchAllSetLogsForExercise(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  exerciseId: string,
+) {
+  const pageSize = 1000;
+  const rows: unknown[] = [];
+
+  for (let page = 0; ; page++) {
+    const { data, error } = await supabase
+      .from("set_logs")
+      .select(
+        "set_log_id, block_id, exercise_id, weight_kg, reps, is_to_failure, logged_at, set_index",
+      )
+      .eq("exercise_id", exerciseId)
+      .order("logged_at", { ascending: true })
+      .order("set_index", { ascending: true })
+      .order("set_log_id", { ascending: true })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    rows.push(...(data ?? []));
+
+    if ((data ?? []).length < pageSize) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
 export async function getExerciseProgression(
   exerciseId: string,
 ): Promise<ExerciseProgression | null> {
@@ -749,14 +784,7 @@ export async function getExerciseProgression(
       .select("exercise_id, name, is_bodyweight")
       .eq("exercise_id", exerciseId)
       .maybeSingle(),
-    supabase
-      .from("set_logs")
-      .select(
-        "set_log_id, block_id, exercise_id, weight_kg, reps, is_to_failure, logged_at, set_index",
-      )
-      .eq("exercise_id", exerciseId)
-      .order("logged_at", { ascending: true })
-      .order("set_index", { ascending: true }),
+    fetchAllSetLogsForExercise(supabase, exerciseId),
     supabase
       .from("pr_history")
       .select("pr_id, pr_type, weight_kg, reps, achieved_at, set_log_id")

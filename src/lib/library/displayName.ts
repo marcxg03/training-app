@@ -45,11 +45,12 @@ export function formatRepRange(exercise: LiftingExerciseInBlock) {
   return `${exercise.prescribed_min}\u2013${exercise.prescribed_max} reps`;
 }
 
+export function formatMuscleGroupLabel(group: string) {
+  return group
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 export function formatMuscleGroups(muscleGroups: string[]) {
-  return muscleGroups
-    .map((group) => group.replace(/_/g, " "))
-    .map((group) =>
-      group.replace(/\b\w/g, (character) => character.toUpperCase()),
-    )
-    .join(" · ");
+  return muscleGroups.map(formatMuscleGroupLabel).join(" · ");
 }

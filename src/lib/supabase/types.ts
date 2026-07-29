@@ -185,6 +185,30 @@ export type Database = {
           },
         ];
       };
+      bodyweight_logs: {
+        Row: {
+          bodyweight_log_id: string;
+          log_date: string;
+          logged_at: string;
+          user_id: string;
+          weight_kg: number;
+        };
+        Insert: {
+          bodyweight_log_id?: string;
+          log_date: string;
+          logged_at?: string;
+          user_id: string;
+          weight_kg: number;
+        };
+        Update: {
+          bodyweight_log_id?: string;
+          log_date?: string;
+          logged_at?: string;
+          user_id?: string;
+          weight_kg?: number;
+        };
+        Relationships: [];
+      };
       blocks: {
         Row: {
           block_category: Database["public"]["Enums"]["block_category_enum"];
@@ -501,6 +525,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          timezone: string;
           bodyweight_kg: number | null;
           created_at: string;
           display_name: string | null;
@@ -510,6 +535,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          timezone?: string;
           bodyweight_kg?: number | null;
           created_at?: string;
           display_name?: string | null;
@@ -519,6 +545,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          timezone?: string;
           bodyweight_kg?: number | null;
           created_at?: string;
           display_name?: string | null;

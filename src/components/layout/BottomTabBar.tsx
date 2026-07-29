@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Home,
   LineChart,
+  TrendingUp,
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const tabs: TabDefinition[] = [
   { href: "/library", label: "Library", icon: Dumbbell },
   { href: "/nutrition", label: "Fuel", icon: UtensilsCrossed },
   { href: "/history", label: "Progress", icon: LineChart },
+  { href: "/trends", label: "Trends", icon: TrendingUp },
 ];
 
 export function BottomTabBar() {

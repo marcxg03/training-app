@@ -5,4 +5,5 @@ export type Profile = {
   bodyweight_kg: number | null;
   height_cm: number | null;
   goal_mode: GoalMode;
+  timezone: string;
 };

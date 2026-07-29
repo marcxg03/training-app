@@ -16,6 +16,8 @@ export const profileSchema = z.object({
   bodyweight_kg: optionalPositive("bodyweight"),
   height_cm: optionalPositive("height"),
   goal_mode: z.enum(["cut", "maintain", "lean_bulk"]),
+  // IANA identifier; validated against the runtime's own list in the form.
+  timezone: z.string().min(1, "Pick a timezone"),
 });
 
 export type ProfileFormValues = z.infer<typeof profileSchema>;
