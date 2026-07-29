@@ -7,7 +7,8 @@ import {
   type LoggerBlock,
   type LoggerWorkout,
 } from "@/lib/methodology/workout-state";
-import { getTodayDayOfWeek } from "@/lib/methodology/today";
+import { getAppDayOfWeek, getAppTimezone, getAppToday } from "@/lib/time/server";
+import { startOfDayInTzIso } from "@/lib/time/appDay";
 import { createClient } from "@/lib/supabase/server";
 
 type LoggerPageProps = {
@@ -24,11 +25,8 @@ function toArray<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value : [value];
 }
 
-function getTodayStartIso() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today.toISOString();
-}
+// App-day boundary (profile timezone) — matches today/page.tsx so the
+// completion created here is recognized there as "today".
 
 async function getLoggerData(workoutId: string) {
   const supabase = await createClient();
@@ -244,14 +242,17 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
     redirect("/today");
   }
 
-  const todayDayOfWeek = getTodayDayOfWeek();
+  const todayDayOfWeek = await getAppDayOfWeek();
   const { blocks, session } = loggerData;
 
   if (session.dayOfWeek !== todayDayOfWeek) {
     redirect("/today");
   }
 
-  const todayStartIso = getTodayStartIso();
+  const todayStartIso = startOfDayInTzIso(
+    await getAppTimezone(),
+    await getAppToday(),
+  );
   const workoutCompletion = await getOrCreateWorkoutCompletion(
     {
       async create(payload) {

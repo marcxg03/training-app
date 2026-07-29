@@ -26,6 +26,7 @@ import { updateProfile } from "@/lib/settings/mutations";
 import type { Profile } from "@/lib/settings/projections";
 import { profileSchema, type ProfileFormValues } from "@/lib/settings/schemas";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_APP_TIMEZONE } from "@/lib/time/appDay";
 
 type ProfileFormProps = {
   userId: string;
@@ -38,6 +39,9 @@ const GOAL_MODES: { value: GoalMode; label: string }[] = [
   { value: "maintain", label: "Maintain" },
   { value: "lean_bulk", label: "Lean bulk" },
 ];
+
+// Full IANA list from the runtime — zero maintenance, always valid values.
+const TIMEZONES: string[] = Intl.supportedValuesOf("timeZone");
 
 export function ProfileForm({
   userId,
@@ -57,6 +61,7 @@ export function ProfileForm({
       bodyweight_kg: profile?.bodyweight_kg ?? null,
       height_cm: profile?.height_cm ?? null,
       goal_mode: originalGoalMode,
+      timezone: profile?.timezone ?? DEFAULT_APP_TIMEZONE,
     }),
     [profile, originalGoalMode],
   );
@@ -78,6 +83,15 @@ export function ProfileForm({
 
     if (!result.ok) {
       setSubmitError(result.error);
+      return;
+    }
+
+    if (result.warning) {
+      // Partial save (timezone column missing pre-migration): stay on the
+      // page and show it — navigating away would hide that the timezone
+      // choice was NOT persisted.
+      setSubmitError(result.warning);
+      form.reset({ ...values, timezone: defaultValues.timezone });
       return;
     }
 
@@ -221,6 +235,34 @@ export function ProfileForm({
                   </FormControl>
                   <FormDescription>
                     Changing this suggests updated nutrition targets.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="timezone"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="eyebrow">Timezone</FormLabel>
+                  <FormControl>
+                    <select
+                      value={field.value}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      className="h-11 w-full appearance-none rounded-xl border border-border bg-input px-3.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    >
+                      {TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz}>
+                          {tz.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                  <FormDescription>
+                    The app&apos;s clock: decides when &ldquo;today&rdquo;
+                    rolls over for workouts, meals, and charts.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

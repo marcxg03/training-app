@@ -1,14 +1,21 @@
 import type { JSX } from "react";
 
 import { HistoryBackLink } from "@/app/(app)/history/_components/HistoryBackLink";
-import { ProgressionChart } from "@/app/(app)/history/_components/ProgressionChart";
+import { ProgressionChart } from "@/components/shared/ProgressionChart";
+import {
+  buildBestE1rmByDay,
+  buildBestRepsByDay,
+  dayKeyOf,
+  dayLabelOf,
+} from "@/lib/analytics/projections";
 import { getExerciseProgression } from "@/lib/history/queries";
+import { getAppTimezone } from "@/lib/time/server";
 import type {
   ExerciseProgression,
   ExerciseProgressionPoint,
   ExerciseProgressionPR,
 } from "@/lib/history/projections";
-import { kgToLbs } from "@/lib/units";
+import { kgToLbs, toLbsChartPoints } from "@/lib/units";
 
 type ExerciseProgressPageProps = {
   params: Promise<{
@@ -16,13 +23,9 @@ type ExerciseProgressPageProps = {
   }>;
 };
 
-const setDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-});
-
-function formatSetDate(iso: string): string {
-  return setDateFormatter.format(new Date(iso)).toUpperCase();
+// Same local-day convention as the chart above it — one timezone, one label.
+function formatSetDate(iso: string, timeZone: string): string {
+  return dayLabelOf(dayKeyOf(iso, timeZone));
 }
 
 function formatPrValue(
@@ -67,21 +70,44 @@ function StatCard({
   );
 }
 
-function buildChartPoints(
+// Chart the best estimated 1RM per day (Epley) — a rep PR at the same weight
+// now shows as progress, unlike raw top-set weight. Computed from ALL sets
+// (recent_sets), not top_sets: the heaviest set of a day is not always its
+// best e1RM set. Bodyweight exercises have no external load, so their
+// progression axis is best reps per day instead.
+function buildChartConfig(
   progression: ExerciseProgression,
-): { label: string; value: number }[] {
-  return progression.top_sets
-    .filter((point) => point.weight_kg !== null)
-    .map((point) => ({
-      label: formatSetDate(point.logged_at),
-      value: Math.round(kgToLbs(point.weight_kg ?? 0)),
-    }));
+  timeZone: string,
+): {
+  points: { label: string; value: number }[];
+  heading: string;
+  unitLabel: string;
+  ariaLabel: string;
+} {
+  if (progression.is_bodyweight) {
+    return {
+      points: buildBestRepsByDay(progression.recent_sets, timeZone),
+      heading: "Best reps · progression",
+      unitLabel: "REPS · OLDEST → NEWEST",
+      ariaLabel: "Best reps progression",
+    };
+  }
+
+  return {
+    points: toLbsChartPoints(
+      buildBestE1rmByDay(progression.recent_sets, timeZone),
+    ),
+    heading: "Estimated 1RM · progression",
+    unitLabel: "LBS E1RM · OLDEST → NEWEST",
+    ariaLabel: "Estimated one-rep-max progression",
+  };
 }
 
 export default async function ExerciseProgressPage({
   params,
 }: ExerciseProgressPageProps): Promise<JSX.Element> {
   const { exercise_id: exerciseId } = await params;
+  const tz = await getAppTimezone();
   const progression = await getExerciseProgression(exerciseId);
 
   if (progression === null) {
@@ -100,7 +126,7 @@ export default async function ExerciseProgressPage({
     );
   }
 
-  const chartPoints = buildChartPoints(progression);
+  const chart = buildChartConfig(progression, tz);
   const recentSets = progression.recent_sets.slice(0, 12);
 
   return (
@@ -126,10 +152,11 @@ export default async function ExerciseProgressPage({
       </div>
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="eyebrow">Top-set weight · progression</h2>
+        <h2 className="eyebrow">{chart.heading}</h2>
         <ProgressionChart
-          points={chartPoints}
-          unitLabel="LBS · OLDEST → NEWEST"
+          points={chart.points}
+          unitLabel={chart.unitLabel}
+          ariaLabel={chart.ariaLabel}
         />
       </section>
 
@@ -143,7 +170,7 @@ export default async function ExerciseProgressPage({
                 className="flex items-center justify-between rounded-lg border border-border bg-card px-3.5 py-2.5"
               >
                 <span className="font-mono text-[11px] uppercase tabular-nums text-muted-foreground">
-                  {formatSetDate(point.logged_at)}
+                  {formatSetDate(point.logged_at, tz)}
                 </span>
                 <span className="flex items-center gap-1.5 font-mono text-[13px] font-semibold tabular-nums text-foreground">
                   {formatSetValue(point, progression.is_bodyweight)}

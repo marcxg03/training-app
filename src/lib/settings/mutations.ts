@@ -5,7 +5,9 @@ import type { Database } from "@/lib/supabase/types";
 
 type BrowserClient = SupabaseClient<Database>;
 
-type MutationResult<T> = { ok: true; data: T } | { ok: false; error: string };
+type MutationResult<T> =
+  | { ok: true; data: T; warning?: string }
+  | { ok: false; error: string };
 
 function translateMutationError(error: PostgrestError | null): string {
   if (error?.code === "42501") {
@@ -26,19 +28,40 @@ export async function updateProfile(
   input: ProfileFormValues,
 ): Promise<MutationResult<void>> {
   const displayName = input.display_name.trim();
+  const row = {
+    user_id: userId,
+    display_name: displayName.length > 0 ? displayName : null,
+    bodyweight_kg: input.bodyweight_kg,
+    height_cm: input.height_cm,
+    goal_mode: input.goal_mode,
+  };
 
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      user_id: userId,
-      display_name: displayName.length > 0 ? displayName : null,
-      bodyweight_kg: input.bodyweight_kg,
-      height_cm: input.height_cm,
-      goal_mode: input.goal_mode,
-    },
-    { onConflict: "user_id" },
-  );
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({ ...row, timezone: input.timezone }, { onConflict: "user_id" });
 
   if (error) {
+    // Pre-migration-022 the timezone column doesn't exist (PGRST204). Save
+    // the rest of the profile rather than bricking the settings form.
+    if (error.code === "PGRST204") {
+      const { error: retryError } = await supabase
+        .from("profiles")
+        .upsert(row, { onConflict: "user_id" });
+
+      if (retryError) {
+        return { ok: false, error: translateMutationError(retryError) };
+      }
+
+      // Everything except timezone saved. Say so — a silent ok here means
+      // the user's timezone choice evaporates when migration 022 lands.
+      return {
+        ok: true,
+        data: undefined,
+        warning:
+          "Saved — except timezone: apply migration 022 first, then set it again.",
+      };
+    }
+
     return { ok: false, error: translateMutationError(error) };
   }
 

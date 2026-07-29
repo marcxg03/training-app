@@ -10,10 +10,10 @@ import {
   getGoalMode,
   getMealsForDate,
   getNutritionTargets,
-  getTodayDateString,
   getTodayDayType,
 } from "@/lib/nutrition/queries";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
+import { getAppToday } from "@/lib/time/server";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NutritionPage() {
@@ -26,7 +26,7 @@ export default async function NutritionPage() {
     redirect("/login");
   }
 
-  const today = getTodayDateString();
+  const today = await getAppToday();
   const [targets, meals, dayType, goalMode] = await Promise.all([
     getNutritionTargets(),
     getMealsForDate(today),

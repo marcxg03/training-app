@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAppDayOfWeek } from "@/lib/time/server";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -6,7 +7,6 @@ import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
 import { StartWorkoutButton } from "@/components/today/StartWorkoutButton";
 import {
-  getTodayDayOfWeek,
   parseDayOfWeek,
 } from "@/lib/methodology/today";
 import { createClient } from "@/lib/supabase/server";
@@ -194,7 +194,7 @@ export default async function TodayWorkoutDetailPage({
 }: TodayWorkoutDetailPageProps) {
   const { workout_id: workoutId } = await params;
   const { day: dayParam } = await searchParams;
-  const actualDay = getTodayDayOfWeek();
+  const actualDay = await getAppDayOfWeek();
   const selectedDay = parseDayOfWeek(dayParam) ?? actualDay;
   const isToday = selectedDay === actualDay;
   const workout = await getTodayWorkoutDetail(workoutId, selectedDay);

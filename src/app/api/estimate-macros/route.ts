@@ -181,6 +181,26 @@ export async function POST(request: Request) {
     return NextResponse.json(sanitize(response.parsed_output));
   } catch (error) {
     console.error("estimate-macros failed", error);
+    // An invalid or unauthorized key is an operator problem, not a transient
+    // failure — surface it distinctly so a dead key is self-diagnosing.
+    if (
+      error instanceof Anthropic.AuthenticationError ||
+      error instanceof Anthropic.PermissionDeniedError
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Estimation isn't configured correctly (API key rejected). Enter macros manually.",
+        },
+        { status: 503 },
+      );
+    }
+    if (error instanceof Anthropic.RateLimitError) {
+      return NextResponse.json(
+        { error: "Estimation is busy right now. Try again in a minute." },
+        { status: 429 },
+      );
+    }
     return NextResponse.json(
       { error: "Estimation failed. Enter macros manually." },
       { status: 502 },

@@ -9,14 +9,15 @@ import {
 import { RestDayEmpty } from "@/components/today/RestDayEmpty";
 import {
   dayOfWeekLabel,
-  getTodayDayOfWeek,
   parseDayOfWeek,
 } from "@/lib/methodology/today";
 import {
   getMealsForDate,
   getNutritionTargets,
-  getTodayDateString,
 } from "@/lib/nutrition/queries";
+import { getAppDayOfWeek, getAppToday } from "@/lib/time/server";
+import { getAppTimezone } from "@/lib/time/server";
+import { startOfDayInTzIso } from "@/lib/time/appDay";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,14 +53,6 @@ function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
   return zone
     .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-// Match the logger's "today" boundary so a completion written during today's
-// session is recognized here (see log/[workout_id]/page.tsx getTodayStartIso).
-function getTodayStartIso() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today.toISOString();
 }
 
 function sortWorkouts(left: TodayWorkoutRow, right: TodayWorkoutRow) {
@@ -165,7 +158,10 @@ async function getPresetActivityNames(presets: WorkoutPresetRow[]) {
   );
 }
 
-async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
+async function getTodaySessions(
+  dayOfWeek: Enums<"day_of_week_enum">,
+  todayStartIso: string,
+) {
   const supabase = await createClient();
   const { data: schedule, error: scheduleError } = await supabase
     .from("daily_schedules")
@@ -231,7 +227,7 @@ async function getTodaySessions(dayOfWeek: Enums<"day_of_week_enum">) {
         .select("workout_id")
         .in("workout_id", workoutIds)
         .not("completed_at", "is", null)
-        .gte("started_at", getTodayStartIso())
+        .gte("started_at", todayStartIso)
     : { data: [], error: null };
 
   if (completionsError) {
@@ -267,8 +263,11 @@ type TodayPageProps = {
 };
 
 export default async function TodayPage({ searchParams }: TodayPageProps) {
-  const today = new Date();
-  const actualDay = getTodayDayOfWeek(today);
+  const actualDay = await getAppDayOfWeek();
+  const todayKey = await getAppToday();
+  // Noon-anchored so the header eyebrow formats the app-timezone calendar
+  // day correctly regardless of the server's own timezone.
+  const todayDate = new Date(`${todayKey}T12:00:00`);
   const { day: dayParam } = await searchParams;
   const selectedDay = parseDayOfWeek(dayParam) ?? actualDay;
   const isToday = selectedDay === actualDay;
@@ -276,9 +275,14 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
   // Nutrition tracking is anchored to the real calendar date, so only fetch and
   // show fuel on today's view; other days are a read-only plan preview.
   const [selectedSchedule, targets, meals] = await Promise.all([
-    getTodaySessions(selectedDay),
+    getTodaySessions(
+      selectedDay,
+      // App-day boundary: matches the logger (log/[workout_id]) so a
+      // completion from tonight's session is recognized as "today".
+      startOfDayInTzIso(await getAppTimezone(), todayKey),
+    ),
     isToday ? getNutritionTargets() : Promise.resolve(null),
-    isToday ? getMealsForDate(getTodayDateString()) : Promise.resolve([]),
+    isToday ? getMealsForDate(todayKey) : Promise.resolve([]),
   ]);
 
   const hasSessions = Boolean(
@@ -290,7 +294,7 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <TodayHeader dayOfWeek={selectedDay} date={today} isToday={isToday} />
+      <TodayHeader dayOfWeek={selectedDay} date={todayDate} isToday={isToday} />
       <TodayWeekStrip selectedDay={selectedDay} actualDay={actualDay} />
       {hasSessions && selectedSchedule ? (
         <TodaySessionList

@@ -29,3 +29,32 @@ export function formatWeight(kg: number): string {
 
   return `${Math.round(kgToLbs(kg))} ${DISPLAY_UNIT}`;
 }
+
+// Chart adapter: convert a kg-valued trend series to display-lbs points in
+// ONE place (delta math should use unrounded values; rounding happens here,
+// last).
+export function toLbsChartPoints(
+  points: { label: string; value: number }[],
+): { label: string; value: number }[] {
+  return points.map((point) => ({
+    label: point.label,
+    value: Math.round(kgToLbs(point.value)),
+  }));
+}
+
+// Tonnage display for volume stats (weight x reps summed across a range).
+// k-suffix past 1000 lbs to keep the stat glanceable; an all-bodyweight
+// group legitimately shows "0 lbs" (sets counted, no external load).
+export function formatTonnage(kg: number): string {
+  const lbs = kgToLbs(kg);
+
+  if (!Number.isFinite(lbs) || lbs <= 0) {
+    return `0 ${DISPLAY_UNIT}`;
+  }
+
+  if (lbs >= 1000) {
+    return `${(lbs / 1000).toFixed(1)}k ${DISPLAY_UNIT}`;
+  }
+
+  return `${Math.round(lbs)} ${DISPLAY_UNIT}`;
+}

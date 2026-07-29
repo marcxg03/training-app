@@ -1,12 +1,7 @@
-import { getTodayDayOfWeek } from "@/lib/methodology/today";
+import { getAppDayOfWeek } from "@/lib/time/server";
 import type { GoalMode, NutritionDayType } from "@/lib/methodology/nutrition";
 import { createClient } from "@/lib/supabase/server";
 import type { MealEntry, NutritionTargets } from "@/lib/nutrition/projections";
-
-/** Today's local date as YYYY-MM-DD (en-CA formats to ISO date, server tz). */
-export function getTodayDateString(date: Date = new Date()): string {
-  return date.toLocaleDateString("en-CA");
-}
 
 export async function getNutritionTargets(): Promise<NutritionTargets | null> {
   const supabase = await createClient();
@@ -58,7 +53,7 @@ export async function getMealsForDate(date: string): Promise<MealEntry[]> {
 /** Derives today's nutrition day type from the active plan's schedule. */
 export async function getTodayDayType(): Promise<NutritionDayType> {
   const supabase = await createClient();
-  const dayOfWeek = getTodayDayOfWeek();
+  const dayOfWeek = await getAppDayOfWeek();
 
   const { data: schedule, error: scheduleError } = await supabase
     .from("daily_schedules")
@@ -103,4 +98,32 @@ export async function getTodayDayType(): Promise<NutritionDayType> {
   // Recovery-only days (mobility / stretch) are nutritionally closer to a rest
   // day than a cardio day, so they fall through to "rest".
   return "rest";
+}
+
+export type MealEntryWithDate = MealEntry & { date: string };
+
+/** All meals in [startDate, endDate] (inclusive, YYYY-MM-DD) for trends. */
+export async function getMealsForDateRange(
+  startDate: string,
+  endDate: string,
+): Promise<MealEntryWithDate[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("meal_entries")
+    .select(
+      "meal_id, meal_type, date, protein_min_g, protein_max_g, carbs_min_g, carbs_max_g, fat_min_g, fat_max_g, cal_min, cal_max, note, logged_at",
+    )
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: true })
+    .order("logged_at", { ascending: true })
+    .limit(1000);
+
+  if (error) {
+    throw new Error(`Failed to load meals for range: ${error.message}`);
+  }
+
+  // 30 days x a realistic meal count sits far below the 1000-row cap; the
+  // explicit .limit documents the ceiling rather than trusting the default.
+  return data ?? [];
 }
