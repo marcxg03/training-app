@@ -115,7 +115,10 @@ export async function getMealsForDateRange(
     )
     .gte("date", startDate)
     .lte("date", endDate)
-    .order("date", { ascending: true })
+    // Descending: if the 1000-row cap is ever hit (90-day windows now use
+    // this), truncation must eat the OLDEST days, never the newest — callers
+    // (buildNutritionBands, buildMealDaySummaries) sort for themselves.
+    .order("date", { ascending: false })
     .order("logged_at", { ascending: true })
     .limit(1000);
 
@@ -123,7 +126,5 @@ export async function getMealsForDateRange(
     throw new Error(`Failed to load meals for range: ${error.message}`);
   }
 
-  // 30 days x a realistic meal count sits far below the 1000-row cap; the
-  // explicit .limit documents the ceiling rather than trusting the default.
   return data ?? [];
 }

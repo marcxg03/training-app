@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SlidersHorizontal } from "lucide-react";
+import { History, SlidersHorizontal } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { DayTypeFrameworkCard } from "@/app/(app)/nutrition/_components/DayTypeFrameworkCard";
@@ -56,15 +56,24 @@ export default async function NutritionPage() {
             Fuel
           </h1>
         </div>
-        <Link
-          href="/nutrition/targets"
-          aria-label={
-            targets ? "Edit nutrition targets" : "Set nutrition targets"
-          }
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
-        >
-          <SlidersHorizontal className="h-5 w-5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/nutrition/history"
+            aria-label="Meal log history"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
+          >
+            <History className="h-5 w-5" />
+          </Link>
+          <Link
+            href="/nutrition/targets"
+            aria-label={
+              targets ? "Edit nutrition targets" : "Set nutrition targets"
+            }
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+          </Link>
+        </div>
       </header>
 
       <DayTypeFrameworkCard framework={framework} />
