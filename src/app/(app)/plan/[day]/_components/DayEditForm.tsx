@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
 import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
+import { SessionContentEditor } from "@/app/(app)/plan/[day]/_components/SessionContentEditor";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -125,7 +126,16 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
     });
 
     if (!result.ok) {
-      setSubmitError(result.error);
+      // Sessions inserted before the failure are already committed. Adopt their
+      // ids so a retry updates those rows instead of inserting duplicates.
+      for (const row of result.inserted) {
+        form.setValue(`workouts.${row.index}.workout_id`, row.workout_id);
+      }
+      setSubmitError(
+        result.inserted.length > 0
+          ? `${result.error} Some sessions were already saved — retry from this page rather than leaving it.`
+          : result.error,
+      );
       return;
     }
 
@@ -269,6 +279,9 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                                       key={t.value}
                                       type="button"
                                       onClick={() => {
+                                        if (t.value === field.value) {
+                                          return;
+                                        }
                                         field.onChange(t.value);
                                         if (t.value !== "cardio") {
                                           form.setValue(
@@ -277,6 +290,16 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                                             { shouldValidate: true },
                                           );
                                         }
+                                        // Content is type-shaped: lifting holds
+                                        // a block list, cardio/recovery hold a
+                                        // preset. Carrying it across a type
+                                        // change would fail validation or write
+                                        // a block of the wrong category.
+                                        form.setValue(
+                                          `workouts.${index}.blocks`,
+                                          [],
+                                          { shouldValidate: true },
+                                        );
                                       }}
                                       aria-pressed={active}
                                       className={
@@ -396,6 +419,30 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                       )}
                     />
 
+                    <SessionContentEditor
+                      control={form.control}
+                      workoutIndex={index}
+                      workoutType={rowType}
+                      isCatalogLinked={row.workout_def_id !== null}
+                      hasHistory={row.has_history}
+                      blockCatalog={data.block_catalog}
+                      cardioActivities={data.cardio_activities}
+                      recoveryActivities={data.recovery_activities}
+                    />
+
+                    {/* Surfaces the schema's session-content errors (duplicate
+                        block, missing activity) — SessionContentEditor renders
+                        controls, not messages. */}
+                    <FormField
+                      control={form.control}
+                      name={`workouts.${index}.blocks`}
+                      render={() => (
+                        <FormItem>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     {row.has_history ? (
                       <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-faint">
                         Has logged history — can be edited but not removed.
@@ -410,6 +457,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                 onClick={() =>
                   append({
                     workout_id: null,
+                    workout_def_id: null,
                     workout_name: "",
                     workout_type: "lifting",
                     cardio_format: null,
@@ -417,6 +465,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     gym: "",
                     display_order: fields.length,
                     has_history: false,
+                    blocks: [],
                   })
                 }
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-3.5 text-[13px] font-semibold text-subtle transition-colors hover:border-faint hover:text-foreground"

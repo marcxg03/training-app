@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
+import { getPresetActivityNames } from "@/lib/plan/preset-activities";
 import { createClient } from "@/lib/supabase/server";
 
 type PlanDayPageProps = {
@@ -21,6 +22,8 @@ type SessionDetail = {
   description: string | null;
   cardioDistance: string | null;
   cardioTargetZone: Enums<"cardio_target_zone_enum"> | null;
+  /** Name of the preset cardio/recovery activity attached to this session. */
+  activityName: string | null;
   displayOrder: number;
   blocks: Array<{
     blockId: string;
@@ -163,6 +166,23 @@ async function getDayPlan(day: Enums<"day_of_week_enum">) {
         : [],
     ),
   );
+  // Cardio/recovery sessions carry their content as a preset activity on the
+  // junction row rather than as lifting blocks (which is why the block_type
+  // filter above drops them). Resolve those names so the panel can show what
+  // the session actually is instead of "No extra details".
+  const presetNames = await getPresetActivityNames(workoutBlocks ?? []);
+  const activityNameByWorkoutId = new Map<string, string>();
+
+  for (const row of workoutBlocks ?? []) {
+    if (!row.preset_activity_id) {
+      continue;
+    }
+    const name = presetNames.get(row.preset_activity_id);
+    if (name && !activityNameByWorkoutId.has(row.workout_id)) {
+      activityNameByWorkoutId.set(row.workout_id, name);
+    }
+  }
+
   const blockIds = liftingBlocks.map((block) => block.blockId);
   const { data: liftingItems, error: liftingItemsError } = blockIds.length
     ? await supabase
@@ -239,6 +259,7 @@ async function getDayPlan(day: Enums<"day_of_week_enum">) {
     description: workout.description,
     cardioDistance: workout.cardio_distance,
     cardioTargetZone: workout.cardio_target_zone,
+    activityName: activityNameByWorkoutId.get(workout.workout_id) ?? null,
     displayOrder: workout.display_order,
     blocks: blocksByWorkoutId.get(workout.workout_id) ?? [],
   }));

@@ -7,6 +7,14 @@ type BrowserClient = SupabaseClient<Database>;
 
 type MutationResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+/** A session inserted during a saveDay call, reported back even when a later
+ * step fails so the form can adopt the id instead of re-inserting on retry. */
+export type InsertedWorkout = { index: number; workout_id: string };
+
+export type SaveDayResult =
+  | { ok: true }
+  | { ok: false; error: string; inserted: InsertedWorkout[] };
+
 function translateMutationError(error: PostgrestError | null): string {
   if (error?.code === "42501") {
     return "You don't have permission to save this. Sign out and back in if the issue persists.";
@@ -326,15 +334,18 @@ export async function saveDay(
     workouts: WorkoutRowValues[];
     removed_workout_ids: string[];
   },
-): Promise<MutationResult<void>> {
+): Promise<SaveDayResult> {
   // 1. Guard: never delete a workout that has logged history (FK cascade would
   //    silently drop set_logs / completions).
   if (await anyHasHistory(supabase, input.removed_workout_ids)) {
     return {
       ok: false,
       error: "A session with logged history can't be removed.",
+      inserted: [],
     };
   }
+
+  const inserted: InsertedWorkout[] = [];
 
   // 2. Rest-day flag.
   const { error: scheduleError } = await supabase
@@ -343,7 +354,11 @@ export async function saveDay(
     .eq("schedule_id", input.schedule_id);
 
   if (scheduleError) {
-    return { ok: false, error: translateMutationError(scheduleError) };
+    return {
+      ok: false,
+      error: translateMutationError(scheduleError),
+      inserted,
+    };
   }
 
   // 3. Deletes (history-free; cascades workout_blocks only).
@@ -353,7 +368,11 @@ export async function saveDay(
       .delete()
       .in("workout_id", input.removed_workout_ids);
     if (deleteError) {
-      return { ok: false, error: translateMutationError(deleteError) };
+      return {
+        ok: false,
+        error: translateMutationError(deleteError),
+        inserted,
+      };
     }
   }
 
@@ -363,11 +382,25 @@ export async function saveDay(
   //    also carries its format (the schema guarantees a new cardio row has one, so
   //    the workouts cardio CHECK — cardio ⇒ format NOT NULL, non-cardio ⇒ all
   //    cardio_* NULL — always holds).
+  // Server-authoritative history check, mirroring savePlan: a session that has
+  // been logged keeps its block snapshot frozen. `history/queries.ts` reports
+  // blocks_completed_count from the frozen completed_block_ids but
+  // blocks_total_count from LIVE workout_blocks, so rewriting a logged
+  // session's blocks retroactively corrupts every past completion of it
+  // ("3/2 blocks"). Never trust the client's display-only has_history flag.
+  const historySet = await workoutsWithHistory(
+    supabase,
+    input.workouts
+      .map((row) => row.workout_id)
+      .filter((id): id is string => id !== null),
+  );
+
   for (let index = 0; index < input.workouts.length; index += 1) {
     const row = input.workouts[index];
     const gym = row.gym.trim();
+    let workoutId = row.workout_id;
 
-    if (row.workout_id) {
+    if (workoutId) {
       const { error } = await supabase
         .from("workouts")
         .update({
@@ -376,25 +409,149 @@ export async function saveDay(
           gym: gym.length > 0 ? gym : null,
           display_order: index,
         })
-        .eq("workout_id", row.workout_id);
+        .eq("workout_id", workoutId);
       if (error) {
-        return { ok: false, error: translateMutationError(error) };
+        return {
+          ok: false,
+          error: translateMutationError(error),
+          inserted,
+        };
       }
     } else {
       const isCardio = row.workout_type === "cardio";
-      const { error } = await supabase.from("workouts").insert({
-        schedule_id: input.schedule_id,
-        workout_name: row.workout_name.trim(),
-        workout_type: row.workout_type,
-        cardio_format: isCardio ? row.cardio_format : null,
-        timing: row.timing,
-        gym: gym.length > 0 ? gym : null,
-        display_order: index,
-      });
+      // .select() so the new id is available to sync this session's blocks
+      // below — without it a newly added session could never gain content.
+      const { data: insertedRow, error } = await supabase
+        .from("workouts")
+        .insert({
+          schedule_id: input.schedule_id,
+          workout_name: row.workout_name.trim(),
+          workout_type: row.workout_type,
+          cardio_format: isCardio ? row.cardio_format : null,
+          timing: row.timing,
+          gym: gym.length > 0 ? gym : null,
+          display_order: index,
+        })
+        .select("workout_id")
+        .single();
       if (error) {
-        return { ok: false, error: translateMutationError(error) };
+        return { ok: false, error: translateMutationError(error), inserted };
       }
+      workoutId = insertedRow.workout_id;
+      // Reported back even on a later failure so the form can adopt the id;
+      // otherwise a retry re-inserts and the day ends up with duplicates.
+      inserted.push({ index, workout_id: workoutId });
     }
+
+    // 5. Session content (workout_blocks membership + preset activity).
+    const blocksResult = await syncSessionBlocks(
+      supabase,
+      workoutId,
+      row,
+      blocksLockReason(row, historySet),
+    );
+    if (!blocksResult.ok) {
+      return { ok: false, error: blocksResult.error, inserted };
+    }
+  }
+
+  return { ok: true };
+}
+
+/** Why this session's blocks may not be rewritten here, or null if they may.
+ *
+ * Two owners other than this editor: a logged session's snapshot is frozen
+ * history, and a catalog-linked session's blocks belong to its workout
+ * definition (savePlan re-materializes them, so an edit here would be silently
+ * reverted). The UI renders both read-only; this is the server enforcing it. */
+export function blocksLockReason(
+  row: WorkoutRowValues,
+  historySet: Set<string>,
+): { reason: string } | null {
+  if (row.workout_id && historySet.has(row.workout_id)) {
+    return {
+      reason: `"${row.workout_name.trim()}" has logged history, so its blocks are frozen. Edit the blocks in the Library instead.`,
+    };
+  }
+
+  if (row.workout_def_id) {
+    return {
+      reason: `"${row.workout_name.trim()}" comes from the workout catalog — edit its blocks in the Library.`,
+    };
+  }
+
+  return null;
+}
+
+/** Replaces a session's `workout_blocks` membership with `row.blocks`, in order.
+ *
+ * No-ops when the stored membership already matches. That matters: the rewrite
+ * is delete-then-insert (not transactional, matching the Library's updateBlock
+ * idiom), so re-running it on every save would put a session's whole block list
+ * at risk every time the user merely renamed a session.
+ *
+ * `locked` sessions never have their blocks rewritten — see saveDay. A locked
+ * session whose submitted blocks differ from storage means the client was
+ * working from a stale snapshot, so it errors instead of silently winning. */
+async function syncSessionBlocks(
+  supabase: BrowserClient,
+  workoutId: string,
+  row: WorkoutRowValues,
+  locked: { reason: string } | null,
+): Promise<MutationResult<void>> {
+  const presetType = row.workout_type === "lifting" ? null : row.workout_type;
+
+  const { data: current, error: readError } = await supabase
+    .from("workout_blocks")
+    .select("block_id, display_order, preset_activity_id")
+    .eq("workout_id", workoutId)
+    .order("display_order");
+
+  if (readError) {
+    return { ok: false, error: translateMutationError(readError) };
+  }
+
+  const signature = (
+    rows: Array<{ block_id: string; preset_activity_id: string | null }>,
+  ) => rows.map((r) => `${r.block_id}:${r.preset_activity_id ?? ""}`).join("|");
+
+  const unchanged = signature(current ?? []) === signature(row.blocks);
+
+  if (unchanged) {
+    return { ok: true, data: undefined };
+  }
+
+  if (locked) {
+    return { ok: false, error: locked.reason };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("workout_blocks")
+    .delete()
+    .eq("workout_id", workoutId);
+
+  if (deleteError) {
+    return { ok: false, error: translateMutationError(deleteError) };
+  }
+
+  if (row.blocks.length === 0) {
+    return { ok: true, data: undefined };
+  }
+
+  const { error: insertError } = await supabase.from("workout_blocks").insert(
+    row.blocks.map((block, blockIndex) => ({
+      workout_id: workoutId,
+      block_id: block.block_id,
+      display_order: blockIndex,
+      // The table's CHECK requires both preset columns set or both NULL.
+      preset_activity_id: presetType ? block.preset_activity_id : null,
+      preset_activity_type:
+        presetType && block.preset_activity_id ? presetType : null,
+    })),
+  );
+
+  if (insertError) {
+    return { ok: false, error: translateMutationError(insertError) };
   }
 
   return { ok: true, data: undefined };

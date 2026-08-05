@@ -1712,3 +1712,57 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
   session and both persist with the correct type; both delete through the UI. It
   creates a throwaway active plan + Mon/Sun schedules and tears it down, restoring
   the user's prior active plan.
+
+## Plan editor — compose a session's content (2026-08-05)
+
+### What changed
+
+- **The gap:** `saveDay` wrote only `workouts` rows and never touched
+  `workout_blocks`, so every session added through the per-day editor was
+  created **empty** — no blocks, no activity, nothing for the logger to show.
+  Adding a recovery session to Saturday produced a session containing nothing.
+- Per-day editor (`/plan/[day]/edit`) now composes session content:
+  - **Lifting** sessions get an attach / reorder / remove list of Library
+    blocks (`SessionContentEditor`).
+  - **Cardio / recovery** sessions get a preset-activity picker, written as the
+    category block plus `preset_activity_id` + `preset_activity_type` — the
+    shape the seed writes and the day view renders.
+  - Blocks are only ever _attached_ here. Authoring stays in the Library, which
+    already owns names, uniqueness, and exercise lists.
+- `saveDay` returns the inserted `workout_id`, so a session created and filled
+  in the same save actually gets its blocks. On failure it now reports the ids
+  it did insert, and the form adopts them — previously a retry after a
+  mid-save error inserted duplicate sessions.
+- **Block snapshots are locked where they aren't owned here** (`blocksLockReason`):
+  - a session with **logged history** keeps the snapshot its history was
+    recorded against. `/history` reports `blocks_completed_count` from the
+    frozen `completed_block_ids` but `blocks_total_count` from **live**
+    `workout_blocks`, so rewriting a logged session's blocks retroactively
+    corrupts every past completion of it ("3/2 blocks");
+  - a **catalog-linked** session's blocks belong to its workout definition,
+    which `savePlan` re-materializes — an edit here would be silently reverted.
+    Both render read-only _and_ are enforced server-side, mirroring the guard
+    `savePlan` already had.
+- Fixed: `/plan/[day]` selected the preset columns but never resolved them, and
+  filtered out cardio/recovery blocks (their `block_type` is NULL), so those
+  sessions always read "No extra details for this session". `/today` resolved
+  presets and the day view didn't; the resolver is now shared
+  (`src/lib/plan/preset-activities.ts`) instead of duplicated.
+
+### Verification
+
+- `scripts/verify-plan-schema.ts` — 15 fixture assertions over the day schema
+  and the server-side block lock.
+- `e2e/verify-session-content.mjs` — 15 checks against a real dev server and
+  the real database: blocks persist in order, reorder and removal persist, a
+  recovery session persists its preset, the **day view actually renders** both
+  (closing the loop from editor to read surface), reordering _sessions_ keeps
+  each session's own blocks, and a logged session's snapshot is frozen with no
+  edit controls exposed.
+- `scripts/ralph-verify.sh` GREEN; logger, analytics and chart suites still pass.
+- Adversarial review (`/roast-code`, Bug Hunter + Maintainer/Operator): both
+  independently found the logged-history rewrite as the top must-fix; also
+  fixed the catalog-linked server gap, the duplicate-on-retry path, and a
+  category-block mis-selection for users with more than one block of a
+  category. The reviewers disagreed on whether the nested field array was
+  index-stale under session reorder — settled with a test, which passes.
