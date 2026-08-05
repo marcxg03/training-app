@@ -357,9 +357,12 @@ export async function saveDay(
     }
   }
 
-  // 4. Updates (existing) + inserts (new lifting sessions). display_order is
-  //    renormalised to the row index. workout_type is preserved on updates and
-  //    is always "lifting" for inserts, so the cardio CHECK can't be violated.
+  // 4. Updates (existing) + inserts (new sessions). display_order is renormalised
+  //    to the row index. Existing rows keep their type/cardio fields (the update
+  //    never touches them). New rows carry the type the user picked; a cardio row
+  //    also carries its format (the schema guarantees a new cardio row has one, so
+  //    the workouts cardio CHECK — cardio ⇒ format NOT NULL, non-cardio ⇒ all
+  //    cardio_* NULL — always holds).
   for (let index = 0; index < input.workouts.length; index += 1) {
     const row = input.workouts[index];
     const gym = row.gym.trim();
@@ -378,10 +381,12 @@ export async function saveDay(
         return { ok: false, error: translateMutationError(error) };
       }
     } else {
+      const isCardio = row.workout_type === "cardio";
       const { error } = await supabase.from("workouts").insert({
         schedule_id: input.schedule_id,
         workout_name: row.workout_name.trim(),
-        workout_type: "lifting",
+        workout_type: row.workout_type,
+        cardio_format: isCardio ? row.cardio_format : null,
         timing: row.timing,
         gym: gym.length > 0 ? gym : null,
         display_order: index,

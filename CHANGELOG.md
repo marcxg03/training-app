@@ -1681,3 +1681,34 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
 - Live verification pending — the bug only reproduces against week-old data,
   so it requires migration 023 + the deploy + the repair script applied to the
   real DB, in that order.
+
+## Plan Editor — Add cardio & recovery sessions (2026-08-05)
+
+### What was built
+
+- The per-day plan editor (`/plan/[day]/edit`) can now **add cardio and recovery
+  sessions**, not just lifting. New rows carry a Type picker (Lifting / Cardio /
+  Recovery); choosing Cardio reveals a Cardio-format picker (endurance run / speed
+  run / basketball). Existing rows keep their original type (read-only badge), per
+  the original slice contract. Deleting any session type already worked
+  (history-guarded) — this closes the "add" half.
+- `saveDay` now inserts the row's real `workout_type` (was hardcoded `"lifting"`)
+  plus `cardio_format` for cardio rows — mirroring the DB `workouts` CHECK
+  (cardio ⇒ `cardio_format` NOT NULL; non-cardio ⇒ all `cardio_*` NULL). Recovery
+  rows insert with NULL cardio fields. Existing rows are still updated in place and
+  never rewrite their type/cardio fields.
+- `workoutRowSchema` gains a nullable `cardio_format` + a `superRefine` mirroring
+  the CHECK (a new cardio row requires a format; a non-cardio row forbids one).
+- Resolves the deferred KNOWN_ISSUES item "Plan Editor v1 doesn't add
+  cardio/recovery sessions." Still deferred: attaching a specific preset activity
+  to a session (polymorphic preset wiring) and editing blocks-within-a-workout.
+
+### Verification
+
+- `pnpm typecheck` / `pnpm lint` / `pnpm build` GREEN.
+- New `e2e/verify-plan-blocks.mjs` (11 assertions) drives the real page against the
+  remote DB: the DB accepts recovery (NULL format) + cardio (`endurance_run`) and
+  REJECTS cardio without a format (CHECK 23514); the UI adds a recovery + a cardio
+  session and both persist with the correct type; both delete through the UI. It
+  creates a throwaway active plan + Mon/Sun schedules and tears it down, restoring
+  the user's prior active plan.
