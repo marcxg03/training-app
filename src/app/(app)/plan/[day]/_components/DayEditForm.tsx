@@ -203,81 +203,167 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                 const rowType =
                   watched.workouts?.[index]?.workout_type ?? row.workout_type;
                 return (
-                <div
-                  key={row.id}
-                  className="space-y-3 rounded-xl border border-border bg-card p-[14px]"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <GripVertical
-                      className="h-[18px] w-[18px] shrink-0 text-faint"
-                      aria-hidden="true"
-                    />
-                    <span className="rounded-md border border-border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-subtle">
-                      {TYPE_LABEL[rowType] ?? rowType}
-                    </span>
-                    <div className="ml-auto flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={index === 0}
-                        onClick={() => move(index, index - 1)}
-                        aria-label="Move up"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={index === fields.length - 1}
-                        onClick={() => move(index, index + 1)}
-                        aria-label="Move down"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                      <button
-                        type="button"
-                        disabled={row.has_history}
-                        onClick={() => remove(index)}
-                        aria-label="Remove session"
-                        title={
-                          row.has_history
-                            ? "This session has logged history and can't be removed"
-                            : "Remove session"
-                        }
-                        className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-danger transition-colors hover:bg-danger/10 disabled:pointer-events-none disabled:opacity-40"
-                      >
-                        <Trash2 className="h-[18px] w-[18px]" />
-                      </button>
+                  <div
+                    key={row.id}
+                    className="space-y-3 rounded-xl border border-border bg-card p-[14px]"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <GripVertical
+                        className="h-[18px] w-[18px] shrink-0 text-faint"
+                        aria-hidden="true"
+                      />
+                      <span className="rounded-md border border-border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-subtle">
+                        {TYPE_LABEL[rowType] ?? rowType}
+                      </span>
+                      <div className="ml-auto flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          disabled={index === 0}
+                          onClick={() => move(index, index - 1)}
+                          aria-label="Move up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          disabled={index === fields.length - 1}
+                          onClick={() => move(index, index + 1)}
+                          aria-label="Move down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <button
+                          type="button"
+                          disabled={row.has_history}
+                          onClick={() => remove(index)}
+                          aria-label="Remove session"
+                          title={
+                            row.has_history
+                              ? "This session has logged history and can't be removed"
+                              : "Remove session"
+                          }
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-danger transition-colors hover:bg-danger/10 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          <Trash2 className="h-[18px] w-[18px]" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {isNew ? (
+                    {isNew ? (
+                      <FormField
+                        control={form.control}
+                        name={`workouts.${index}.workout_type`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="eyebrow">Type</FormLabel>
+                            <FormControl>
+                              <div className="flex gap-1.5">
+                                {WORKOUT_TYPES.map((t) => {
+                                  const active = field.value === t.value;
+                                  return (
+                                    <button
+                                      key={t.value}
+                                      type="button"
+                                      onClick={() => {
+                                        field.onChange(t.value);
+                                        if (t.value !== "cardio") {
+                                          form.setValue(
+                                            `workouts.${index}.cardio_format`,
+                                            null,
+                                            { shouldValidate: true },
+                                          );
+                                        }
+                                      }}
+                                      aria-pressed={active}
+                                      className={
+                                        active
+                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                          : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
+                                      }
+                                    >
+                                      {t.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+
+                    {isNew && rowType === "cardio" ? (
+                      <FormField
+                        control={form.control}
+                        name={`workouts.${index}.cardio_format`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="eyebrow">
+                              Cardio format
+                            </FormLabel>
+                            <FormControl>
+                              <div className="flex gap-1.5">
+                                {CARDIO_FORMATS.map((f) => {
+                                  const active = field.value === f.value;
+                                  return (
+                                    <button
+                                      key={f.value}
+                                      type="button"
+                                      onClick={() => field.onChange(f.value)}
+                                      aria-pressed={active}
+                                      className={
+                                        active
+                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                          : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
+                                      }
+                                    >
+                                      {f.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+
                     <FormField
                       control={form.control}
-                      name={`workouts.${index}.workout_type`}
+                      name={`workouts.${index}.workout_name`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="eyebrow">Type</FormLabel>
+                          <FormLabel className="eyebrow">
+                            Session name
+                          </FormLabel>
+                          <FormControl>
+                            <Input {...field} autoComplete="off" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name={`workouts.${index}.timing`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="eyebrow">Timing</FormLabel>
                           <FormControl>
                             <div className="flex gap-1.5">
-                              {WORKOUT_TYPES.map((t) => {
+                              {TIMINGS.map((t) => {
                                 const active = field.value === t.value;
                                 return (
                                   <button
                                     key={t.value}
                                     type="button"
-                                    onClick={() => {
-                                      field.onChange(t.value);
-                                      if (t.value !== "cardio") {
-                                        form.setValue(
-                                          `workouts.${index}.cardio_format`,
-                                          null,
-                                          { shouldValidate: true },
-                                        );
-                                      }
-                                    }}
+                                    onClick={() => field.onChange(t.value)}
                                     aria-pressed={active}
                                     className={
                                       active
@@ -291,115 +377,31 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                               })}
                             </div>
                           </FormControl>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
-                  ) : null}
 
-                  {isNew && rowType === "cardio" ? (
                     <FormField
                       control={form.control}
-                      name={`workouts.${index}.cardio_format`}
+                      name={`workouts.${index}.gym`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="eyebrow">
-                            Cardio format
-                          </FormLabel>
+                          <FormLabel className="eyebrow">Gym</FormLabel>
                           <FormControl>
-                            <div className="flex gap-1.5">
-                              {CARDIO_FORMATS.map((f) => {
-                                const active = field.value === f.value;
-                                return (
-                                  <button
-                                    key={f.value}
-                                    type="button"
-                                    onClick={() => field.onChange(f.value)}
-                                    aria-pressed={active}
-                                    className={
-                                      active
-                                        ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
-                                        : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
-                                    }
-                                  >
-                                    {f.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            <Input {...field} autoComplete="off" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  ) : null}
 
-                  <FormField
-                    control={form.control}
-                    name={`workouts.${index}.workout_name`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="eyebrow">Session name</FormLabel>
-                        <FormControl>
-                          <Input {...field} autoComplete="off" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`workouts.${index}.timing`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="eyebrow">Timing</FormLabel>
-                        <FormControl>
-                          <div className="flex gap-1.5">
-                            {TIMINGS.map((t) => {
-                              const active = field.value === t.value;
-                              return (
-                                <button
-                                  key={t.value}
-                                  type="button"
-                                  onClick={() => field.onChange(t.value)}
-                                  aria-pressed={active}
-                                  className={
-                                    active
-                                      ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
-                                      : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
-                                  }
-                                >
-                                  {t.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`workouts.${index}.gym`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="eyebrow">Gym</FormLabel>
-                        <FormControl>
-                          <Input {...field} autoComplete="off" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {row.has_history ? (
-                    <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-faint">
-                      Has logged history — can be edited but not removed.
-                    </p>
-                  ) : null}
-                </div>
+                    {row.has_history ? (
+                      <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-faint">
+                        Has logged history — can be edited but not removed.
+                      </p>
+                    ) : null}
+                  </div>
                 );
               })}
 
