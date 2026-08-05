@@ -12,15 +12,15 @@ A mobile-first PWA that runs my full training methodology end-to-end — block +
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js (App Router, RSC-first) + TypeScript |
+| Layer     | Choice                                                                         |
+| --------- | ------------------------------------------------------------------------------ |
+| Framework | Next.js (App Router, RSC-first) + TypeScript                                   |
 | Data/Auth | Supabase (Postgres, per-user RLS on every table, SSR auth via `@supabase/ssr`) |
-| UI | Tailwind + shadcn (New York), mobile-first, semantic tokens |
-| Forms | react-hook-form + zod |
-| AI | Anthropic SDK — meal-photo macro estimation |
-| Testing | Playwright e2e + screenshot verification, fixture-asserted projections |
-| Deploy | Vercel |
+| UI        | Tailwind + shadcn (New York), mobile-first, semantic tokens                    |
+| Forms     | react-hook-form + zod                                                          |
+| AI        | Anthropic SDK — meal-photo macro estimation                                    |
+| Testing   | Playwright e2e + screenshot verification, fixture-asserted projections         |
+| Deploy    | Vercel                                                                         |
 
 ## Architecture conventions
 

@@ -494,6 +494,38 @@ Do it in exactly this order, and do not open the app between steps 1 and 2:
    `set_logs.completion_id` matches the session, and that the summary and the
    `/history` session detail both show only that session's sets.
 
+**ROLLED OUT 2026-08-05.** Steps 1-3 executed against production in order:
+migration 023 applied via `supabase db push` (clean); merged to `main` as
+`dc89800`, Vercel production deploy `dpl_HSFGnmJfTF…` READY; repair run.
+
+Backfill measured on live data: 238 set logs, 139 linked, 99 NULL — and all 99
+NULL rows belong to the e2e test user, whose seed writes set logs with no
+completions. Every one of the owner's set logs linked correctly.
+
+The diagnose found exactly one phantom: the owner's 2026-08-03 "Upper",
+`d274afc6-…`, duration **0.114s**, `was_ended_early = false`, zero sets — the
+reported lockout. It was reopened (`completed_at = NULL`). The e2e user's other
+0.1s completion was correctly skipped (it has 9 linked sets), and the owner's
+2026-05-04 genuinely-ended-early session was protected by the
+`was_ended_early = false` predicate. Full pre-repair backup of all 9
+`workout_completions` rows was taken before any write.
+
+This also explains why week 1 worked: the owner's "Upper" recurs several times
+a week, and each session's `failure` blocks accumulated `set_index` values
+across sessions. Aug 3 was simply when the _last_ block crossed the ≥3
+threshold, flipping `findLastIncompleteBlock` from a valid index to `-1`.
+
+### 🟢 Low — One orphaned open session remains at 2026-08-03 (artifact of the repair)
+
+Reopening the phantom cleared the false "Completed", but `getAllWorkouts` does
+not filter on `completed_at`, so the row now shows in `/history` as an OPEN
+session with zero sets, and it can never be resumed — the logger's
+`findLatestForToday` only considers completions started today.
+
+Deleting it is the cleaner end state (a phantom row records "the logger was
+opened", not a workout). `scripts/repair-023-bogus-completions.sql` carries the
+guarded DELETE. Left in place pending the owner's call.
+
 ### 🟢 Low — 99 set logs carry a NULL `completion_id` (all e2e fixture data)
 
 The 023 backfill assigns each set to the most recent completion of the same

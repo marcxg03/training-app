@@ -305,3 +305,20 @@ server props into `useState`/`useRef` initializers with no prop→state sync and
 no `key`, so every `router.refresh()` into it is a no-op; `sync/drain.ts` never
 refreshes after a successful drain; `revalidatePath`/`revalidateTag` appear
 nowhere in `src/`.
+
+**Rolled out 2026-08-05** (migration → deploy → repair, in that order):
+migration 023 applied via `supabase db push`; merged to `main` (`dc89800`),
+Vercel production READY; repair executed. Backfill on live data: 238 set logs,
+139 linked, 99 NULL — all 99 NULLs are the e2e test user's (its seed writes set
+logs with no completions); every one of the owner's sets linked. Diagnose found
+exactly one phantom — the 2026-08-03 "Upper", duration **0.114s**, zero sets —
+reopened after a full backup. The e2e user's other 0.1s completion was skipped
+(9 linked sets) and the owner's genuine 2026-05-04 ended-early session was
+protected by the `was_ended_early` predicate, both as designed. Production
+`/today` and `/login` serve 200.
+
+Root cause confirmed by the data: "Upper" recurs several times a week, and its
+`failure` blocks accumulated `set_index` values across sessions. Aug 3 was when
+the last block crossed the ≥3 threshold, flipping `findLastIncompleteBlock`
+from a valid index to `-1` — which is exactly why week 1 worked and week 2 did
+not.

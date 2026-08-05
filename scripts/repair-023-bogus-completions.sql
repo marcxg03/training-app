@@ -74,3 +74,20 @@ COMMIT;   -- or ROLLBACK; if it does not
 -- ── Step 3: confirm ─────────────────────────────────────────────────────────
 -- Re-run step 1. The rows you reopened should be gone from the result.
 -- Then open /today: the workout shows "Start" again.
+
+-- ── Note: reopen vs delete ──────────────────────────────────────────────────
+-- Reopening (above) clears the false "Completed" state, which is what unblocks
+-- the logger on the same day. But `getAllWorkouts` in src/lib/history/queries.ts
+-- does NOT filter on completed_at, so a reopened row stays in /history forever
+-- as an OPEN session with zero sets — and it can never be resumed, because the
+-- logger's findLatestForToday only looks at completions started today.
+--
+-- A phantom row records "the logger was opened", not a workout. If you would
+-- rather it not appear in history at all, delete it instead. Safe only when it
+-- has zero linked set logs; the FK added in 023 refuses the delete otherwise,
+-- which is the append-only guard working as intended:
+--
+--   DELETE FROM workout_completions
+--   WHERE completion_id = '<id>'
+--     AND NOT EXISTS (SELECT 1 FROM set_logs s
+--                     WHERE s.completion_id = workout_completions.completion_id);
