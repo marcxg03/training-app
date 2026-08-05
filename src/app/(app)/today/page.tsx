@@ -7,14 +7,8 @@ import {
   type TodaySessionListItem,
 } from "@/components/today/TodaySessionList";
 import { RestDayEmpty } from "@/components/today/RestDayEmpty";
-import {
-  dayOfWeekLabel,
-  parseDayOfWeek,
-} from "@/lib/methodology/today";
-import {
-  getMealsForDate,
-  getNutritionTargets,
-} from "@/lib/nutrition/queries";
+import { dayOfWeekLabel, parseDayOfWeek } from "@/lib/methodology/today";
+import { getMealsForDate, getNutritionTargets } from "@/lib/nutrition/queries";
 import { getAppDayOfWeek, getAppToday } from "@/lib/time/server";
 import { getAppTimezone } from "@/lib/time/server";
 import { startOfDayInTzIso } from "@/lib/time/appDay";

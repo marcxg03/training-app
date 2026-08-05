@@ -57,9 +57,7 @@ export function VolumeBarChart({
           width={barWidth}
           height={bar.height}
           rx={2}
-          fill={
-            bar.isLast ? "rgb(var(--accent))" : "rgb(var(--accent) / 0.45)"
-          }
+          fill={bar.isLast ? "rgb(var(--accent))" : "rgb(var(--accent) / 0.45)"}
         />
       ))}
     </ChartFrame>

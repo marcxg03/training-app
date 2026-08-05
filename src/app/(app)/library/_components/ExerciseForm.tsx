@@ -82,7 +82,32 @@ export function ExerciseForm({
               <div className="space-y-1">
                 <FormLabel>Bodyweight movement</FormLabel>
                 <p className="text-sm text-muted-foreground">
-                  Marks the exercise as bodyweight-based in list views.
+                  Sets log reps only (no weight input). Use a separate exercise
+                  for weighted variants.
+                </p>
+              </div>
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(checked) =>
+                    field.onChange(Boolean(checked))
+                  }
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="is_compound"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-xl border border-border/70 px-4 py-3">
+              <div className="space-y-1">
+                <FormLabel>Compound lift</FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Compound lifts are featured in the Strength (e1RM) spotlights
+                  on Trends.
                 </p>
               </div>
               <FormControl>

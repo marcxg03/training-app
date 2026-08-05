@@ -49,6 +49,7 @@ shared lbs adapter; trends scaffold array removed. Converged: no unaddressed
 must-fix; surface re-reviewed again at final whole-build roast.
 
 **Decisions carried forward:**
+
 - D1: analytics day bucketing = APP_TIMEZONE local dayKeys, everywhere.
 - D2: new chart types (bar/band) = sibling components sharing frame
   primitives — do NOT add a variant prop to ProgressionChart.
@@ -87,6 +88,7 @@ mutant-killing tests added (window guards, Sunday-night Chicago anchoring,
 full sort order, dedupe); all mutants now die. Converged.
 
 **Decisions carried forward:**
+
 - D6: extract shared `ChartFrame` (empty state, card, svg shell, grid,
   footer) as the FIRST step of Slice 3's band chart — rule-of-three hits
   there. Scaling math stays per-component.
@@ -138,9 +140,10 @@ generated types.ts (regen after db push).
 
 **Verified:** builder fixture tests; typecheck+lint; screenshots — page
 renders the graceful "apply migration 021" state against the live DB (found
-+ fixed en route: missing-table code is PGRST205, not 42P01 — the 500 this
-caused was caught by screenshot verification). Live log→chart flow verified
-after Marcus applies the migration.
+
+- fixed en route: missing-table code is PGRST205, not 42P01 — the 500 this
+  caused was caught by screenshot verification). Live log→chart flow verified
+  after Marcus applies the migration.
 
 **Roast (Bug Hunter · Security):** FIX FIRST → implemented: (1) partial
 success (log written, profile sync failed) reported as failure — now
@@ -221,6 +224,7 @@ success UI lie, timezone-save lie). All converged; nothing ships with a
 known unaddressed must-fix.
 
 **To go live (Marcus):**
+
 1. Apply migrations 021 + 022 (`supabase db push`, or paste both files into
    the Supabase dashboard SQL editor) — BEFORE merging, which makes the
    deploy window a non-issue (both are backward-compatible with deployed code).
@@ -229,3 +233,75 @@ known unaddressed must-fix.
 
 Everything is uncommitted on redesign/instrument — commit when ready.
 
+---
+
+## Post-ship fix — workout logger week-2 lockout 🔴 (2026-08-04)
+
+Marcus hit this live: "it is a new week, but it says that workout is complete.
+Everything worked perfectly last week, but this week when I opened the app on
+Monday, it showed last Monday's workout as complete and I was unable to log my
+workout."
+
+**Root cause (structural, not a refresh bug):** `set_logs` had no session
+scoping — only `workout_id`, which a weekly plan reuses every Monday forever.
+Week 2 loaded week 1's sets. `isBlockComplete` derives `failure`-block
+completion from `set_index` count and `failure` is the DEFAULT block type, so
+every block read as done → `findLastIncompleteBlock` returned `-1` →
+`/log/[workout_id]` **wrote `completed_at` during its GET render** and
+redirected. Hence "Completed" on Today and the lockout. A query-only fix was
+impossible: `UNIQUE (user_id, workout_id, block_id, set_index)` (migration 011)
+made re-logging set 1 a `23505`, which `classify.ts` marks non-retryable.
+
+**Built:** migration `023_set_logs_completion_scope.sql` (`set_logs.completion_id`
+FK + `logged_at`-based backfill + constraint re-scoped to the completion);
+`/log/[workout_id]` split into `getWorkoutStructure` + `getSessionSetLogs`
+(completion-scoped) with the completion resolved first, plus a
+`blocks.length === 0` guard so an empty workout can never auto-complete;
+`completion_id` threaded through LoggerShell → protocols → SetEntryForm and
+`SetLogInsertPayload`; summary page switched from a `logged_at` window to
+`completion_id` (fixes queued sets that drain after the session ends silently
+vanishing from the summary); `scripts/repair-023-bogus-completions.sql` to
+reopen the phantom completions already written.
+
+**Verified:** NEW `scripts/verify-logger.ts` — 12 fixture assertions including
+the regression itself (prior-session sets → `-1`; fresh session → `0`) and the
+empty-blocks case the new page guard depends on. `ralph-verify.sh` GREEN
+(format/typecheck/lint/build); analytics + chart suites still pass.
+**Live verification pending** — reproduces only against week-old data, so it
+needs migration 023 → deploy → repair script, in that order.
+
+**Roast (council of 6: Bug Hunter · Security · Operator · Test Skeptic ·
+Maintainer · Scope Gate): FIX FIRST → all 5 must-fixes implemented same
+round:** (1) my own `ON DELETE RESTRICT` on the new FK would have aborted the
+plan-delete cascade (`set_logs` and `workout_completions` are siblings off one
+`workouts` delete) and made any plan with logged history permanently
+undeletable → default `NO ACTION`, which still blocks a bare completion delete;
+(2) `getCompletedSession` selected set logs by `workout_id` with no scoping —
+harmless only because the constraint this migration DROPS was capping rows at
+one session per workout, so shipping 023 would have merged every week's sets
+into every `/history` session detail → scoped to `completion_id`; (3) offline
+rows queued pre-023 carry no `completion_id`, and the column is nullable, so
+they inserted successfully, dequeued, showed "Synced", and became invisible to
+every read path → handler now resolves the session with the backfill's rule and
+refuses rather than orphaning; (4) the rollout order I documented
+(migration → repair → deploy) undoes its own repair, because the old code
+re-writes `completed_at` on first open → corrected to migration → deploy →
+repair, with both failure modes written down; (5) the repair predicate ("no
+sets in window") also matched a session genuinely ended early with no sets, and
+the UPDATE reset `was_ended_early` to false, falsifying real history → narrowed
+to `was_ended_early = false` + sub-60s duration, plus a backup table and an
+explicit reviewed-id list instead of a re-evaluated predicate. Also adopted:
+composite `(user_id, completion_id)` FK so session ownership is structural (a
+completion_id-only FK lets a client attach sets to another user's completion —
+referential checks bypass RLS). **Flagged, deliberately not changed:**
+`set_logs` has UPDATE/DELETE RLS policies contradicting CLAUDE.md's append-only
+rule (pre-existing, structural — needs its own decision).
+
+**Not converged into this round:** the council's re-review has not been run, so
+the ralph-loop convergence signal is unconfirmed.
+
+**Also found, NOT fixed (separate from this bug):** `LoggerShell` captures all
+server props into `useState`/`useRef` initializers with no prop→state sync and
+no `key`, so every `router.refresh()` into it is a no-op; `sync/drain.ts` never
+refreshes after a successful drain; `revalidatePath`/`revalidateTag` appear
+nowhere in `src/`.

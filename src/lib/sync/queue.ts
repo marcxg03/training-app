@@ -16,6 +16,7 @@ export type QueueRowKind = (typeof queueRowKinds)[number];
 export type SetLogInsertPayload = Pick<
   Tables<"set_logs">,
   | "block_id"
+  | "completion_id"
   | "exercise_id"
   | "is_to_failure"
   | "logged_at"

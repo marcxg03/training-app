@@ -33,7 +33,9 @@ export function dayKeyOf(loggedAtIso: string, timeZone: string): string {
 }
 
 export function dayLabelOf(dayKey: string): string {
-  return dayLabelFormatter.format(new Date(`${dayKey}T12:00:00Z`)).toUpperCase();
+  return dayLabelFormatter
+    .format(new Date(`${dayKey}T12:00:00Z`))
+    .toUpperCase();
 }
 
 // A single point on a line/sparkline chart. `dayKey` follows the local-day
@@ -157,6 +159,7 @@ export type AnalyticsSetRow = {
   exercises: {
     name: string;
     is_bodyweight: boolean;
+    is_compound: boolean;
     muscle_groups: string[];
   } | null;
 };
@@ -167,9 +170,11 @@ export type E1rmSpotlight = {
   points: TrendPoint[]; // best e1RM per day, kg, chronological
 };
 
-// Top weighted exercises by set count since rankCutoffKey (a local dayKey),
+// Top COMPOUND lifts by set count since rankCutoffKey (a local dayKey),
 // each with its best-e1RM-per-day series over the full window. Bodyweight
-// exercises are excluded — no load, no e1RM. Pure: rank ties break by
+// and isolation (non-compound) exercises are excluded — e1RM is a compound-
+// lift stat; the flag is editable per exercise in the Library. Rank ties
+// break by
 // exercise name for determinism; exercises whose window yields no chartable
 // points are dropped BEFORE the limit is applied so they can't burn a slot.
 export function buildE1rmSpotlights(
@@ -188,7 +193,11 @@ export function buildE1rmSpotlights(
   >();
 
   for (const row of rows) {
-    if (!row.exercises || row.exercises.is_bodyweight) {
+    if (
+      !row.exercises ||
+      row.exercises.is_bodyweight ||
+      !row.exercises.is_compound
+    ) {
       continue;
     }
 
@@ -284,7 +293,10 @@ export function buildWeeklyVolumeByGroup(
   }
 
   const windowStartKey = weekKeys[0];
-  const byGroup = new Map<string, Map<string, { sets: number; tonnageKg: number }>>();
+  const byGroup = new Map<
+    string,
+    Map<string, { sets: number; tonnageKg: number }>
+  >();
 
   for (const row of rows) {
     if (!row.exercises || row.reps <= 0) {
@@ -391,8 +403,12 @@ export function buildNutritionBands(
   >();
 
   for (const meal of meals) {
-    const bucket =
-      byDay.get(meal.date) ?? { calMin: 0, calMax: 0, proMin: 0, proMax: 0 };
+    const bucket = byDay.get(meal.date) ?? {
+      calMin: 0,
+      calMax: 0,
+      proMin: 0,
+      proMax: 0,
+    };
     bucket.calMin += meal.cal_min;
     bucket.calMax += meal.cal_max;
     bucket.proMin += meal.protein_min_g;

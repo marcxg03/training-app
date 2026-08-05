@@ -34,9 +34,7 @@ export function BodyweightSection({
   const chartPoints = toLbsChartPoints(points);
   const current = chartPoints[chartPoints.length - 1]?.value ?? null;
   const rawKgDelta =
-    points.length > 1
-      ? points[points.length - 1].value - points[0].value
-      : 0;
+    points.length > 1 ? points[points.length - 1].value - points[0].value : 0;
   const delta =
     Math.round(kgToLbs(Math.abs(rawKgDelta))) * Math.sign(rawKgDelta);
   const deltaLabel =
@@ -101,10 +99,7 @@ export function BodyweightSection({
             ariaLabel="Bodyweight trend"
           />
 
-          <form
-            action={submit}
-            className="flex items-center gap-2"
-          >
+          <form action={submit} className="flex items-center gap-2">
             <input
               type="number"
               inputMode="decimal"
@@ -120,7 +115,7 @@ export function BodyweightSection({
             <button
               type="submit"
               disabled={isPending || value.trim() === ""}
-              className="h-11 shrink-0 rounded-[var(--radius)] bg-accent px-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent-foreground transition-opacity disabled:opacity-50"
+              className="text-accent-foreground h-11 shrink-0 rounded-[var(--radius)] bg-accent px-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition-opacity disabled:opacity-50"
             >
               {isPending ? "Saving…" : "Log"}
             </button>

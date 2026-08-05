@@ -111,13 +111,19 @@ function makeRows(
   name: string,
   isBodyweight: boolean,
   setDays: string[], // dayKeys (noon UTC = same local day in Chicago)
+  isCompound = true,
 ): AnalyticsSetRow[] {
   return setDays.map((day, index) => ({
     exercise_id: exerciseId,
     weight_kg: isBodyweight ? null : 100,
     reps: 5,
     logged_at: `${day}T17:0${index % 10}:00Z`, // noon Chicago
-    exercises: { name, is_bodyweight: isBodyweight, muscle_groups: ["test"] },
+    exercises: {
+      name,
+      is_bodyweight: isBodyweight,
+      is_compound: isCompound,
+      muscle_groups: ["test"],
+    },
   }));
 }
 
@@ -148,6 +154,26 @@ check(
   ["ex-a", "ex-b", "ex-c", "ex-d"], // Bravo before Charlie by name at 7=7
 );
 
+// Non-compound (isolation) exercises are excluded from spotlights entirely
+// and must not burn a slot, no matter how many sets they have.
+const isolationRows: AnalyticsSetRow[] = [
+  ...makeRows("ex-a", "Alpha", false, inWin(9)),
+  ...makeRows("ex-b", "Bravo", false, inWin(7)),
+  ...makeRows("ex-c", "Charlie", false, inWin(7)),
+  ...makeRows("ex-d", "Delta", false, inWin(3)),
+  ...makeRows("ex-iso", "Curlzilla", false, inWin(50), false), // isolation
+];
+check(
+  "spotlights: non-compound excluded and don't burn a slot",
+  buildE1rmSpotlights(isolationRows, {
+    rankCutoffKey: CUTOFF,
+    windowStartKey: WINDOW,
+    limit: 4,
+    timeZone: DEFAULT_APP_TIMEZONE,
+  }).map((s) => s.exercise_id),
+  ["ex-a", "ex-b", "ex-c", "ex-d"],
+);
+
 // Zero-chartable-points exercises must not burn a spotlight slot: an
 // exercise whose sets all have reps=0 (no e1RM points) ranks 0 points and is
 // dropped BEFORE the limit, letting the 4th real exercise in.
@@ -160,7 +186,7 @@ const zeroPointRows: AnalyticsSetRow[] = [
     weight_kg: 100,
     reps: 0, // e1RM = 0 -> no points
     logged_at: `${day}T17:00:00Z`,
-    exercises: { name: "Junk", is_bodyweight: false, muscle_groups: [] },
+    exercises: { name: "Junk", is_bodyweight: false, is_compound: true, muscle_groups: [] },
   })),
   ...makeRows("ex-d", "Delta", false, inWin(2)),
 ];
@@ -200,24 +226,24 @@ const volumeRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-27T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
   },
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
   },
   // bodyweight set: counts as a back set, adds zero tonnage
   {
     exercise_id: "pullup", weight_kg: null, reps: 10,
     logged_at: "2026-07-27T17:30:00Z",
-    exercises: { name: "Pullup", is_bodyweight: true, muscle_groups: ["back"] },
+    exercises: { name: "Pullup", is_bodyweight: true, is_compound: false, muscle_groups: ["back"] },
   },
   // 3 weeks ago, chest — creates a gap that must be zero-filled, not bridged
   {
     exercise_id: "bench", weight_kg: 90, reps: 10,
     logged_at: "2026-07-07T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
   },
 ];
 
@@ -247,12 +273,12 @@ const guardRows: AnalyticsSetRow[] = [
   {
     exercise_id: "squat", weight_kg: 120, reps: 5,
     logged_at: "2026-05-15T17:00:00Z", // long before the 8-week window
-    exercises: { name: "Squat", is_bodyweight: false, muscle_groups: ["quads"] },
+    exercises: { name: "Squat", is_bodyweight: false, is_compound: false, muscle_groups: ["quads"] },
   },
   {
     exercise_id: "calf", weight_kg: 60, reps: 12,
     logged_at: "2026-08-05T17:00:00Z", // future beyond current week
-    exercises: { name: "Calf Raise", is_bodyweight: false, muscle_groups: ["calves"] },
+    exercises: { name: "Calf Raise", is_bodyweight: false, is_compound: false, muscle_groups: ["calves"] },
   },
 ];
 check(
@@ -270,7 +296,7 @@ const sundayRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-27T02:00:00Z", // Sun Jul 26, 9pm Chicago
-    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest"] },
+    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest"] },
   },
 ];
 const sunday = buildWeeklyVolumeByGroup(sundayRows, { weeks: 8, timeZone: DEFAULT_APP_TIMEZONE, now: NOW_SUN });
@@ -286,12 +312,12 @@ const orderRows: AnalyticsSetRow[] = [
   {
     exercise_id: "pushdown", weight_kg: 30, reps: 12,
     logged_at: "2026-07-28T18:30:00Z",
-    exercises: { name: "Pushdown", is_bodyweight: false, muscle_groups: ["triceps"] },
+    exercises: { name: "Pushdown", is_bodyweight: false, is_compound: false, muscle_groups: ["triceps"] },
   },
   {
     exercise_id: "curl", weight_kg: 20, reps: 12,
     logged_at: "2026-07-28T18:40:00Z",
-    exercises: { name: "Curl", is_bodyweight: false, muscle_groups: ["biceps"] },
+    exercises: { name: "Curl", is_bodyweight: false, is_compound: false, muscle_groups: ["biceps"] },
   },
 ];
 check(
@@ -305,7 +331,7 @@ const dupRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "Chest"] },
+    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "Chest"] },
   },
 ];
 const dedup = buildWeeklyVolumeByGroup(dupRows, { weeks: 8, timeZone: DEFAULT_APP_TIMEZONE, now: NOW });
@@ -318,7 +344,7 @@ const otherRows: AnalyticsSetRow[] = [
   {
     exercise_id: "sled", weight_kg: 80, reps: 10,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Sled Push", is_bodyweight: false, muscle_groups: [] },
+    exercises: { name: "Sled Push", is_bodyweight: false, is_compound: false, muscle_groups: [] },
   },
 ];
 check("volume: untagged sets bucket under other",

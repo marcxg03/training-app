@@ -44,7 +44,7 @@ export async function getSetLogWindow(
     const { data, error } = await supabase
       .from("set_logs")
       .select(
-        "exercise_id, weight_kg, reps, logged_at, exercises(name, is_bodyweight, muscle_groups)",
+        "exercise_id, weight_kg, reps, logged_at, exercises(name, is_bodyweight, is_compound, muscle_groups)",
       )
       .gte("logged_at", since)
       // set_log_id tiebreaker: equal logged_at values have no stable order
@@ -68,4 +68,3 @@ export async function getSetLogWindow(
     }
   }
 }
-

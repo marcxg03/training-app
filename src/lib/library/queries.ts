@@ -252,7 +252,7 @@ export async function getExercises(): Promise<ExerciseListItem[]> {
   const { data, error } = await supabase
     .from("exercises")
     .select(
-      "exercise_id, name, muscle_groups, is_bodyweight, prescribed_min, prescribed_max, notes",
+      "exercise_id, name, muscle_groups, is_bodyweight, is_compound, prescribed_min, prescribed_max, notes",
     )
     .order("name");
 
@@ -268,6 +268,7 @@ export async function getExercises(): Promise<ExerciseListItem[]> {
       exercise.muscle_groups,
     ),
     is_bodyweight: exercise.is_bodyweight,
+    is_compound: exercise.is_compound,
     prescribed_min: exercise.prescribed_min,
     prescribed_max: exercise.prescribed_max,
     notes: exercise.notes,

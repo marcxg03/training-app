@@ -42,6 +42,7 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
 ## Slices
 
 ### Slice 0 — Scaffold
+
 - `/trends` route (RSC page shell with four empty section cards), 6th nav tab
   (TrendingUp icon, label "Trends"), `src/lib/analytics/` skeleton
   (queries/projections), chart-component variants file stub.
@@ -49,6 +50,7 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
 - **Verify:** typecheck/lint; Playwright screenshot mobile+desktop.
 
 ### Slice 1 — e1RM progression
+
 - `epleyE1rm()` in analytics projections; best-e1RM-per-day series per exercise;
   history exercise page chart switches to e1RM (label "lbs e1rm"); /trends shows
   e1RM sparklines for top 4 exercises by recent volume.
@@ -56,6 +58,7 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
 - **Verify:** tsx script asserting projection outputs on fixture data; Playwright.
 
 ### Slice 2 — Weekly volume by muscle group
+
 - Weekly bucketing (ISO weeks, last 8), sets/week + tonnage per muscle group;
   grouped bar chart variant of the SVG component; muscle-group selector or
   stacked list of small multiples (decide in-slice, mobile-first).
@@ -63,6 +66,7 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
 - **Verify:** tsx fixture test + SQL spot-check + Playwright.
 
 ### Slice 3 — Nutrition 30-day trend
+
 - `getMealsForDateRange()` query; daily min–max band series for calories +
   protein; band-chart SVG variant; target zone drawn as reference band.
 - **Done:** today's chart endpoint value equals the Fuel page's today totals.
@@ -70,6 +74,7 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
   Playwright.
 
 ### Slice 4 — Bodyweight trend
+
 - Migration `021_bodyweight_logs.sql` (+RLS); quick-log server action (upsert
   per date, also updates `profiles.bodyweight_kg`); one-tap log UI on /trends;
   trend line chart. Migration applied via `supabase db push` or dashboard SQL —
@@ -79,4 +84,5 @@ sparse-data rendering (weeks with no data must not interpolate misleadingly).
   applied; typecheck/lint.
 
 ### Final pass
+
 Whole-build verification + final /roast-code + FUTURE_WORK.md.

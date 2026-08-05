@@ -22,6 +22,7 @@ export type ExerciseListItem = {
   muscle_groups: string[];
   primary_muscle_group_label: string | null;
   is_bodyweight: boolean;
+  is_compound: boolean;
   prescribed_min: number;
   prescribed_max: number;
   notes: string;

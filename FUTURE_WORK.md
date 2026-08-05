@@ -3,6 +3,7 @@
 Deferred deliberately; none block the shipped build.
 
 ## Charts / analytics
+
 - **Range toggles** (7/30/90-day) on Trends sections — builders are already
   parameterized; a searchParams-driven re-render is all it needs.
 - **Consistency heatmap** (workouts/week calendar) and **cardio load**
@@ -14,10 +15,11 @@ Deferred deliberately; none block the shipped build.
   matters.
 
 ## Housekeeping
+
 - **Regenerate `src/lib/supabase/types.ts`** after applying migrations
-  021+022 (`supabase gen types`) — the bodyweight_logs + profiles.timezone
-  entries were hand-added to match the migrations and regen will also
-  re-alphabetize them.
+  021+022+023 (`supabase gen types`) — the bodyweight_logs,
+  profiles.timezone, and set_logs.completion_id entries were hand-added to
+  match the migrations and regen will also re-alphabetize them.
 - **e2e hardening (D5)**: committed test password in `seed-auth.mjs`
   (pre-existing) — generate at runtime; e2e test-user email constant is
   duplicated across `env.ts` and the .mjs scripts — single-source it.
@@ -29,5 +31,6 @@ Deferred deliberately; none block the shipped build.
   self-documenting (Security, cosmetic).
 
 ## Product ideas (unscoped)
+
 - Backdated bodyweight/meal entry (log for a past day).
 - Per-exercise e1RM goal lines on the progression charts.

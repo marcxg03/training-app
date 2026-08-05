@@ -14,6 +14,7 @@ import { SetLogRow } from "@/components/log/SetLogRow";
 
 type FreeFormProtocolProps = {
   block: LoggerBlock;
+  completionId: string;
   exercise: LoggerExercise;
   workoutId: string;
   userId: string;
@@ -23,6 +24,7 @@ type FreeFormProtocolProps = {
 
 export function FreeFormProtocol({
   block,
+  completionId,
   exercise,
   workoutId,
   userId,
@@ -70,6 +72,7 @@ export function FreeFormProtocol({
       {isAddingSet ? (
         <SetEntryForm
           blockId={block.block_id}
+          completionId={completionId}
           exercise={exercise}
           label={`Set ${loggedSets.length + 1}`}
           workoutId={workoutId}

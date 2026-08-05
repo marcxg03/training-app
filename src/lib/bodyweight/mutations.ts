@@ -10,7 +10,11 @@ type BrowserClient = SupabaseClient<Database>;
 // (refresh the chart, clear the input) and surface the warning as
 // non-blocking text, not an error loop.
 type LogBodyweightResult =
-  | { ok: true; data: { weight_kg: number; log_date: string }; warning?: string }
+  | {
+      ok: true;
+      data: { weight_kg: number; log_date: string };
+      warning?: string;
+    }
   | { ok: false; error: string };
 
 // Guardrails mirror the migration CHECK (0 < kg < 500); input is lbs.

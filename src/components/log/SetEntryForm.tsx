@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 
 type SetEntryFormProps = {
   blockId: string;
+  completionId: string;
   defaultFailureChecked?: boolean;
   exercise: LoggerExercise;
   label: string;
@@ -60,6 +61,7 @@ function getQueueErrorMessage(error: unknown) {
 
 export function SetEntryForm({
   blockId,
+  completionId,
   defaultFailureChecked = false,
   exercise,
   label,
@@ -74,7 +76,9 @@ export function SetEntryForm({
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isBodyweight, setIsBodyweight] = useState(exercise.is_bodyweight);
+  // Exercise-level flag is the single authority: weighted variants are
+  // separate exercises in the Library (e.g. "Weighted Pull Ups").
+  const isBodyweight = exercise.is_bodyweight;
   const [notes, setNotes] = useState("");
   const [reps, setReps] = useState("");
   const [toFailure, setToFailure] = useState(defaultFailureChecked);
@@ -99,9 +103,7 @@ export function SetEntryForm({
       parsedWeightLbs = Number(weight);
 
       if (!weight || Number.isNaN(parsedWeightLbs) || parsedWeightLbs <= 0) {
-        setError(
-          "Enter a weight, or turn on Bodyweight for this set.",
-        );
+        setError("Enter a weight.");
         return;
       }
     }
@@ -115,6 +117,7 @@ export function SetEntryForm({
       set_log_id: setLogId,
       user_id: userId,
       workout_id: workoutId,
+      completion_id: completionId,
       block_id: blockId,
       exercise_id: exercise.exercise_id,
       set_index: setIndex,
@@ -255,31 +258,6 @@ export function SetEntryForm({
           Set {setIndex}
         </p>
       </div>
-
-      <button
-        type="button"
-        role="switch"
-        aria-checked={isBodyweight}
-        onClick={() => setIsBodyweight((current) => !current)}
-        className="flex w-full items-center justify-between rounded-xl border border-border px-3.5 py-2.5"
-      >
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-subtle">
-          Bodyweight
-        </span>
-        <span
-          className={cn(
-            "inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors",
-            isBodyweight ? "bg-accent" : "bg-border",
-          )}
-        >
-          <span
-            className={cn(
-              "h-5 w-5 shrink-0 rounded-full bg-foreground transition-transform",
-              isBodyweight ? "translate-x-5" : "translate-x-0",
-            )}
-          />
-        </span>
-      </button>
 
       <div
         className={cn(

@@ -442,3 +442,103 @@ client's nutrition history into coach review.
 (an idempotent UPDATE) during render to attach pending invites. It is safe
 and idempotent but performs a write on a read path; consider moving it to an
 explicit accept action or login hook if it becomes noisy.
+
+## Workout logger — week-2 lockout (2026-08-04)
+
+### 🔴 Critical — Repeating a weekly workout marked it complete and locked the logger — FIXED, awaiting live verification
+
+Reported live: on Monday of week 2, `/today` showed Monday's lifting workout
+as already **Completed** and opening it bounced straight back. Week 1 worked.
+
+**Cause:** `set_logs` was keyed to `workout_id`, which a weekly plan reuses
+every week, so the logger loaded week 1's sets as the current session's.
+`isBlockComplete` counts `set_index` values for `failure` blocks (the default
+block type), so every block read as finished, `findLastIncompleteBlock`
+returned `-1`, and the page wrote `completed_at` during its GET render.
+
+**Escalation mechanism worth remembering:** the write-during-render at
+`/log/[workout_id]` is what turned a read-side display bug into persisted bad
+data. A page that only _rendered_ wrong would have been cosmetic and
+self-healing; because it wrote, the bad state outlived the request and had to
+be repaired by hand. Treat writes on a GET path as a defect class, not a
+shortcut. (See also the 🟢 entry above on invite linking during render.)
+
+**Fixed by:** migration `023_set_logs_completion_scope.sql` +
+`completion_id` scoping through the logger, the offline queue, and the
+summary. Pinned by `scripts/verify-logger.ts`.
+
+**Remaining action:** the fix is code-complete and GREEN on the static gate,
+but has NOT been verified against the live database — this bug only
+reproduces with week-old data.
+
+**Rollout order is load-bearing here.** Migration 023 is NOT backward-
+compatible with the deployed code in either direction, unlike 021/022:
+
+- _Migration applied, old code still live:_ the old logger still selects
+  `set_logs` by `workout_id`, so it re-derives "every block complete" and
+  re-writes `completed_at` the moment the workout is opened — silently undoing
+  the repair. Any set logged in that window also goes in with a NULL
+  `completion_id`.
+- _New code deployed, migration not applied:_ `.eq("completion_id", …)` returns
+  `42703`, so `/log/[workout_id]` and the summary both 500, and
+  `SetEntryForm`'s insert fails as a non-retryable 4xx — the set is neither
+  saved nor queued.
+
+Do it in exactly this order, and do not open the app between steps 1 and 2:
+
+1. Apply migration 023.
+2. Merge and push; wait for the Vercel production deploy to report Ready.
+3. Run `scripts/repair-023-bogus-completions.sql` — step 0 backup, step 1
+   diagnose, review, paste the reviewed ids into step 2.
+4. Drive a real workout end to end: confirm no `23505`, that
+   `set_logs.completion_id` matches the session, and that the summary and the
+   `/history` session detail both show only that session's sets.
+
+### 🟢 Low — 99 set logs carry a NULL `completion_id` (all e2e fixture data)
+
+The 023 backfill assigns each set to the most recent completion of the same
+workout that had already started when the set was logged. Sets with no such
+completion keep `completion_id = NULL` and will not appear in a session summary
+or the `/history` session detail.
+
+Measured on the live database immediately after applying 023: 238 set logs
+total, 139 linked, 99 NULL — and **all 99 belong to
+`e2e-slice7b@trainingapp.test`**, seeded by `e2e/_setup/seed-analytics-data.mjs`,
+which creates set logs without any `workout_completions` rows. The owner's real
+training history backfilled completely — every one of their set logs is linked
+to its session. No action needed.
+
+Offline-queue rows queued by a pre-023 build are handled separately and do NOT
+land in this state: `handleSetLogInsert` resolves their session with the same
+rule the backfill uses, and refuses the write (leaving the row visible in the
+QueuePanel with an explanatory error) rather than inserting an unreachable set
+log if no session matches.
+
+### 🟡 Medium — `set_logs` has UPDATE and DELETE RLS policies, contradicting the append-only rule — FLAGGED, not changed
+
+`CLAUDE.md` states that append-only tables (`set_logs`, `pr_history`) must have
+only SELECT and INSERT policies. `pr_history` complies. `set_logs` does not:
+`010_extended_rls.sql:10-14` grants `update_own` and `delete_own` to the anon
+client. Nothing in `src/` updates or deletes `set_logs`, so no code depends on
+them, but any holder of the session (including an XSS payload) can rewrite or
+delete training history over PostgREST — and after 023, `completion_id` is a
+rewritable column, so history can be re-pointed at a different session.
+
+Not changed here: dropping RLS policies is a structural change outside the
+scope of this bug fix and needs an explicit decision. The fix is a new
+migration dropping both policies.
+
+### 🟢 Low — Auto-completed sessions record no `completed_block_ids`
+
+The auto-complete branch in `/log/[workout_id]` writes `completed_at` without
+`completed_block_ids`, so a session finished that way shows `0/N blocks` in
+`/history`. Reachable only when every block was genuinely completed in-session,
+so the count is wrong but the session itself is real.
+
+### 🟢 Low — `/history` workout-list PR counts are attributed by time window
+
+`countPrsByCompletion` (`src/lib/history/queries.ts`) maps PRs to a session by
+`workout_id` plus a `[started_at, completed_at]` window on `achieved_at`, not
+by `completion_id`. Correct in practice (sessions of the same workout are days
+apart) but it is the same inference 023 removed elsewhere; worth switching to
+`completion_id` if that query is touched again.

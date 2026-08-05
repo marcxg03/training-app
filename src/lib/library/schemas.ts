@@ -111,6 +111,7 @@ export const exerciseSchema = z
       .array(z.enum(MUSCLE_GROUP_VALUES))
       .min(1, "Pick at least one muscle group."),
     is_bodyweight: z.boolean(),
+    is_compound: z.boolean(),
     prescribed_min: z.number().int().min(1, "Minimum reps must be at least 1."),
     prescribed_max: z.number().int().min(1, "Maximum reps must be at least 1."),
     notes: z

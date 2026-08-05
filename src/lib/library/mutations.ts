@@ -272,6 +272,7 @@ export async function createExercise(
       prescribed_max: input.prescribed_max,
       muscle_groups: input.muscle_groups,
       is_bodyweight: input.is_bodyweight,
+      is_compound: input.is_compound,
     })
     .select("exercise_id")
     .single();
@@ -300,6 +301,7 @@ export async function updateExercise(
       prescribed_max: input.prescribed_max,
       muscle_groups: input.muscle_groups,
       is_bodyweight: input.is_bodyweight,
+      is_compound: input.is_compound,
     })
     .eq("exercise_id", exerciseId);
 

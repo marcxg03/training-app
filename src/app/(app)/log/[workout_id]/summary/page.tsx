@@ -51,11 +51,12 @@ function getCompletionQuery(
   return query.order("started_at", { ascending: false }).limit(1).maybeSingle();
 }
 
+// Scoped by completion_id, not by a [started_at, completed_at] window: a set
+// that syncs from the offline queue after the session ends falls outside that
+// window and would vanish from the summary.
 function getSetLogsQuery(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  workoutId: string,
-  startedAt: string,
-  completedAt: string,
+  completionId: string,
 ) {
   return supabase
     .from("set_logs")
@@ -70,9 +71,7 @@ function getSetLogsQuery(
         )
       `,
     )
-    .eq("workout_id", workoutId)
-    .gte("logged_at", startedAt)
-    .lte("logged_at", completedAt);
+    .eq("completion_id", completionId);
 }
 
 function getPrHistoryQuery(
@@ -134,12 +133,7 @@ export default async function WorkoutSummaryPage({
     redirect("/today");
   }
 
-  const setLogsQuery = getSetLogsQuery(
-    supabase,
-    workoutId,
-    completion.started_at,
-    completion.completed_at,
-  );
+  const setLogsQuery = getSetLogsQuery(supabase, completion.completion_id);
   const { data: setLogs, error: setLogsError } = await setLogsQuery;
 
   if (setLogsError) {

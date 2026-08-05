@@ -38,4 +38,3 @@ export function parseDayOfWeek(value: unknown): DayOfWeek | null {
     ? (value as DayOfWeek)
     : null;
 }
-
