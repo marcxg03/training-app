@@ -36,6 +36,22 @@ const TYPE_LABEL: Record<string, string> = {
   recovery: "Recovery",
 };
 
+// New-row session types. Existing rows keep their original type (rendered as a
+// read-only badge); only new rows expose this picker (slice spec §2).
+const WORKOUT_TYPES = [
+  { value: "lifting", label: "Lifting" },
+  { value: "cardio", label: "Cardio" },
+  { value: "recovery", label: "Recovery" },
+] as const;
+
+// Cardio formats — mirrors cardio_format_enum. A new cardio session requires one
+// (DB CHECK: cardio ⇒ cardio_format NOT NULL).
+const CARDIO_FORMATS = [
+  { value: "endurance_run", label: "Endurance run" },
+  { value: "speed_run", label: "Speed run" },
+  { value: "basketball", label: "Basketball" },
+] as const;
+
 const TIMINGS = [
   { value: "am", label: "AM" },
   { value: "anytime", label: "Anytime" },
@@ -53,7 +69,13 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
     resolver: zodResolver(daySchema),
     defaultValues: {
       is_rest_day: data.is_rest_day,
-      workouts: data.workouts.map((w) => ({ ...w, gym: w.gym ?? "" })),
+      // cardio_format is a form-only field for NEW rows; existing rows are never
+      // re-inserted, so seeding null here can't overwrite a stored cardio format.
+      workouts: data.workouts.map((w) => ({
+        ...w,
+        gym: w.gym ?? "",
+        cardio_format: null,
+      })),
     },
     mode: "onBlur",
   });
@@ -176,7 +198,11 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
 
             <div className="space-y-2">
               <p className="eyebrow">Sessions</p>
-              {fields.map((row, index) => (
+              {fields.map((row, index) => {
+                const isNew = row.workout_id === null;
+                const rowType =
+                  watched.workouts?.[index]?.workout_type ?? row.workout_type;
+                return (
                 <div
                   key={row.id}
                   className="space-y-3 rounded-xl border border-border bg-card p-[14px]"
@@ -187,7 +213,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                       aria-hidden="true"
                     />
                     <span className="rounded-md border border-border px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-subtle">
-                      {TYPE_LABEL[row.workout_type] ?? row.workout_type}
+                      {TYPE_LABEL[rowType] ?? rowType}
                     </span>
                     <div className="ml-auto flex items-center gap-1">
                       <Button
@@ -226,6 +252,86 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                       </button>
                     </div>
                   </div>
+
+                  {isNew ? (
+                    <FormField
+                      control={form.control}
+                      name={`workouts.${index}.workout_type`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="eyebrow">Type</FormLabel>
+                          <FormControl>
+                            <div className="flex gap-1.5">
+                              {WORKOUT_TYPES.map((t) => {
+                                const active = field.value === t.value;
+                                return (
+                                  <button
+                                    key={t.value}
+                                    type="button"
+                                    onClick={() => {
+                                      field.onChange(t.value);
+                                      if (t.value !== "cardio") {
+                                        form.setValue(
+                                          `workouts.${index}.cardio_format`,
+                                          null,
+                                          { shouldValidate: true },
+                                        );
+                                      }
+                                    }}
+                                    aria-pressed={active}
+                                    className={
+                                      active
+                                        ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                        : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
+                                    }
+                                  >
+                                    {t.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
+
+                  {isNew && rowType === "cardio" ? (
+                    <FormField
+                      control={form.control}
+                      name={`workouts.${index}.cardio_format`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="eyebrow">
+                            Cardio format
+                          </FormLabel>
+                          <FormControl>
+                            <div className="flex gap-1.5">
+                              {CARDIO_FORMATS.map((f) => {
+                                const active = field.value === f.value;
+                                return (
+                                  <button
+                                    key={f.value}
+                                    type="button"
+                                    onClick={() => field.onChange(f.value)}
+                                    aria-pressed={active}
+                                    className={
+                                      active
+                                        ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                        : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
+                                    }
+                                  >
+                                    {f.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : null}
 
                   <FormField
                     control={form.control}
@@ -294,7 +400,8 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     </p>
                   ) : null}
                 </div>
-              ))}
+                );
+              })}
 
               <button
                 type="button"
@@ -303,6 +410,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                     workout_id: null,
                     workout_name: "",
                     workout_type: "lifting",
+                    cardio_format: null,
                     timing: "anytime",
                     gym: "",
                     display_order: fields.length,
@@ -312,7 +420,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-3.5 text-[13px] font-semibold text-subtle transition-colors hover:border-faint hover:text-foreground"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                Add lifting session
+                Add session
               </button>
             </div>
 

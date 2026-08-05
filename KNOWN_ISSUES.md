@@ -214,12 +214,19 @@ history-guarded and run before the loop), so the worst case is a cosmetic
 schedule inconsistency. The clean fix is a Postgres function / RPC wrapping the
 writes in a transaction — tracked in FUTURE_WORK.
 
-### 🟢 Low — Plan Editor v1 doesn't edit blocks-within-a-workout or add cardio/recovery sessions
+### 🟢 Low — Plan Editor doesn't edit blocks-within-a-workout or wire preset activities
 
-Editing a workout's block list (`workout_blocks` order/membership) and adding
-cardio/recovery sessions (which need cardio fields + polymorphic preset wiring)
-are out of v1 scope. Block catalogs are editable in the Library (Slice 7b);
-wiring them into a day's workout is the deferred piece. Tracked in FUTURE_WORK.
+**Resolved 2026-08-05 (adding cardio/recovery sessions):** the per-day editor now
+adds & deletes **cardio and recovery** sessions, not just lifting — a Type picker
+on new rows, a Cardio-format field for cardio, and `saveDay` writing the real
+`workout_type` + `cardio_format` (mirrors the `workouts` CHECK). Verified end-to-end
+by `e2e/verify-plan-blocks.mjs`.
+
+Still deferred: editing a workout's block list (`workout_blocks` order/membership),
+and attaching a specific **preset** cardio/recovery activity to a session (the
+polymorphic preset wiring). Block catalogs remain editable in the Library (Slice
+7b); wiring a specific activity into a day's session is the remaining piece.
+Tracked in FUTURE_WORK.
 
 ### 🟢 Low — Most methodology schedule-validation rules are deferred
 
