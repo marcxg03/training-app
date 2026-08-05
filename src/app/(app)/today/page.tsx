@@ -13,6 +13,7 @@ import { getAppDayOfWeek, getAppToday } from "@/lib/time/server";
 import { getAppTimezone } from "@/lib/time/server";
 import { startOfDayInTzIso } from "@/lib/time/appDay";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
+import { getPresetActivityNames } from "@/lib/plan/preset-activities";
 import { createClient } from "@/lib/supabase/server";
 
 const timingOrder: Record<Enums<"timing_enum">, number> = {
@@ -31,12 +32,6 @@ type TodayWorkoutRow = {
   cardio_distance: string | null;
   cardio_target_zone: Enums<"cardio_target_zone_enum"> | null;
   display_order: number;
-};
-
-type WorkoutPresetRow = {
-  workout_id: string;
-  preset_activity_id: string | null;
-  preset_activity_type: "cardio" | "recovery" | null;
 };
 
 function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
@@ -84,71 +79,6 @@ function buildWorkoutSummary(
   return (
     workout.description ??
     "Open workout detail to view blocks and exercise bank."
-  );
-}
-
-async function getPresetActivityNames(presets: WorkoutPresetRow[]) {
-  const supabase = await createClient();
-  const cardioIds = presets
-    .filter(
-      (
-        preset,
-      ): preset is WorkoutPresetRow & {
-        preset_activity_id: string;
-        preset_activity_type: "cardio";
-      } =>
-        preset.preset_activity_id !== null &&
-        preset.preset_activity_type === "cardio",
-    )
-    .map((preset) => preset.preset_activity_id);
-  const recoveryIds = presets
-    .filter(
-      (
-        preset,
-      ): preset is WorkoutPresetRow & {
-        preset_activity_id: string;
-        preset_activity_type: "recovery";
-      } =>
-        preset.preset_activity_id !== null &&
-        preset.preset_activity_type === "recovery",
-    )
-    .map((preset) => preset.preset_activity_id);
-
-  const [
-    { data: cardioActivities, error: cardioError },
-    { data: recoveryActivities, error: recoveryError },
-  ] = await Promise.all([
-    cardioIds.length
-      ? supabase
-          .from("cardio_activities")
-          .select("activity_id, name")
-          .in("activity_id", cardioIds)
-      : Promise.resolve({ data: [], error: null }),
-    recoveryIds.length
-      ? supabase
-          .from("recovery_activities")
-          .select("activity_id, name")
-          .in("activity_id", recoveryIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-
-  if (cardioError) {
-    throw new Error(
-      `Failed to load cardio presets for today: ${cardioError.message}`,
-    );
-  }
-
-  if (recoveryError) {
-    throw new Error(
-      `Failed to load recovery presets for today: ${recoveryError.message}`,
-    );
-  }
-
-  return new Map(
-    [...cardioActivities, ...recoveryActivities].map((activity) => [
-      activity.activity_id,
-      activity.name,
-    ]),
   );
 }
 

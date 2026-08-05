@@ -581,3 +581,37 @@ so the count is wrong but the session itself is real.
 by `completion_id`. Correct in practice (sessions of the same workout are days
 apart) but it is the same inference 023 removed elsewhere; worth switching to
 `completion_id` if that query is touched again.
+
+## Plan editor — session content (2026-08-05)
+
+### 🟡 Medium — The block rewrite is delete-then-insert and not transactional
+
+`syncSessionBlocks` (`src/lib/plan/mutations.ts`) replaces a session's
+`workout_blocks` by deleting them and re-inserting, over the browser client.
+If the insert fails after the delete succeeds (network drop mid-save on the
+PWA, an RLS hiccup, or a `23503` if a block was deleted in another tab), the
+session is left with **no blocks** and the only copy of the intended list is
+the in-memory form.
+
+Mitigated, not solved: the rewrite no-ops when the stored membership already
+matches, so an unrelated edit (rename, gym, timing) never puts the list at
+risk; and a failure now reports which sessions were inserted so a retry
+updates rather than duplicates. The user is told the save was partial.
+
+This is the third copy of the same non-transactional pattern — the others are
+`materializeBlocks` (same file) and the Library's `replaceWorkoutDefBlocks`.
+The correct fix is one `SECURITY INVOKER` Postgres function
+`set_workout_blocks(workout_id, rows jsonb)` doing DELETE + INSERT in a single
+statement body (RLS still applies under invoker rights, so the
+browser-client/no-server-actions constraint holds), called via `supabase.rpc()`
+from all three. Deferred as a dedicated slice rather than smuggled into this
+change.
+
+### 🟢 Low — A cardio/recovery session cannot be given content without a category block
+
+`SessionContentEditor` needs a block whose `block_category` matches the session
+type to hang the preset activity on. If the Library has no cardio (or recovery)
+block, the picker shows "Add one in the Library first" and the session stays
+empty. The schema permits an empty cardio/recovery session, so it saves — and
+an empty session bounces out of the logger. Seeded accounts always have both
+blocks, so this only bites a hand-built Library.

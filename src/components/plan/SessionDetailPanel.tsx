@@ -26,6 +26,8 @@ type SessionDetailPanelProps = {
     description: string | null;
     cardioDistance: string | null;
     cardioTargetZone: Enums<"cardio_target_zone_enum"> | null;
+    /** Preset cardio/recovery activity attached to this session, if any. */
+    activityName?: string | null;
     blocks: Array<{
       blockId: string;
       blockName: string;
@@ -123,13 +125,21 @@ export function SessionDetailPanel({ session }: SessionDetailPanelProps) {
           />
         ) : (
           <div className="space-y-3">
+            {session.activityName ? (
+              <p className="text-sm font-semibold text-foreground">
+                {session.activityName}
+              </p>
+            ) : null}
             {cardioMetaLine ? (
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 {cardioMetaLine}
               </p>
             ) : null}
             <p className="text-sm leading-7 text-muted-foreground">
-              {session.description ?? "No extra details for this session."}
+              {session.description ??
+                (session.activityName
+                  ? "No extra details for this activity."
+                  : "No extra details for this session.")}
             </p>
           </div>
         )}
