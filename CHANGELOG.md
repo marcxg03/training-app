@@ -1606,3 +1606,78 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass clean; no `coach`
   references remain in `src/`.
+
+## Fix — workout logger locked out on a repeated workout (2026-08-04)
+
+### What changed
+
+- **Root cause:** `set_logs` was scoped to `workout_id`, which a weekly plan
+  reuses every week. On week 2 the logger loaded week 1's sets and read them as
+  the current session's. Since `isBlockComplete` derives `failure`-block
+  completion from `set_index` count (and `failure` is the default block type),
+  every block looked finished, `findLastIncompleteBlock` returned `-1`, and
+  `/log/[workout_id]` auto-wrote `completed_at` during its GET render — so
+  Today showed "Completed" for a workout that was never performed and the
+  logger bounced straight back to `/today`.
+- Migration `023_set_logs_completion_scope.sql`: adds
+  `set_logs.completion_id` (nullable), backfills it from each set's `logged_at`
+  against the completions that had already started, and replaces
+  `UNIQUE (user_id, workout_id, block_id, set_index)` with
+  `UNIQUE (user_id, completion_id, block_id, set_index)`. The old constraint
+  also made the bug unrecoverable in the app: re-logging set 1 the next week
+  raised `23505`, which `lib/sync/classify.ts` treats as non-retryable.
+  The FK is composite — `(user_id, completion_id)` → `workout_completions` —
+  so "this set belongs to a session I own" is structural rather than an RLS
+  assumption (referential checks bypass row security). It deliberately uses
+  the default `NO ACTION` rather than `ON DELETE RESTRICT`: deleting a plan
+  cascades to `set_logs` and `workout_completions` as siblings of one
+  statement, and `RESTRICT` (checked per-row, immediately) would abort that
+  and make any plan with logged history permanently undeletable.
+- `getCompletedSession` (`src/lib/history/queries.ts`) now selects set logs by
+  `completion_id`. It filtered by `workout_id` with no scoping at all — latent
+  until now, because the dropped constraint had physically capped `set_logs` at
+  one session's worth of rows per workout. Without this, every `/history`
+  session detail for a repeated workout would show every week's sets merged.
+- `handleSetLogInsert` (`src/lib/sync/handlers.ts`) resolves a missing
+  `completion_id` on rows queued by a pre-023 build, using the same rule as the
+  backfill, and refuses the write (keeping the row visible in the QueuePanel)
+  when no session matches. Inserting them as-is would have succeeded, dequeued,
+  and left a set log no read path can see.
+- `/log/[workout_id]` split into `getWorkoutStructure` (template: blocks +
+  exercise bank) and `getSessionSetLogs` (this session's sets, by
+  `completion_id`), reordered so the completion resolves before the set-log
+  fetch. Added a `blocks.length === 0` guard before a completion is created —
+  `findIndex` also returns `-1` on an empty array, so an empty workout could
+  auto-complete itself too.
+- `completion_id` threaded through the write path: `LoggerShell` →
+  `FailureProtocol` / `FreeFormProtocol` → `SetEntryForm`, and added to
+  `SetLogInsertPayload` so offline-queued inserts carry it.
+- Summary page now selects set logs by `completion_id` instead of a
+  `[started_at, completed_at]` window — a set syncing from the offline queue
+  after the session ended fell outside that window and vanished from the
+  summary.
+- `scripts/repair-023-bogus-completions.sql`: one-time repair that finds
+  completions marked complete with no sets logged in their own window and
+  reopens them.
+
+### Verification
+
+- New `scripts/verify-logger.ts` — 12 fixture assertions over
+  `workout-state.ts`, including the regression itself (a block carrying a prior
+  session's 3 sets reports `-1`; a fresh session reports `0`) and the
+  empty-blocks case that makes the new page guard load-bearing.
+- `scripts/ralph-verify.sh` GREEN (format, typecheck, lint, build);
+  `verify-analytics.ts` and `verify-charts.ts` still pass.
+- Adversarial review (`/roast-code`, council of 6) before commit: 5 must-fixes
+  found and implemented — `ON DELETE RESTRICT` would have made any plan with
+  logged history undeletable; `getCompletedSession` merged every week's sets
+  into one session detail; pre-023 queue rows drained to an invisible NULL
+  `completion_id` and were reported as synced; the documented rollout order
+  (migration → repair → deploy) silently undid its own repair; the repair
+  script's predicate also matched legitimately ended-early sessions and
+  rewrote `was_ended_early`. Flagged but deliberately not changed: `set_logs`
+  carries UPDATE/DELETE RLS policies that contradict the append-only rule in
+  CLAUDE.md (see KNOWN_ISSUES).
+- Live verification pending — the bug only reproduces against week-old data,
+  so it requires migration 023 + the deploy + the repair script applied to the
+  real DB, in that order.

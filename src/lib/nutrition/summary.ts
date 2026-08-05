@@ -128,7 +128,10 @@ export function buildMealDaySummaries(
   meals: (MealEntry & { date: string })[],
   targets: NutritionTargets | null,
 ): MealDaySummary[] {
-  const byDate = new Map<string, { count: number; calMin: number; calMax: number }>();
+  const byDate = new Map<
+    string,
+    { count: number; calMin: number; calMax: number }
+  >();
 
   for (const meal of meals) {
     const bucket = byDate.get(meal.date) ?? { count: 0, calMin: 0, calMax: 0 };

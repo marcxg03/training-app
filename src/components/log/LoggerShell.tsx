@@ -411,6 +411,7 @@ export function LoggerShell({
                     block.block_type === "failure" ? (
                       <FailureProtocol
                         block={block}
+                        completionId={workoutCompletion.completion_id}
                         exercise={selectedExercise}
                         workoutId={session.workout_id}
                         userId={userId}
@@ -437,6 +438,7 @@ export function LoggerShell({
                     ) : (
                       <FreeFormProtocol
                         block={block}
+                        completionId={workoutCompletion.completion_id}
                         exercise={selectedExercise}
                         workoutId={session.workout_id}
                         userId={userId}

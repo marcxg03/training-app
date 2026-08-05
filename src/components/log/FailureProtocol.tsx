@@ -10,6 +10,7 @@ import { SetLogRow } from "@/components/log/SetLogRow";
 
 type FailureProtocolProps = {
   block: LoggerBlock;
+  completionId: string;
   exercise: LoggerExercise;
   workoutId: string;
   userId: string;
@@ -25,6 +26,7 @@ const failureSteps = [
 
 export function FailureProtocol({
   block,
+  completionId,
   exercise,
   workoutId,
   userId,
@@ -71,6 +73,7 @@ export function FailureProtocol({
           <SetEntryForm
             key={step.setIndex}
             blockId={block.block_id}
+            completionId={completionId}
             exercise={exercise}
             label={step.label}
             workoutId={workoutId}

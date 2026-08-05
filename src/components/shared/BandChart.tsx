@@ -53,7 +53,8 @@ export function BandChart({
       ? [CHART_VIEWBOX_WIDTH / 2]
       : points.map(
           (_, index) =>
-            CHART_PADDING_X + (CHART_USABLE_WIDTH * index) / (points.length - 1),
+            CHART_PADDING_X +
+            (CHART_USABLE_WIDTH * index) / (points.length - 1),
         );
 
   const upperPath = points

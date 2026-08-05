@@ -24,7 +24,11 @@ export const getAppTimezone = cache(async (): Promise<string> => {
     // Anything else is a real failure: log it so a silent Chicago fallback
     // during an outage is at least visible in Vercel logs.
     if (error.code !== "42703") {
-      console.error("getAppTimezone unexpected error", error.code, error.message);
+      console.error(
+        "getAppTimezone unexpected error",
+        error.code,
+        error.message,
+      );
     }
     return DEFAULT_APP_TIMEZONE;
   }

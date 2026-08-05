@@ -12,7 +12,9 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const userId = process.argv[2];
 
 if (!URL || !SERVICE || !userId) {
-  console.error("Usage: node --env-file=.env.local seed-analytics-data.mjs <userId>");
+  console.error(
+    "Usage: node --env-file=.env.local seed-analytics-data.mjs <userId>",
+  );
   process.exit(1);
 }
 
@@ -54,9 +56,18 @@ for (const table of [
 }
 // junction tables (workout_blocks, block_lifting_items) have no user_id and
 // are cleaned via ON DELETE CASCADE from blocks/workouts/plans below
-await must(admin.from("blocks").delete().eq("owner_user_id", userId), "wipe blocks");
-await must(admin.from("exercises").delete().eq("user_id", userId), "wipe exercises");
-await must(admin.from("training_plans").delete().eq("user_id", userId), "wipe plans");
+await must(
+  admin.from("blocks").delete().eq("owner_user_id", userId),
+  "wipe blocks",
+);
+await must(
+  admin.from("exercises").delete().eq("user_id", userId),
+  "wipe exercises",
+);
+await must(
+  admin.from("training_plans").delete().eq("user_id", userId),
+  "wipe plans",
+);
 
 // --- plan structure (minimal FK chain for set_logs) ---
 const plan = await must(
@@ -153,7 +164,11 @@ for (let week = 5; week >= 0; week--) {
           workout_id: workout.workout_id,
           block_id: block.block_id,
           exercise_id: ex.exercise_id,
-          set_index: setCounter, // unique(user, workout, block, set_index)
+          // Analytics fixture only — no workout_completions rows, so
+          // completion_id stays NULL and the unique constraint (which is now
+          // scoped to completion_id) never applies. Kept globally incrementing
+          // so the seeded rows stay stable against the hand-checked values.
+          set_index: setCounter,
           weight_kg: ex.base + progression - (set - 1) * 2.5,
           reps: 5 + set, // 6,7,8
           prescribed_min: 5,
@@ -205,22 +220,20 @@ await must(admin.from("meal_entries").insert(mealRows), "insert meal_entries");
 
 // --- nutrition targets ---
 await must(
-  admin
-    .from("nutrition_targets")
-    .upsert(
-      {
-        user_id: userId,
-        cal_min: 2400,
-        cal_max: 2700,
-        protein_min_g: 160,
-        protein_max_g: 190,
-        carbs_min_g: 250,
-        carbs_max_g: 320,
-        fat_min_g: 60,
-        fat_max_g: 85,
-      },
-      { onConflict: "user_id" },
-    ),
+  admin.from("nutrition_targets").upsert(
+    {
+      user_id: userId,
+      cal_min: 2400,
+      cal_max: 2700,
+      protein_min_g: 160,
+      protein_max_g: 190,
+      carbs_min_g: 250,
+      carbs_max_g: 320,
+      fat_min_g: 60,
+      fat_max_g: 85,
+    },
+    { onConflict: "user_id" },
+  ),
   "upsert nutrition_targets",
 );
 

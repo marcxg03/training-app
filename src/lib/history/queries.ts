@@ -925,12 +925,17 @@ export async function getCompletedSession(
       .from("workout_blocks")
       .select("block_id, workout_id")
       .eq("workout_id", completion.workout_id),
+    // Scoped to THIS completion, not the workout. A weekly plan reuses one
+    // workout_id, so filtering by workout_id here returned every past
+    // session's sets — masked until migration 023, because the old
+    // UNIQUE (user_id, workout_id, block_id, set_index) physically capped
+    // set_logs at one session's worth of rows per workout.
     supabase
       .from("set_logs")
       .select(
         "set_log_id, block_id, exercise_id, weight_kg, reps, is_to_failure, logged_at, set_index",
       )
-      .eq("workout_id", completion.workout_id)
+      .eq("completion_id", completion.completion_id)
       .order("logged_at", { ascending: true })
       .order("set_index", { ascending: true }),
   ]);

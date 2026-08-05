@@ -261,8 +261,8 @@ export function ProfileForm({
                     </select>
                   </FormControl>
                   <FormDescription>
-                    The app&apos;s clock: decides when &ldquo;today&rdquo;
-                    rolls over for workouts, meals, and charts.
+                    The app&apos;s clock: decides when &ldquo;today&rdquo; rolls
+                    over for workouts, meals, and charts.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

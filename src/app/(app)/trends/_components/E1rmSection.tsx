@@ -21,7 +21,8 @@ function SpotlightCard({
       ? spotlight.points[spotlight.points.length - 1].value -
         spotlight.points[0].value
       : 0;
-  const delta = Math.round(kgToLbs(Math.abs(rawKgDelta))) * Math.sign(rawKgDelta);
+  const delta =
+    Math.round(kgToLbs(Math.abs(rawKgDelta))) * Math.sign(rawKgDelta);
   const deltaLabel =
     spotlight.points.length > 1 ? `${delta >= 0 ? "+" : ""}${delta} lbs` : "—";
 
@@ -71,7 +72,8 @@ export function E1rmSection({
         </div>
       ) : (
         <div className="rounded-[var(--radius)] border border-dashed border-border bg-card px-4 py-6 text-sm leading-6 text-muted-foreground">
-          Log some weighted sets and your e1RM trends will appear here.
+          Log some compound lifts and their e1RM trends will appear here. Mark
+          exercises as compound in the Library.
         </div>
       )}
     </section>

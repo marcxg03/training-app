@@ -46,11 +46,61 @@ function toFailureResult(
   } satisfies HandlerResult;
 }
 
+// Rows queued by a pre-migration-023 build carry no completion_id. Inserting
+// them as-is would succeed (the column is nullable) and then be invisible to
+// every read path, which all filter on completion_id — a silent data loss, and
+// the queue row that could have re-linked them is dequeued on success. Resolve
+// the session with the same rule migration 023's backfill uses.
+async function resolveLegacyCompletionId(
+  supabase: ReturnType<typeof createClient>,
+  payload: SetLogInsertPayload,
+) {
+  const { data, error } = await supabase
+    .from("workout_completions")
+    .select("completion_id")
+    .eq("user_id", payload.user_id)
+    .eq("workout_id", payload.workout_id)
+    .lte("started_at", payload.logged_at)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return { completionId: null, error };
+  }
+
+  return { completionId: data?.completion_id ?? null, error: null };
+}
+
 async function handleSetLogInsert(
   row: Extract<QueueRow, { kind: "set_log_insert" }>,
 ) {
   const supabase = createClient();
-  const { error, status } = await supabase.from("set_logs").insert(row.payload);
+  let payload = row.payload;
+
+  if (!payload.completion_id) {
+    const { completionId, error: lookupError } =
+      await resolveLegacyCompletionId(supabase, payload);
+
+    if (lookupError) {
+      return toFailureResult(lookupError, 0);
+    }
+
+    if (!completionId) {
+      // Keep the row in the queue and surface it in QueuePanel rather than
+      // writing an unreachable set log.
+      return {
+        ok: false,
+        retryable: false,
+        errorMessage:
+          "Queued before the session-scoping migration and no matching session was found — this set needs to be re-entered.",
+      } satisfies HandlerResult;
+    }
+
+    payload = { ...payload, completion_id: completionId };
+  }
+
+  const { error, status } = await supabase.from("set_logs").insert(payload);
 
   if (!error || isConflictError(status, error)) {
     return {

@@ -586,6 +586,7 @@ export type Database = {
       set_logs: {
         Row: {
           block_id: string;
+          completion_id: string | null;
           exercise_id: string;
           is_to_failure: boolean;
           logged_at: string;
@@ -601,6 +602,7 @@ export type Database = {
         };
         Insert: {
           block_id: string;
+          completion_id?: string | null;
           exercise_id: string;
           is_to_failure?: boolean;
           logged_at?: string;
@@ -616,6 +618,7 @@ export type Database = {
         };
         Update: {
           block_id?: string;
+          completion_id?: string | null;
           exercise_id?: string;
           is_to_failure?: boolean;
           logged_at?: string;
@@ -636,6 +639,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "blocks";
             referencedColumns: ["block_id"];
+          },
+          {
+            foreignKeyName: "set_logs_completion_id_fkey";
+            columns: ["completion_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_completions";
+            referencedColumns: ["completion_id"];
           },
           {
             foreignKeyName: "set_logs_exercise_id_fkey";

@@ -6,9 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
 import { StartWorkoutButton } from "@/components/today/StartWorkoutButton";
-import {
-  parseDayOfWeek,
-} from "@/lib/methodology/today";
+import { parseDayOfWeek } from "@/lib/methodology/today";
 import { createClient } from "@/lib/supabase/server";
 
 type TodayWorkoutDetailPageProps = {

@@ -1322,3 +1322,42 @@ strictly own-data. The coaching design and data model remain captured in
 `spec/REDESIGN_BRIEF.md` §8 and in git history (commit that added the backend)
 for reuse when the separate app is built. Migration 021 was never applied to the
 remote, so dropping it left no schema drift.
+
+## Session membership is a stored `completion_id`, not a time window (2026-08-04)
+
+`set_logs` gained a `completion_id` FK to `workout_completions` (migration
+023). A set log now says which _session_ it belongs to, rather than that
+being inferred.
+
+**Options considered**
+
+1. Store `completion_id` on `set_logs` (chosen).
+2. Infer the session from a `[started_at, completed_at]` window on
+   `logged_at` — the pattern the summary page already used.
+3. Drop the unique constraint and scope queries by `logged_at >= started_at`
+   only.
+
+**Reasoning**
+Option 2 is wrong at the edges, and the offline queue is exactly those edges:
+a set enqueued offline and drained after the session ends has a `logged_at`
+outside its own completion's window, so the summary silently dropped it.
+Option 3 additionally throws away the constraint's real job — idempotent
+replay of a queued insert (`lib/sync/handlers.ts` treats `23505` as success)
+and a double-tap guard — leaving nothing to dedupe against.
+
+Option 1 keeps that guard while re-scoping it from "once per workout, ever"
+to "once per session", which is what it always meant. It also makes the
+week-2 lockout structurally impossible rather than fixed-by-query-discipline:
+there is no longer a query you can write that accidentally returns another
+session's sets.
+
+`completion_id` is nullable so pre-023 rows with no matching completion (and
+the analytics e2e fixture, which seeds no completions) stay valid. Postgres
+treats NULLs as distinct in a unique constraint, so those rows never collide.
+
+**Related:** the logger page also stopped auto-completing an empty workout.
+`findLastIncompleteBlock` returns `-1` both for "every block done" and for "no
+blocks at all", and the page treated `-1` as a reason to write `completed_at`
+during a GET render. Writing to the database from a render path is what turned
+a display bug into persisted bad data; the guard now runs before any
+completion row is created.

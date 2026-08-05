@@ -17,9 +17,7 @@ function GroupCard({ group }: { group: MuscleGroupVolume }): JSX.Element {
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <p className="truncate text-sm font-medium text-foreground">
-          {label}
-        </p>
+        <p className="truncate text-sm font-medium text-foreground">{label}</p>
         <p className="shrink-0 font-mono text-[13px] font-semibold tabular-nums text-foreground">
           {group.currentWeekSets}
           <span className="ml-1.5 text-[10px] font-normal uppercase text-faint">

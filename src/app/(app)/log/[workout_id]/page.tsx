@@ -7,7 +7,11 @@ import {
   type LoggerBlock,
   type LoggerWorkout,
 } from "@/lib/methodology/workout-state";
-import { getAppDayOfWeek, getAppTimezone, getAppToday } from "@/lib/time/server";
+import {
+  getAppDayOfWeek,
+  getAppTimezone,
+  getAppToday,
+} from "@/lib/time/server";
 import { startOfDayInTzIso } from "@/lib/time/appDay";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,7 +32,10 @@ function toArray<T>(value: T | T[] | null | undefined) {
 // App-day boundary (profile timezone) — matches today/page.tsx so the
 // completion created here is recognized there as "today".
 
-async function getLoggerData(workoutId: string) {
+// The workout template: blocks and their exercise bank. Deliberately free of
+// set logs — those belong to a session (workout_completions row), not to the
+// template, and the template is resolved before a completion exists.
+async function getWorkoutStructure(workoutId: string) {
   const supabase = await createClient();
   const { data: workout, error: workoutError } = await supabase
     .from("workouts")
@@ -99,75 +106,32 @@ async function getLoggerData(workoutId: string) {
     .sort((left, right) => left.display_order - right.display_order);
   const blockIds = orderedBlocks.map((block) => block.block_id);
 
-  const [
-    { data: liftingItems, error: liftingItemsError },
-    { data: setLogs, error: setLogsError },
-  ] = await Promise.all([
-    blockIds.length
-      ? supabase
-          .from("block_lifting_items")
-          .select(
-            `
-              block_id,
-              display_order,
-              exercises!inner (
-                exercise_id,
-                name,
-                notes,
-                prescribed_min,
-                prescribed_max,
-                muscle_groups,
-                is_bodyweight
-              )
-            `,
-          )
-          .in("block_id", blockIds)
-          .order("display_order")
-      : Promise.resolve({ data: [], error: null }),
-    blockIds.length
-      ? supabase
-          .from("set_logs")
-          .select(
-            "set_log_id, user_id, workout_id, block_id, exercise_id, set_index, weight_kg, reps, is_to_failure, prescribed_min, prescribed_max, notes, logged_at",
-          )
-          .eq("workout_id", workoutId)
-          .in("block_id", blockIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const { data: liftingItems, error: liftingItemsError } = blockIds.length
+    ? await supabase
+        .from("block_lifting_items")
+        .select(
+          `
+            block_id,
+            display_order,
+            exercises!inner (
+              exercise_id,
+              name,
+              notes,
+              prescribed_min,
+              prescribed_max,
+              muscle_groups,
+              is_bodyweight
+            )
+          `,
+        )
+        .in("block_id", blockIds)
+        .order("display_order")
+    : { data: [], error: null };
 
   if (liftingItemsError) {
     throw new Error(
       `Failed to load logger lifting items: ${liftingItemsError.message}`,
     );
-  }
-
-  if (setLogsError) {
-    throw new Error(`Failed to load logger set logs: ${setLogsError.message}`);
-  }
-
-  const setLogIds = setLogs.map((setLog) => setLog.set_log_id);
-  const { data: prHistory, error: prHistoryError } = setLogIds.length
-    ? await supabase
-        .from("pr_history")
-        .select("set_log_id, pr_type")
-        .in("set_log_id", setLogIds)
-    : { data: [], error: null };
-
-  if (prHistoryError) {
-    throw new Error(
-      `Failed to load logger PR history: ${prHistoryError.message}`,
-    );
-  }
-
-  const prTypesBySetLogId = new Map<
-    string,
-    LoggerBlock["setLogs"][number]["prTypes"]
-  >();
-
-  for (const row of prHistory ?? []) {
-    const list = prTypesBySetLogId.get(row.set_log_id) ?? [];
-    list.push(row.pr_type);
-    prTypesBySetLogId.set(row.set_log_id, list);
   }
 
   const exercisesByBlockId = new Map<string, LoggerBlock["exercises"]>();
@@ -194,9 +158,68 @@ async function getLoggerData(workoutId: string) {
     exercisesByBlockId.set(item.block_id, list);
   }
 
+  const session: LoggerWorkout = {
+    workout_id: workout.workout_id,
+    workout_name: workout.workout_name,
+    workout_type: workout.workout_type,
+    dayOfWeek: schedule.day_of_week,
+  };
+
+  const blocks = orderedBlocks.map((block) => ({
+    ...block,
+    exercises: exercisesByBlockId.get(block.block_id) ?? [],
+  }));
+
+  return { blockIds, blocks, session };
+}
+
+// Set logs for ONE session, keyed on completion_id. Scoping this to the
+// workout instead would load every prior week's sets for the same workout —
+// the bug this replaced (see migration 023).
+async function getSessionSetLogs(completionId: string, blockIds: string[]) {
+  const supabase = await createClient();
+  const { data: setLogs, error: setLogsError } = blockIds.length
+    ? await supabase
+        .from("set_logs")
+        .select(
+          "set_log_id, user_id, workout_id, block_id, exercise_id, set_index, weight_kg, reps, is_to_failure, prescribed_min, prescribed_max, notes, logged_at",
+        )
+        .eq("completion_id", completionId)
+        .in("block_id", blockIds)
+    : { data: [], error: null };
+
+  if (setLogsError) {
+    throw new Error(`Failed to load logger set logs: ${setLogsError.message}`);
+  }
+
+  const setLogIds = (setLogs ?? []).map((setLog) => setLog.set_log_id);
+  const { data: prHistory, error: prHistoryError } = setLogIds.length
+    ? await supabase
+        .from("pr_history")
+        .select("set_log_id, pr_type")
+        .in("set_log_id", setLogIds)
+    : { data: [], error: null };
+
+  if (prHistoryError) {
+    throw new Error(
+      `Failed to load logger PR history: ${prHistoryError.message}`,
+    );
+  }
+
+  const prTypesBySetLogId = new Map<
+    string,
+    LoggerBlock["setLogs"][number]["prTypes"]
+  >();
+
+  for (const row of prHistory ?? []) {
+    const list = prTypesBySetLogId.get(row.set_log_id) ?? [];
+    list.push(row.pr_type);
+    prTypesBySetLogId.set(row.set_log_id, list);
+  }
+
   const setLogsByBlockId = new Map<string, LoggerBlock["setLogs"]>();
 
-  for (const setLog of setLogs) {
+  for (const setLog of setLogs ?? []) {
     const list = setLogsByBlockId.get(setLog.block_id) ?? [];
 
     list.push({
@@ -207,22 +230,7 @@ async function getLoggerData(workoutId: string) {
     setLogsByBlockId.set(setLog.block_id, list);
   }
 
-  const session: LoggerWorkout = {
-    workout_id: workout.workout_id,
-    workout_name: workout.workout_name,
-    workout_type: workout.workout_type,
-    dayOfWeek: schedule.day_of_week,
-  };
-
-  const blocks: LoggerBlock[] = orderedBlocks.map((block) => ({
-    ...block,
-    exercises: exercisesByBlockId.get(block.block_id) ?? [],
-    setLogs: (setLogsByBlockId.get(block.block_id) ?? []).sort(
-      (left, right) => left.set_index - right.set_index,
-    ),
-  }));
-
-  return { blocks, session };
+  return setLogsByBlockId;
 }
 
 export default async function LoggerPage({ params }: LoggerPageProps) {
@@ -236,16 +244,22 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
     redirect("/today");
   }
 
-  const loggerData = await getLoggerData(workoutId);
+  const workoutStructure = await getWorkoutStructure(workoutId);
 
-  if (!loggerData) {
+  if (!workoutStructure) {
     redirect("/today");
   }
 
   const todayDayOfWeek = await getAppDayOfWeek();
-  const { blocks, session } = loggerData;
+  const { blockIds, blocks: templateBlocks, session } = workoutStructure;
 
   if (session.dayOfWeek !== todayDayOfWeek) {
+    redirect("/today");
+  }
+
+  // Nothing to log. Guarded before a completion is created so an empty workout
+  // can never be auto-marked complete below (findIndex returns -1 on []).
+  if (templateBlocks.length === 0) {
     redirect("/today");
   }
 
@@ -298,6 +312,17 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
   if (workoutCompletion.completed_at) {
     redirect("/today");
   }
+
+  const setLogsByBlockId = await getSessionSetLogs(
+    workoutCompletion.completion_id,
+    blockIds,
+  );
+  const blocks: LoggerBlock[] = templateBlocks.map((block) => ({
+    ...block,
+    setLogs: (setLogsByBlockId.get(block.block_id) ?? []).sort(
+      (left, right) => left.set_index - right.set_index,
+    ),
+  }));
 
   const initialBlockIndex = findLastIncompleteBlock(
     blocks,

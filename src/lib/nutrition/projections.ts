@@ -55,4 +55,3 @@ export type MacroBar = {
 };
 
 export type { NutritionDayType };
-

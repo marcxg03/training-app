@@ -5,10 +5,7 @@ import { notFound } from "next/navigation";
 
 import { MacroProgressBar } from "@/app/(app)/nutrition/_components/MacroProgressBar";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
-import {
-  getMealsForDate,
-  getNutritionTargets,
-} from "@/lib/nutrition/queries";
+import { getMealsForDate, getNutritionTargets } from "@/lib/nutrition/queries";
 import { dayLabelOf } from "@/lib/analytics/projections";
 import { getAppToday } from "@/lib/time/server";
 
