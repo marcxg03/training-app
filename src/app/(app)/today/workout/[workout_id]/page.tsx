@@ -7,6 +7,10 @@ import type { Enums } from "@/lib/supabase/types";
 import { SessionDetailPanel } from "@/components/plan/SessionDetailPanel";
 import { StartWorkoutButton } from "@/components/today/StartWorkoutButton";
 import { parseDayOfWeek } from "@/lib/methodology/today";
+import {
+  getBankExercisesByBlockId,
+  toSessionDetailExercises,
+} from "@/lib/blocks/bank";
 import { createClient } from "@/lib/supabase/server";
 
 type TodayWorkoutDetailPageProps = {
@@ -116,57 +120,8 @@ async function getTodayWorkoutDetail(
     )
     .sort((left, right) => left.displayOrder - right.displayOrder);
   const blockIds = liftingBlocks.map((block) => block.blockId);
-  const { data: liftingItems, error: liftingItemsError } = blockIds.length
-    ? await supabase
-        .from("block_lifting_items")
-        .select(
-          `
-            block_id,
-            display_order,
-            exercises!inner (
-              exercise_id,
-              name,
-              notes,
-              muscle_groups
-            )
-          `,
-        )
-        .in("block_id", blockIds)
-        .order("display_order")
-    : { data: [], error: null };
-
-  if (liftingItemsError) {
-    throw new Error(
-      `Failed to load lifting bank items: ${liftingItemsError.message}`,
-    );
-  }
-
-  const exercisesByBlockId = new Map<
-    string,
-    WorkoutDetail["blocks"][number]["exercises"]
-  >();
-
-  for (const item of liftingItems ?? []) {
-    const list = exercisesByBlockId.get(item.block_id) ?? [];
-    const exerciseRows = Array.isArray(item.exercises)
-      ? item.exercises
-      : [item.exercises];
-
-    for (const exercise of exerciseRows) {
-      if (!exercise) {
-        continue;
-      }
-
-      list.push({
-        exerciseId: exercise.exercise_id,
-        name: exercise.name,
-        notes: exercise.notes,
-        muscleGroups: exercise.muscle_groups,
-      });
-    }
-
-    exercisesByBlockId.set(item.block_id, list);
-  }
+  // Follows shared banks (migration 024).
+  const exercisesByBlockId = await getBankExercisesByBlockId(blockIds);
 
   return {
     workoutId: workout.workout_id,
@@ -181,7 +136,9 @@ async function getTodayWorkoutDetail(
       blockId: block.blockId,
       blockName: block.blockName,
       blockType: block.blockType,
-      exercises: exercisesByBlockId.get(block.blockId) ?? [],
+      exercises: toSessionDetailExercises(
+        exercisesByBlockId.get(block.blockId) ?? [],
+      ),
     })),
   };
 }

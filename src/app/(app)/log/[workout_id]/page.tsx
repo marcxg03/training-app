@@ -5,6 +5,7 @@ import {
   findLastIncompleteBlock,
   getOrCreateWorkoutCompletion,
   type LoggerBlock,
+  type LoggerExercise,
   type LoggerWorkout,
 } from "@/lib/methodology/workout-state";
 import {
@@ -13,6 +14,7 @@ import {
   getAppToday,
 } from "@/lib/time/server";
 import { startOfDayInTzIso } from "@/lib/time/appDay";
+import { getBankExercisesByBlockId } from "@/lib/blocks/bank";
 import { createClient } from "@/lib/supabase/server";
 
 type LoggerPageProps = {
@@ -106,57 +108,9 @@ async function getWorkoutStructure(workoutId: string) {
     .sort((left, right) => left.display_order - right.display_order);
   const blockIds = orderedBlocks.map((block) => block.block_id);
 
-  const { data: liftingItems, error: liftingItemsError } = blockIds.length
-    ? await supabase
-        .from("block_lifting_items")
-        .select(
-          `
-            block_id,
-            display_order,
-            exercises!inner (
-              exercise_id,
-              name,
-              notes,
-              prescribed_min,
-              prescribed_max,
-              muscle_groups,
-              is_bodyweight
-            )
-          `,
-        )
-        .in("block_id", blockIds)
-        .order("display_order")
-    : { data: [], error: null };
-
-  if (liftingItemsError) {
-    throw new Error(
-      `Failed to load logger lifting items: ${liftingItemsError.message}`,
-    );
-  }
-
-  const exercisesByBlockId = new Map<string, LoggerBlock["exercises"]>();
-
-  for (const item of liftingItems ?? []) {
-    const list = exercisesByBlockId.get(item.block_id) ?? [];
-
-    for (const exercise of toArray(item.exercises)) {
-      if (!exercise) {
-        continue;
-      }
-
-      list.push({
-        exercise_id: exercise.exercise_id,
-        name: exercise.name,
-        notes: exercise.notes,
-        prescribed_min: exercise.prescribed_min,
-        prescribed_max: exercise.prescribed_max,
-        muscle_groups: exercise.muscle_groups,
-        is_bodyweight: exercise.is_bodyweight,
-      });
-    }
-
-    exercisesByBlockId.set(item.block_id, list);
-  }
+  // Follows shared banks (migration 024): Chest — Round 1/2/3 are distinct
+  // slots that draw from one exercise list.
+  const exercisesByBlockId = await getBankExercisesByBlockId(blockIds);
 
   const session: LoggerWorkout = {
     workout_id: workout.workout_id,
@@ -231,6 +185,24 @@ async function getSessionSetLogs(completionId: string, blockIds: string[]) {
   }
 
   return setLogsByBlockId;
+}
+
+/** Every exercise the user owns — the source for adding one mid-session that
+ * the block's bank does not prescribe. */
+async function getExerciseCatalog(): Promise<LoggerExercise[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select(
+      "exercise_id, name, notes, prescribed_min, prescribed_max, muscle_groups, is_bodyweight",
+    )
+    .order("name");
+
+  if (error) {
+    throw new Error(`Failed to load exercise catalog: ${error.message}`);
+  }
+
+  return data ?? [];
 }
 
 export default async function LoggerPage({ params }: LoggerPageProps) {
@@ -313,16 +285,42 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
     redirect("/today");
   }
 
-  const setLogsByBlockId = await getSessionSetLogs(
-    workoutCompletion.completion_id,
-    blockIds,
-  );
-  const blocks: LoggerBlock[] = templateBlocks.map((block) => ({
-    ...block,
-    setLogs: (setLogsByBlockId.get(block.block_id) ?? []).sort(
-      (left, right) => left.set_index - right.set_index,
+  const [exerciseCatalog, setLogsByBlockId] = await Promise.all([
+    getExerciseCatalog(),
+    getSessionSetLogs(workoutCompletion.completion_id, blockIds),
+  ]);
+  const catalogById = new Map(
+    exerciseCatalog.map(
+      (exercise) => [exercise.exercise_id, exercise] as const,
     ),
-  }));
+  );
+
+  const blocks: LoggerBlock[] = templateBlocks.map((block) => {
+    const blockSetLogs = (setLogsByBlockId.get(block.block_id) ?? []).sort(
+      (left, right) => left.set_index - right.set_index,
+    );
+
+    // An exercise added mid-session is deliberately never written to the
+    // block's bank, so on a reload it would vanish from the picker and the
+    // already-logged sets would render with no selectable exercise. Union in
+    // anything this session actually logged against.
+    const bankIds = new Set(block.exercises.map((e) => e.exercise_id));
+    const adHoc = [
+      ...new Set(
+        blockSetLogs
+          .map((setLog) => setLog.exercise_id)
+          .filter((id) => !bankIds.has(id)),
+      ),
+    ]
+      .map((id) => catalogById.get(id))
+      .filter((exercise): exercise is LoggerExercise => Boolean(exercise));
+
+    return {
+      ...block,
+      exercises: [...block.exercises, ...adHoc],
+      setLogs: blockSetLogs,
+    };
+  });
 
   const initialBlockIndex = findLastIncompleteBlock(
     blocks,
@@ -353,6 +351,7 @@ export default async function LoggerPage({ params }: LoggerPageProps) {
       initialBlockIndex={initialBlockIndex}
       session={session}
       workoutCompletion={workoutCompletion}
+      exerciseCatalog={exerciseCatalog}
       userId={user.id}
     />
   );

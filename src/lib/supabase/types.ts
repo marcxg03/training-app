@@ -211,6 +211,7 @@ export type Database = {
       };
       blocks: {
         Row: {
+          bank_source_block_id: string | null;
           block_category: Database["public"]["Enums"]["block_category_enum"];
           block_id: string;
           block_name: string;
@@ -219,6 +220,7 @@ export type Database = {
           owner_user_id: string;
         };
         Insert: {
+          bank_source_block_id?: string | null;
           block_category: Database["public"]["Enums"]["block_category_enum"];
           block_id?: string;
           block_name: string;
@@ -227,6 +229,7 @@ export type Database = {
           owner_user_id: string;
         };
         Update: {
+          bank_source_block_id?: string | null;
           block_category?: Database["public"]["Enums"]["block_category_enum"];
           block_id?: string;
           block_name?: string;

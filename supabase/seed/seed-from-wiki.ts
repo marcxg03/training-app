@@ -737,6 +737,28 @@ async function syncGlobalBlocks(
   );
 
   for (const staleRow of staleRows) {
+    // set_logs.block_id and workout_blocks.block_id are ON DELETE CASCADE, so
+    // dropping a block here would silently destroy logged history. A block
+    // renamed outside the wiki (e.g. the Chest — Round 1/2/3 merge) reads as
+    // "stale" purely by name; refuse rather than cascade.
+    const { count: loggedSets, error: historyError } = await supabase
+      .from("set_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("block_id", staleRow.block_id);
+
+    if (historyError) {
+      throw new Error(
+        `Failed to check history for block "${staleRow.block_name}": ${historyError.message}`,
+      );
+    }
+
+    if ((loggedSets ?? 0) > 0) {
+      throw new Error(
+        `Refusing to delete block "${staleRow.block_name}": it has ${loggedSets} logged set(s). ` +
+          `Deleting it would cascade that history away. Rename it in the wiki to match, or remove it deliberately.`,
+      );
+    }
+
     const { error: deleteError } = await supabase
       .from("blocks")
       .delete()
@@ -780,9 +802,27 @@ async function syncBlockLiftingItems(
   blocksByName: Map<string, BlockRow>,
   exercisesByName: Map<string, ExerciseRow>,
 ) {
-  const liftingBlockIds = plan.liftingBlocks
+  const allBlockIds = plan.liftingBlocks
     .map((block) => blocksByName.get(block.blockName)?.block_id)
     .filter((value): value is string => Boolean(value));
+
+  // A block that sources its bank from another owns no items of its own (see
+  // migration 024). Rebuilding one here would write rows the app never reads
+  // and quietly un-merge a shared bank.
+  const { data: followerRows, error: followerError } = allBlockIds.length
+    ? await supabase
+        .from("blocks")
+        .select("block_id")
+        .in("block_id", allBlockIds)
+        .not("bank_source_block_id", "is", null)
+    : { data: [], error: null };
+
+  if (followerError) {
+    throw new Error(`Failed to resolve shared banks: ${followerError.message}`);
+  }
+
+  const followerIds = new Set((followerRows ?? []).map((row) => row.block_id));
+  const liftingBlockIds = allBlockIds.filter((id) => !followerIds.has(id));
 
   const { data, error } = liftingBlockIds.length
     ? await supabase

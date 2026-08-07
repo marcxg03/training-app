@@ -1766,3 +1766,61 @@ PR-detection, or offline-queue behavior were changed on existing surfaces.
   category-block mis-selection for users with more than one block of a
   category. The reviewers disagreed on whether the nested field array was
   index-stale under session reorder — settled with a test, which passes.
+
+## Shared exercise banks + mid-session exercises (2026-08-07)
+
+### What changed
+
+- **Migration 024** — `blocks.bank_source_block_id`: several blocks can share
+  ONE exercise bank. The methodology interleaves a muscle group through a
+  session (Upper runs chest at positions 1, 4 and 7), which meant three
+  separate blocks with three overlapping, separately-maintained banks. The
+  slots stay distinct rows because `workout_blocks`, `set_logs.block_id` and
+  `completed_block_ids` all key on `block_id` — only the bank is shared. A
+  trigger enforces one level (no chains, no cycles); a CHECK forbids
+  self-reference.
+- `src/lib/blocks/bank.ts` resolves a block's bank through its source and is
+  now the single path used by the logger, `/plan`, `/plan/[day]` and
+  `/today/workout/[id]` — replacing four copies of the same query.
+- `scripts/merge-chest-blocks.mjs` collapses "Chest 1/2/3" onto one 9-exercise
+  bank, renaming them "Chest — Round 1/2/3" **in place**, so every
+  `workout_blocks` row and every logged set keeps referring to the same block
+  ids. Nothing propagates because nothing moves.
+- **Mid-session exercises** (`AddExerciseSheet`): during a workout, add an
+  exercise to the current block either from the exercise bank or by creating
+  one on the spot. It never writes `block_lifting_items`, so the plan is
+  unchanged; the set carries the `exercise_id` directly, and the logger page
+  unions session-logged exercises back in so the pick survives a reload. A
+  created exercise IS saved to the Library — it is simply not added to the
+  block's prescription.
+
+### Verification
+
+- `e2e/verify-shared-bank-and-adhoc.mjs` — 9 live checks: the DB accepts a
+  shared bank and rejects chains and self-reference; a **follower block placed
+  first** (so the logger opens on it) lists its source's bank; an off-plan
+  exercise is selectable, its set persists against the right block, the plan's
+  bank is provably unchanged, and the pick survives a reload.
+- `verify-session-content` 15/15 and `verify-plan-blocks` 11/11 still pass;
+  ralph-verify GREEN; all four fixture suites pass.
+
+### Adversarial review (`/roast-code`) — 5 must-fixes, all implemented
+
+1. **`pnpm seed` would have cascade-deleted 27 logged sets.** The seed sweeps
+   blocks by NAME and deletes stale ones; renaming Chest 1/2/3 made all three
+   "stale", and `set_logs.block_id` is ON DELETE CASCADE. The seed now refuses
+   to delete a block with logged history, skips rebuilding a follower's bank,
+   and the wiki carries the new names.
+2. Deleting a bank source left its followers permanently empty — the delete
+   guard never checked for followers. Now blocked with a reason.
+3. `updateBlock` committed the rename/type change and _then_ returned an error,
+   so a follower could never be renamed while its `block_type` silently
+   changed. The lookup moved before any write.
+4. The merge script had no undo, a destructive delete-then-insert window, and a
+   verification that could only ever pass (it counted rows it never touched).
+   Now: a snapshot file written before any write, upsert-then-prune so the bank
+   is never empty, every UPDATE asserts it matched a row, and the verify
+   re-reads what was actually rewritten.
+5. The headline shared-bank e2e assertion was vacuous — it passed on the block
+   heading alone, i.e. in exactly the broken state. Rewritten to scope into the
+   picker of a follower block.
