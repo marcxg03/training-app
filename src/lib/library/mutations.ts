@@ -234,6 +234,28 @@ export async function updateBlock(
   blockId: string,
   input: Pick<BlockPayload, "block_name" | "block_type" | "bank">,
 ): Promise<MutationResult<null>> {
+  // Resolve the bank owner BEFORE writing anything. Checking afterwards left
+  // the rename/type change committed while reporting failure — the user was
+  // told nothing saved when block_type (which drives how the logger completes
+  // the block) had already changed.
+  const { data: block, error: bankSourceError } = await supabase
+    .from("blocks")
+    .select(
+      "bank_source_block_id, blocks!blocks_bank_source_block_id_fkey (block_name)",
+    )
+    .eq("block_id", blockId)
+    .maybeSingle();
+
+  if (bankSourceError) {
+    return {
+      ok: false,
+      error: translateMutationError(
+        bankSourceError,
+        blockAlreadyExistsMessage(),
+      ),
+    };
+  }
+
   const { error } = await supabase
     .from("blocks")
     .update({
@@ -247,6 +269,12 @@ export async function updateBlock(
       ok: false,
       error: translateMutationError(error, blockAlreadyExistsMessage()),
     };
+  }
+
+  // A follower owns no items; its exercises come from the source block. Name
+  // and type are still its own, so the rename above stands and this succeeds.
+  if (block?.bank_source_block_id) {
+    return { ok: true, data: null };
   }
 
   return replaceBlockBank(supabase, blockId, input.bank);
@@ -711,6 +739,25 @@ export async function getDeletionImpact(
         blocked: true,
         reason:
           "This block appears in your logged workout history. Deleting it would erase that history, so it's kept — edit it instead.",
+      };
+    }
+    // Other blocks may source their exercise bank from this one and hold no
+    // items of their own (migration 024). The FK is ON DELETE SET NULL, so
+    // deleting this block would leave them permanently empty with no warning
+    // and nothing to restore from.
+    const followers = rowsOrNull(
+      await supabase
+        .from("blocks")
+        .select("*", { count: "exact", head: true })
+        .eq("bank_source_block_id", id),
+    );
+    if (followers === null) {
+      return CHECK_FAILED;
+    }
+    if (followers > 0) {
+      return {
+        blocked: true,
+        reason: `${followers} other block${followers === 1 ? "" : "s"} share this block's exercise bank and would be left empty. Point ${followers === 1 ? "it" : "them"} at another bank first.`,
       };
     }
     const scheduled = rowsOrNull(

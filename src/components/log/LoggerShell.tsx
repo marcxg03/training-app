@@ -31,6 +31,7 @@ import {
   WorkoutSummary,
   type WorkoutSummaryProps,
 } from "@/components/log/WorkoutSummary";
+import { AddExerciseSheet } from "@/components/log/AddExerciseSheet";
 import { SetLogRow } from "@/components/log/SetLogRow";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -39,6 +40,8 @@ type LoggerShellProps = {
   initialBlockIndex: number;
   session: LoggerWorkout;
   workoutCompletion: WorkoutCompletionRecord;
+  /** Every exercise the user owns, for adding one mid-session. */
+  exerciseCatalog: LoggerExercise[];
   userId: string;
 };
 
@@ -135,6 +138,7 @@ export function LoggerShell({
   initialBlockIndex,
   session,
   workoutCompletion,
+  exerciseCatalog,
   userId,
 }: LoggerShellProps) {
   const router = useRouter();
@@ -192,6 +196,28 @@ export function LoggerShell({
         ),
       };
     });
+
+    updateBlocks(nextBlocks);
+    setSelectedExerciseByBlockId((current) => ({
+      ...current,
+      [blockId]: exercise.exercise_id,
+    }));
+  }
+
+  /** Adds an exercise to a block for THIS session only.
+   *
+   * Local state exclusively — nothing writes block_lifting_items, so the plan
+   * is untouched. The set logged against it carries the exercise_id, and the
+   * logger page unions that back in on reload. */
+  function handleExerciseAdded(blockId: string, exercise: LoggerExercise) {
+    setActionError(null);
+
+    const nextBlocks = blocksRef.current.map((block) =>
+      block.block_id === blockId &&
+      !block.exercises.some((e) => e.exercise_id === exercise.exercise_id)
+        ? { ...block, exercises: [...block.exercises, exercise] }
+        : block,
+    );
 
     updateBlocks(nextBlocks);
     setSelectedExerciseByBlockId((current) => ({
@@ -406,6 +432,22 @@ export function LoggerShell({
                       }))
                     }
                   />
+
+                  {/* Only while the block is still free: once a set is logged
+                      the block's exercise is fixed for the session, since every
+                      set in a block records against the one selected. */}
+                  {block.setLogs.length === 0 ? (
+                    <AddExerciseSheet
+                      catalog={exerciseCatalog}
+                      existingExerciseIds={block.exercises.map(
+                        (exercise) => exercise.exercise_id,
+                      )}
+                      userId={userId}
+                      onAdd={(exercise) =>
+                        handleExerciseAdded(block.block_id, exercise)
+                      }
+                    />
+                  ) : null}
 
                   {selectedExercise ? (
                     block.block_type === "failure" ? (

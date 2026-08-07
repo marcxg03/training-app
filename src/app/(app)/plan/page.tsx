@@ -6,6 +6,7 @@ import { getHighLevelMuscleGroups } from "@/lib/methodology/muscle-groups";
 import type { Enums, Tables } from "@/lib/supabase/types";
 import { DayCard, type DayCardSession } from "@/components/plan/DayCard";
 import { PlanControls } from "@/app/(app)/plan/_components/PlanControls";
+import { getBankExercisesByBlockId } from "@/lib/blocks/bank";
 import { createClient } from "@/lib/supabase/server";
 
 const dayOrder: Enums<"day_of_week_enum">[] = [
@@ -112,36 +113,16 @@ async function getWeeklyPlan() {
   }
 
   const blockIds = (workoutBlocks ?? []).map((row) => row.block_id);
-  const { data: liftingItems, error: liftingItemsError } = blockIds.length
-    ? await supabase
-        .from("block_lifting_items")
-        .select("block_id, exercise_id")
-        .in("block_id", blockIds)
-    : { data: [], error: null };
-
-  if (liftingItemsError) {
-    throw new Error(
-      `Failed to load lifting bank items: ${liftingItemsError.message}`,
-    );
-  }
-
-  const exerciseIds = (liftingItems ?? []).map((row) => row.exercise_id);
-  const { data: exercises, error: exercisesError } = exerciseIds.length
-    ? await supabase
-        .from("exercises")
-        .select("exercise_id, muscle_groups")
-        .in("exercise_id", exerciseIds)
-    : { data: [], error: null };
-
-  if (exercisesError) {
-    throw new Error(`Failed to load exercises: ${exercisesError.message}`);
-  }
+  // Follows shared banks (migration 024) so the week's muscle-group summary
+  // counts what each slot actually prescribes.
+  const bankByBlockId = await getBankExercisesByBlockId(blockIds);
 
   const exercisesById = new Map(
-    (exercises ?? []).map(
-      (exercise) => [exercise.exercise_id, exercise] as const,
-    ),
+    [...bankByBlockId.values()]
+      .flat()
+      .map((exercise) => [exercise.exercise_id, exercise] as const),
   );
+
   const blockIdsByWorkoutId = new Map<string, string[]>();
 
   for (const row of workoutBlocks ?? []) {
@@ -150,13 +131,12 @@ async function getWeeklyPlan() {
     blockIdsByWorkoutId.set(row.workout_id, list);
   }
 
-  const exerciseIdsByBlockId = new Map<string, string[]>();
-
-  for (const row of liftingItems ?? []) {
-    const list = exerciseIdsByBlockId.get(row.block_id) ?? [];
-    list.push(row.exercise_id);
-    exerciseIdsByBlockId.set(row.block_id, list);
-  }
+  const exerciseIdsByBlockId = new Map(
+    [...bankByBlockId].map(
+      ([blockId, exercises]) =>
+        [blockId, exercises.map((exercise) => exercise.exercise_id)] as const,
+    ),
+  );
 
   const workoutsByScheduleId = new Map<string, Tables<"workouts">[]>();
 
