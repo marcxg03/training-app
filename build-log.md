@@ -40,3 +40,11 @@ block_type = 'failure';` so legacy failure blocks keep the last-set-to-failure
 
 **Verified:** `pnpm exec tsx scripts/verify-set-scheme.ts` → 15/15 pass;
 `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build).
+
+## ✅ B1 — Adjustable set-scheme per block — DONE (2026-09-20)
+Commits: `bbb953e` (slice) → `c88389c` (roast fixes) → format fix.
+Built: migration 025 (additive warmup_sets/working_sets/to_failure on blocks + backfill to_failure=true for legacy failure blocks + lifting-scoped working_sets CHECK); `isBlockComplete` auto-completes at warmup+working; `getSetSchemeSteps`/`getSetLabel`/`isLastSchemeSet` helpers; FailureProtocol + LoggerShell scheme-driven; log-page projection threads the columns; createBlock/updateBlock write + reconcile the scheme; BlockForm inputs.
+Verify (coordinator re-ran): verify-set-scheme.ts 15/15; ralph-verify.sh GREEN (format/typecheck/lint/build).
+Roast: 🟡 FIX FIRST → 2 must-fix (migration data-regression on is_to_failure; feature inert / no write path) + 3 should-fix (lifting-scoped CHECK, missing scheme tests, block_type/to_failure naming). All fixed. Convergence re-roast: CONVERGED, no new must-fix.
+Deferred (should-fix, out of scope): form block_type-flip could leave an inert to_failure=true on a corrective block (harmless — gated by block_type==='failure'). Reskin of these inputs → the separate mono design pass.
+Seam for B3: most Block II lifts are block_type='failure' (structured scheme) but NOT to failure — B3 MUST set to_failure explicitly (false for 2-working-set lifts, true only for Thu dips); createBlock/seed honors an explicit false.
