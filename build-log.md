@@ -15,8 +15,9 @@ Gates satisfied by the 2026-09-20 interview: spec (REDESIGN_BRIEF §0 + BLOCK_II
 projection consume the scheme.
 
 **Roast-fix pass (findings from the 3-council review):**
+
 - MF1/D11 — migration 025 backfill `UPDATE blocks SET to_failure = true WHERE
-  block_type = 'failure';` so legacy failure blocks keep the last-set-to-failure
+block_type = 'failure';` so legacy failure blocks keep the last-set-to-failure
   semantics (the "F" badge) instead of silently flipping to false.
 - MF2/D13 — write path: `BlockPayload`/zod schema gain optional
   `warmup_sets`/`working_sets`/`to_failure`; `createBlock` persists them
