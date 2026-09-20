@@ -33,6 +33,10 @@ export type LoggerSetLog = Pick<
 export type LoggerBlock = {
   block_id: string;
   block_name: string;
+  /** NOTE: `block_type === "failure"` means the block "uses the structured
+   * set-scheme protocol" (warm-ups + working sets, auto-completing at the last
+   * set) — it is NOT the to-failure flag. Whether the last working set is
+   * actually taken to failure is the separate `toFailure` column below. */
   block_type: NonNullable<Tables<"blocks">["block_type"]>;
   display_order: number;
   /** Per-block set scheme (migration 025). Legacy blocks default to
@@ -93,6 +97,17 @@ export function getSetSchemeSteps(
   }
 
   return steps;
+}
+
+/** True when `savedIndex` is the final prescribed set of the block's scheme —
+ * the set whose save triggers block completion. Pure predicate extracted from
+ * the logger's inline `set_index === lastSetIndex` so the completion trigger is
+ * named and independently testable. */
+export function isLastSchemeSet(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets">,
+  savedIndex: number,
+) {
+  return savedIndex === blockSetCount(block);
 }
 
 /** The label for a completed set at `setIndex` under a block's scheme, with a
@@ -161,6 +176,9 @@ export function isBlockComplete(
   block: LoggerBlock,
   completedBlockIds: readonly string[],
 ) {
+  // block_type === "failure" = "uses the structured set-scheme protocol" (see
+  // LoggerBlock.block_type). The separate `toFailure` column decides whether the
+  // last working set is taken to failure; it does not gate completion here.
   if (block.block_type === "failure") {
     return (
       new Set(block.setLogs.map((setLog) => setLog.set_index)).size >=

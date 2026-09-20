@@ -17,8 +17,23 @@ ADD COLUMN warmup_sets int NOT NULL DEFAULT 1,
 ADD COLUMN working_sets int NOT NULL DEFAULT 2,
 ADD COLUMN to_failure boolean NOT NULL DEFAULT false;
 
--- A block must have at least one working set to be loggable; warm-ups may be
--- zero. These bound the scheme without touching the wiring contract.
+-- Backfill (D11). NEW blocks opt out of to-failure (DEFAULT false), but the
+-- pre-scheme semantics of a `block_type='failure'` block were "the last working
+-- set is taken to failure" — that drove the is_to_failure flag on the final set
+-- and the "F" progression badge in history. Without this backfill every legacy
+-- failure block would suddenly log is_to_failure=false and stop rendering the
+-- toggle (showFailureCheckbox = isLast && to_failure), a silent, unrecoverable
+-- data-semantics regression. Restore the old behavior for existing blocks.
+UPDATE blocks SET to_failure = true WHERE block_type = 'failure';
+
+-- The scheme is conceptually lifting-only (D12). A lifting/failure block must
+-- have at least one working set to be loggable; warm-ups may be zero. Scope the
+-- working-set constraint to lifting so cardio/recovery/mobility rows don't carry
+-- a meaningless mandatory working set — mirroring the partial-CHECK pattern of
+-- `blocks_lifting_has_type` in migration 013. (warmup_sets >= 0 is total, since
+-- it holds for every non-negative int regardless of category.)
 ALTER TABLE blocks
 ADD CONSTRAINT blocks_warmup_sets_nonneg CHECK (warmup_sets >= 0),
-ADD CONSTRAINT blocks_working_sets_positive CHECK (working_sets >= 1);
+ADD CONSTRAINT blocks_working_sets_positive CHECK (
+  block_category != 'lifting' OR working_sets >= 1
+);

@@ -1,88 +1,79 @@
-# Build Plan — Trends & Analytics (graphs)
+# BUILD_PLAN — Block II / Adjustable-Sets redesign
 
-**Date:** 2026-07-28 · **Branch:** redesign/instrument · **Mode:** brownfield
+**Branch:** `redesign/block-ii-adjustable-sets` (worktree `../training-app-redesign`). Base: `main` @ edf2446. Do NOT merge to main without Marcus's explicit ok.
 
-## Spec (agreed with Marcus)
+**Spec source:** `spec/REDESIGN_BRIEF.md` §0 (2026-09-20 update) + `spec/BLOCK_II_SEED.md`. Ledger: `DECISIONS.md` (D1–D9). Log: `build-log.md`.
 
-Add a dedicated **/trends** analytics page (new 6th bottom-nav tab) with four graph
-trackers, all rendered with the existing hand-rolled SVG chart approach (no chart
-library):
+**Stack:** Next.js 15 + TS strict + Supabase + Tailwind/shadcn PWA. Server-first data flow; pure methodology modules; append-only set_logs/pr_history (wiring contract §9 — do not break).
 
-1. **e1RM strength progression** — per-exercise estimated 1RM (Epley:
-   `weight_kg * (1 + reps/30)`), best-of-day, displayed lbs. Upgrades the
-   existing per-exercise history chart and shows top exercises on /trends.
-2. **Weekly volume by muscle group** — sets/week and tonnage (Σ weight×reps)
-   from `set_logs` × `exercises.muscle_groups`, last 8 weeks.
-3. **Nutrition 30-day trend** — daily calories + protein as min–max bands from
-   `meal_entries` vs the `nutrition_targets` zone.
-4. **Bodyweight trend** — NEW `bodyweight_logs` table (migration 021, per-user
-   RLS matching migration 010 pattern), one-tap quick-log on /trends (input lbs,
-   stored kg), trend line; keeps `profiles.bodyweight_kg` in sync as "current".
+**Test convention (repo idiom, NOT a new framework):** there is no vitest/jest. Test-first = write a bespoke `scripts/verify-<x>.ts` (run with `pnpm exec tsx`) that asserts the pure logic and fails first; for UI, a headed Playwright script in `e2e/*.mjs` following the existing pattern. The de-facto build gate is `scripts/ralph-verify.sh` (format → typecheck → lint → build) — every slice must pass it.
 
-**Non-goals:** no chart library; no changes to logging flows (set logger,
-LogMealSheet); no PR-detection changes; no consistency heatmap / cardio load
-(deferred to FUTURE_WORK).
+---
 
-**Conventions honored:** RSC pages → `src/lib/<domain>/queries.ts` (reads) +
-`mutations.ts` (server actions) + pure `projections.ts`; kg stored / lbs
-displayed via `src/lib/units`; shadcn New York + semantic tokens; mobile-first;
-zod + react-hook-form; per-user RLS.
+## Slice order & dependencies
 
-**Definition of done (whole build):** /trends loads with all four sections
-populated from real logged data; bodyweight quick-log persists and re-renders;
-exercise history page shows e1RM; `pnpm typecheck` + `pnpm lint` green;
-UI verified via Playwright screenshots (mobile 390px + desktop) on all touched
-pages; migration file ready + apply instructions flagged (NOT auto-applied).
+`B1 (scheme model) → B2 (cut validation) → B3 (seed Block II)`. B1 before B3 (B3 seeds schemes). B2 before B3 (Block II has no rest day → must not be hard-blocked).
 
-**Top risks:** timezone/day-bucketing consistency with existing `en-CA` date
-convention; muscle-group double-counting (an exercise with 2 groups counts its
-sets toward both — acceptable, standard practice, but must be deliberate);
-sparse-data rendering (weeks with no data must not interpolate misleadingly).
+---
 
-## Slices
+## SLICE B1 — Adjustable set-scheme per block
 
-### Slice 0 — Scaffold
+**Delivers:** each block carries its own set-scheme instead of the hardcoded WU+W1+W2 / auto-complete-after-3. A "failure" block can be `2 working sets`, `2 × failure`, `1 WU + 2 working`, etc.
 
-- `/trends` route (RSC page shell with four empty section cards), 6th nav tab
-  (TrendingUp icon, label "Trends"), `src/lib/analytics/` skeleton
-  (queries/projections), chart-component variants file stub.
-- **Done:** page renders behind auth with placeholder sections; nav highlights.
-- **Verify:** typecheck/lint; Playwright screenshot mobile+desktop.
+**Approach (additive, back-compat):**
 
-### Slice 1 — e1RM progression
+- **Migration** `025_block_set_scheme.sql`: add to `blocks` — `warmup_sets int NOT NULL DEFAULT 1`, `working_sets int NOT NULL DEFAULT 2`, `to_failure bool NOT NULL DEFAULT false` (with a CHECK that they're ≥0 / working_sets ≥1 for lifting). Defaults reproduce today's behavior (1+2 = 3 total). Cardio/recovery blocks (block_type NULL) unaffected.
+- Regenerate/extend `src/lib/supabase/types.ts` for the new columns.
+- `src/lib/methodology/workout-state.ts`: extend `LoggerBlock` with `warmupSets`, `workingSets`, `toFailure` (or a `scheme` object). Replace `isBlockComplete`'s hardcoded `>= 3` with `>= (warmupSets + workingSets)` for scheme-driven blocks. Keep the `mobility`/`corrective` explicit-complete path.
+- `src/components/log/FailureProtocol.tsx`: build `failureSteps` dynamically from the block scheme (N warm-ups labelled WU/WU2…, then working sets W1..Wm; the _last_ working set carries the failure checkbox only if `toFailure`). Remove the hardcoded 3-step array.
+- `src/components/log/LoggerShell.tsx`: derive set-role labels from scheme, not the hardcoded `["WU","W1","W2"]`.
+- Thread the scheme through the block projection that builds `LoggerBlock` (find the query that assembles logger blocks — likely `src/lib/methodology/*` or `src/lib/log/*`; the implementer must locate and report it as a seam).
 
-- `epleyE1rm()` in analytics projections; best-e1RM-per-day series per exercise;
-  history exercise page chart switches to e1RM (label "lbs e1rm"); /trends shows
-  e1RM sparklines for top 4 exercises by recent volume.
-- **Done:** chart values match hand-computed Epley on sample data.
-- **Verify:** tsx script asserting projection outputs on fixture data; Playwright.
+**Definition of done:** a block with `{warmup_sets:0, working_sets:2, to_failure:true}` shows exactly 2 set slots, the 2nd carrying the failure checkbox, and auto-completes after 2 sets; a legacy block with defaults still shows WU/W1/W2 and completes after 3. `ralph-verify.sh` green. A `scripts/verify-set-scheme.ts` asserts `isBlockComplete` against ≥3 scheme configs (written failing first).
 
-### Slice 2 — Weekly volume by muscle group
+**Verify:** run `scripts/verify-set-scheme.ts` (red→green); `scripts/ralph-verify.sh`; headed Playwright drive of the logger for a 2-working-set block + a legacy 3-set block (screenshot desktop+mobile), confirming set counts + auto-complete + persistence on reload.
 
-- Weekly bucketing (ISO weeks, last 8), sets/week + tonnage per muscle group;
-  grouped bar chart variant of the SVG component; muscle-group selector or
-  stacked list of small multiples (decide in-slice, mobile-first).
-- **Done:** totals match a SQL cross-check on real data.
-- **Verify:** tsx fixture test + SQL spot-check + Playwright.
+**Touches:** `supabase/migrations/025_block_set_scheme.sql` (new), `src/lib/supabase/types.ts`, `src/lib/methodology/workout-state.ts`, `src/components/log/FailureProtocol.tsx`, `src/components/log/LoggerShell.tsx`, the logger-block projection query (locate), `scripts/verify-set-scheme.ts` (new). **Off-limits:** set_logs schema (append-only), weight_kg storage, mutation signatures, nutrition/library/PR modules.
 
-### Slice 3 — Nutrition 30-day trend
+---
 
-- `getMealsForDateRange()` query; daily min–max band series for calories +
-  protein; band-chart SVG variant; target zone drawn as reference band.
-- **Done:** today's chart endpoint value equals the Fuel page's today totals.
-- **Verify:** tsx fixture test (range summing incl. legacy single-value rows) +
-  Playwright.
+## SLICE B2 — Simplify: cut the validation guardrails
 
-### Slice 4 — Bodyweight trend
+**Delivers:** the plan/day editor no longer hard-blocks on methodology rules; guardrails are removed or off-by-default. Unblocks seeding a no-rest-day plan.
 
-- Migration `021_bodyweight_logs.sql` (+RLS); quick-log server action (upsert
-  per date, also updates `profiles.bodyweight_kg`); one-tap log UI on /trends;
-  trend line chart. Migration applied via `supabase db push` or dashboard SQL —
-  **flag to Marcus, do not auto-apply**.
-- **Done:** log → persists → chart updates → profile current value syncs.
-- **Verify:** local flow driven end-to-end with Playwright after migration
-  applied; typecheck/lint.
+**Approach:**
 
-### Final pass
+- `src/lib/methodology/plan-schedule.ts`: make `weekRestDayError` non-blocking — either remove it or downgrade the min-rest-day rule to a soft warning (so `validateSchedule` returns `hardErrors: []` by default). Keep the soft cardio-order warning as an _informational_ warning (Marcus can ignore; it never blocked). Preserve the `ScheduleValidation`/`validateSchedule` signatures so `DayEditForm` keeps compiling.
+- `src/app/(app)/plan/[day]/_components/DayEditForm.tsx`: with no hard errors, `blocked` is always false; keep the soft-warning "Save anyway" affordance but ensure a clean save path. Simplify copy.
+- Seed methodology rules `supabase/seed/lib/methodology-rules.ts`: downgrade the HARD violations (48h recovery, push/pull balance, min-rest-day, missing-muscle) to soft warnings (they already don't block runtime, but Block II should seed without scary "hardViolations" output). Keep them as informational warnings in the seed summary.
+- Preserve the _unrelated_ guards in `plan/mutations.ts` (no-remove-logged-session, blocks-frozen lock) — those are data-integrity, NOT methodology guardrails. Do not touch them.
 
-Whole-build verification + final /roast-code + FUTURE_WORK.md.
+**Definition of done:** a 7-day plan with zero rest days saves in the editor with no hard block, and seeds without any `hardViolations`. `ralph-verify.sh` green. `scripts/verify-schedule-validation.ts` asserts `validateSchedule({isRestDay, workouts, otherDaysHaveRest:false}).hardErrors` is empty for the no-rest case (written failing first against current behavior).
+
+**Verify:** `scripts/verify-schedule-validation.ts` (red→green); `ralph-verify.sh`; headed Playwright: open a day editor, remove the last rest day, confirm Save is not blocked.
+
+**Touches:** `src/lib/methodology/plan-schedule.ts`, `src/app/(app)/plan/[day]/_components/DayEditForm.tsx`, `supabase/seed/lib/methodology-rules.ts`, `scripts/verify-schedule-validation.ts` (new). **Off-limits:** `plan/mutations.ts` integrity guards, logger, nutrition.
+
+---
+
+## SLICE B3 — Seed Block II as the active plan
+
+**Delivers:** Marcus's Block II (from `spec/BLOCK_II_SEED.md`) is the active plan, with per-block schemes, banks, and the 7-day split.
+
+**Approach:**
+
+- Author `supabase/seed/wiki/current-plan.md` in the exact format `parsePlanFromWiki` expects (study the parser in `supabase/seed/lib/methodology-rules.ts` + the existing `supabase/seed/wiki/current-plan.md` for the grammar). Represent Block II: 7 days, the lifting blocks with banks, cardio/recovery activities, the 2-working-set schemes (Thu dips = to_failure). If the parser can't express per-block scheme, extend `TrainingPlanSpec`/the parser + `syncGlobalBlocks` to write the new B1 scheme columns.
+- Update `syncGlobalBlocks` (and parser types) so schemes seed into the `blocks` columns from B1.
+- Keep idempotency (the sync diffing) intact.
+
+**Definition of done:** `npm run seed` against a test user produces the Block II plan — 7 days, correct blocks/banks, schemes seeded (Thu dips to_failure, others 2 working sets), no hardViolations. The app's Plan tab renders Block II; the logger shows the right set counts per block.
+
+**Verify:** run the seed against a throwaway user (follow `e2e/_setup` patterns); an `e2e/verify-block-ii.mjs` that loads the plan and asserts day count, a spot-check of Monday Upper's 3 rounds + Thursday dips scheme. `ralph-verify.sh` green. Screenshot the Plan tab.
+
+**Touches:** `supabase/seed/wiki/current-plan.md`, `supabase/seed/lib/methodology-rules.ts` (parser + types if needed), `supabase/seed/seed-from-wiki.ts` (`syncGlobalBlocks` scheme write), `e2e/verify-block-ii.mjs` (new). **Off-limits:** runtime app logic beyond what B1 established.
+
+---
+
+## Final pass
+
+Whole-build verify (seed → open app → drive logger end-to-end on a Block II session), final `/roast-code` over the full diff, triage + ralph to convergence, then present integration options (recommend: PR for Marcus's review, do NOT auto-merge to main).

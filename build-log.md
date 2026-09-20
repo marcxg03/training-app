@@ -1,324 +1,41 @@
-# Build Log — Trends & Analytics
+# Build Log — Block II / Adjustable-Sets redesign
 
-Build order: Slice 0 scaffold → 1 e1RM → 2 weekly volume → 3 nutrition trend →
-4 bodyweight → final pass. Plan + done-defs in BUILD_PLAN.md.
+Branch `redesign/block-ii-adjustable-sets`. Order: **B1 scheme → B2 cut-validation → B3 seed Block II** → final roast+verify → integration.
 
----
-
-## Slice 0 — Scaffold ✅ (2026-07-28)
-
-**Built:** `/trends` RSC page (4 placeholder section cards, standard header
-pattern), 6th nav tab (TrendingUp, "Trends"), `src/lib/analytics/`
-projections+queries skeleton, `e2e/screenshot-trends.mjs` verification driver
-(reuses existing seed-auth/prep-profile harness). Added `playwright` as
-devDependency (browsers already cached locally).
-
-**Verified:** `tsc --noEmit` + lint green. Dev server + seeded e2e user →
-authed screenshots mobile(390)+desktop(1280): page renders, nav highlights
-Trends, 6 tabs fit mobile width.
-
-**Roast:** deferred into Slice 1's roast (scaffold is placeholder markup that
-Slice 1 replaces; its only durable surface — nav tab, lib skeleton — is Slice
-1's seam and gets reviewed there). Decision D0.
+Gates satisfied by the 2026-09-20 interview: spec (REDESIGN_BRIEF §0 + BLOCK_II_SEED) + plan (Marcus greenlit autonomous run). OUT of scope: mono reskin (design-led), community/B4 (post-Nov-16).
 
 ---
 
-## Slice 1 — e1RM progression ✅ (2026-07-28)
+## B1 — Adjustable set-scheme ✅ (2026-09-20)
 
-**Built:** Epley e1RM (12-rep cap) + best-per-day/best-reps-per-day builders +
-pure `buildE1rmSpotlights` ranking in `lib/analytics/projections.ts`; paginated
-`getSetLogWindow` + thin `getE1rmSpotlights` in `queries.ts`; history exercise
-page chart upgraded to e1RM (bodyweight → best-reps fallback); Trends shows
-top-4 spotlight sparklines with current value + delta; `toLbsChartPoints`
-adapter in `lib/units`; ProgressionChart promoted to `components/shared/`.
+**Built:** migration 025 adds `warmup_sets`/`working_sets`/`to_failure` to
+`blocks`; `workout-state.ts` gains `getSetSchemeSteps`/`getSetLabel`/
+`blockSetCount`/`isLastSchemeSet`; `isBlockComplete` auto-completes at
+`warmup_sets+working_sets`; FailureProtocol + LoggerShell + the log-page
+projection consume the scheme.
 
-**Verified:** 15 fixture tests green under both `TZ` locales (Epley incl.
-literal-pinned rep cap, evening-set local-day bucketing, spotlight
-ranking/tiebreak/exclusions); tsc+lint green; authed screenshots — chart
-values hand-checked against seeded data (245 lbs / +33 correct).
+**Roast-fix pass (findings from the 3-council review):**
+- MF1/D11 — migration 025 backfill `UPDATE blocks SET to_failure = true WHERE
+  block_type = 'failure';` so legacy failure blocks keep the last-set-to-failure
+  semantics (the "F" badge) instead of silently flipping to false.
+- MF2/D13 — write path: `BlockPayload`/zod schema gain optional
+  `warmup_sets`/`working_sets`/`to_failure`; `createBlock` persists them
+  (insert derives `to_failure = block_type==='failure'` when unset);
+  `updateBlock` persists them and, on a `block_type` flip with no explicit
+  form value, reconciles `to_failure`; BlockForm gets functional
+  number inputs + a to-failure checkbox (prefilled on edit via
+  `getBlockDetail`/`LiftingBlockDetail`).
+- SF3/D12 — migration 025's working-set CHECK scoped to lifting
+  (`block_category != 'lifting' OR working_sets >= 1`), mirroring 013's
+  `blocks_lifting_has_type` partial CHECK.
+- SF4 — extracted `isLastSchemeSet(block, savedIndex)` and used it in
+  FailureProtocol; `verify-set-scheme.ts` gains 6 assertions (failure-checkbox
+  gate both branches, warmup=0 → no WU label, out-of-scheme `Set N` fallback,
+  isLastSchemeSet both branches). Verified the failure-checkbox pair goes RED
+  against a reintroduced regression.
+- SF5/D14 — naming comments on `block_type==='failure'` (= "uses the structured
+  set-scheme protocol", distinct from the `to_failure` column); KNOWN_ISSUES
+  records the hand-edited types.ts / db-push-before-gen-types ordering hazard.
 
-**Roast (council of 6):** verdict FIX FIRST → all must-fixes implemented same
-round: (1) 1000-row PostgREST truncation → paginated window fetch; (2) UTC vs
-local day bucketing → APP_TIMEZONE-aware dayKeyOf (fixture-pinned); (3) window
-boundary snapped to day keys (delta baseline no longer drifts intra-day);
-(4) seed script now refuses non-@trainingapp.test users before any delete.
-Also adopted: ranking moved to pure layer + tested (incl. Test Skeptic's
-filter-after-slice latent bug — fixed + tested); mutation-proof rep-cap pins
-(old assertion provably passed a cap mutant); delta computed unrounded;
-shared lbs adapter; trends scaffold array removed. Converged: no unaddressed
-must-fix; surface re-reviewed again at final whole-build roast.
-
-**Decisions carried forward:**
-
-- D1: analytics day bucketing = APP_TIMEZONE local dayKeys, everywhere.
-- D2: new chart types (bar/band) = sibling components sharing frame
-  primitives — do NOT add a variant prop to ProgressionChart.
-- D3: queries stay thin fetch wrappers (`getSetLogWindow` is THE set_logs
-  fetch, shared by weekly volume); all shaping pure in projections + tested.
-- D4: bodyweight reps-fallback chart was unplanned scope, kept as a
-  correctness patch (Scope Gate reviewed).
-- D5 (deferred → FUTURE_WORK): committed e2e password in seed-auth.mjs
-  (pre-existing infra); /tmp auth file now chmod 600.
-
----
-
-## Slice 2 — Weekly volume by muscle group ✅ (2026-07-28)
-
-**Built:** `weekKeyOf` (Monday anchor, DST/year-boundary probed) +
-`buildWeeklyVolumeByGroup` (zero-filled 8-week buckets, cross-group
-double-count by design, within-set dedupe, bodyweight counts sets not
-tonnage, "other" bucket) in projections; `VolumeBarChart` sibling component
-(zero baseline — a min-anchored bar chart would lie); `WeeklyVolumeSection`
-small-multiples; page refactored to ONE `getSetLogWindow(90)` fetch feeding
-both builders (D3 honored).
-
-**Verified:** 26 fixture tests green (incl. mutant-killers below); tsc+lint
-green; screenshots mobile+desktop; independent tonnage cross-check from seed
-spec (chest 21,045 kg = 46.4k lbs — matches UI exactly).
-
-**Roast (lean council: Bug Hunter · Test Skeptic · Maintainer; design surface
-pre-ruled by D2/D3):** FIX FIRST → all implemented same round:
-(1) duplicate/case-variant muscle tags double-counted one set → dedupe+
-normalize, tested; (2) snake_case tags rendered "Rear_delts" → shared
-`formatMuscleGroupLabel` reusing the app's existing idiom; (3) DST fall-back
-edge could drop the window's first local hour → fetch pad +2 days;
-(4) unstable offset pagination at the 1000-row seam → set_log_id order
-tiebreaker. Test Skeptic ran 9 mutants: 4 survived old suite → 4 new
-mutant-killing tests added (window guards, Sunday-night Chicago anchoring,
-full sort order, dedupe); all mutants now die. Converged.
-
-**Decisions carried forward:**
-
-- D6: extract shared `ChartFrame` (empty state, card, svg shell, grid,
-  footer) as the FIRST step of Slice 3's band chart — rule-of-three hits
-  there. Scaling math stays per-component.
-- D7: projections.ts splits (time.ts + per-domain) only if a 4th domain
-  lands — not during this build.
-
----
-
-## Slice 3 — Nutrition 30-day trend ✅ (2026-07-28)
-
-**Built:** D6 honored — `ChartFrame` extracted (empty state, card, svg shell,
-grid, footer; scaling math stays per-chart), ProgressionChart + VolumeBarChart
-refactored onto it; NEW `BandChart` sibling (min–max band + midline + dashed
-target zone, eager-children guard); `getMealsForDateRange` (nutrition domain);
-pure `buildNutritionBands` (per-day range sums, unlogged days omitted, partial
-today kept on chart but excluded from averages); pure `nutritionWindowStart`
-in nutrition/projections (injectable clock); NutritionTrendSection (calories +
-protein cards, avg/day stats, target-zone legend only when targets exist).
-
-**Verified:** 33 fixture tests + NEW 9-case chart render smoke test
-(`scripts/verify-charts.ts` — degenerate inputs, NaN/Infinity assertions on
-markup; found none post-fix); tsc+lint green; screenshots — avg kcal/day
-cross-checked by hand from seed spec (1772 exact match).
-
-**Roast (lean: Bug Hunter · Test Skeptic):** FIX FIRST → implemented:
-(1) history exercise fetch was still unpaginated (same 1000-row trap fixed in
-analytics — now paginated with tiebreakers); (2) partial today biased the
-averages → partialDayKey rule + tests; (3) "DASHED = TARGET ZONE" legend
-rendered with no targets → conditional; (4) 4 surviving mutants (protein
-min/max swap, sort drop, rounding, NaN-vs-null masking in check()) → pinned
-with dedicated tests incl. Object.is NaN check; (5) window arithmetic
-untestable → moved to pure helper + month-boundary test. Bug Hunter cleared
-all 4 suspected chart-math edges with SSR probes (no NaN/Infinity leaks).
-Seed gap found during verify (missing cal columns) — seed now derives
-calories 4/4/9 like the app. Converged.
-
----
-
-## Slice 4 — Bodyweight trend ✅ (2026-07-28) — migration gate PENDING
-
-**Built:** migration `021_bodyweight_logs.sql` (one row per user per local
-day, kg stored, RLS matching the app pattern — NOT applied to remote, gated
-on Marcus); `src/lib/bodyweight/` mutations (upsert + profiles.bodyweight_kg
-sync, session-derived user id) + queries (windowed, graceful
-`available: false` when the table is missing — PGRST205); pure
-`buildBodyweightTrend`; `BodyweightSection` client component (quick-log lbs
-input, trend chart, current + delta); `bodyweight_logs` types hand-added to
-generated types.ts (regen after db push).
-
-**Verified:** builder fixture tests; typecheck+lint; screenshots — page
-renders the graceful "apply migration 021" state against the live DB (found
-
-- fixed en route: missing-table code is PGRST205, not 42P01 — the 500 this
-  caused was caught by screenshot verification). Live log→chart flow verified
-  after Marcus applies the migration.
-
-**Roast (Bug Hunter · Security):** FIX FIRST → implemented: (1) partial
-success (log written, profile sync failed) reported as failure — now
-three-state result; input clears, chart refreshes, warning is non-blocking;
-(2) trend window start used server-UTC day against device-local log_date —
-now dayKeyDaysAgo (the file's own documented convention); (3) isPending only
-covered the post-save refresh — whole submit now runs in an async transition
-so the button actually disables during the save. Security: no exploitable
-findings (WITH CHECK defaults verified; upsert blocked on both arms by RLS);
-adopted hardening: mutation derives user id from the session instead of a
-trusted prop. Final-pass check prescribed: RLS audit across all migrations.
-
----
-
-## Slice 5 (unplanned) — App timezone fix 🕐 (2026-07-28)
-
-Marcus hit the pre-existing server-timezone bug live ("still Tuesday 8pm
-Central but the app jumped to the next day") — the exact flaw the councils
-had flagged as out-of-scope wrinkle. Root cause: every "what day is it"
-decision used the server clock (UTC on Vercel), rolling the app's day at 7pm
-Central.
-
-**Built:** migration `022_profile_timezone.sql` (profiles.timezone, default
-America/Chicago); `src/lib/time/appDay.ts` (pure, fixture-tested day clock:
-dateStringInTz, dayOfWeekInTz, dayKeyDaysAgo, addDaysToDayKey,
-startOfDayInTzIso) + `src/lib/time/server.ts` (getAppTimezone — React-cached
-profile read with graceful pre-migration/invalid fallback + observable
-logging, getAppToday, getAppDayOfWeek); timezone picker in Settings→Profile
-(full IANA list); EVERY day-clock call site rewired: today page (incl.
-completed-today boundary), workout logger (completion find/create boundary),
-log page day guard, nutrition day-type + meal filing, trends windows,
-history charts, bodyweight windows.
-
-**Verified:** dev server restarted with TZ=UTC (Vercel simulation) at the
-live repro moment (Tue 8:19pm CDT = Wed 01:19 UTC): Today and Fuel both
-show TUE · JUL 28 — bug reproduced-then-fixed with evidence. Fixture tests
-pin the 7pm boundary (8pm Central = same day, UTC tz = next day). All 5
-touched pages drive 200 at both viewports under UTC.
-
-**Final whole-build roast (Architect · Operator): FIX FIRST → all 6
-implemented:** (1) day-clock authority consolidated — dead getAppToday now
-THE entry point, nutrition getTodayDateString deleted, dayKeyDaysAgo moved
-to lib/time; (2) builder timeZone params made REQUIRED (an optional Chicago
-default would silently recreate the bug class for forgotten call sites);
-(3) bodyweight log_date now authored by the app clock, not the device
-clock (one-clock law, fixed before migration = before any data);
-(4) settings save no longer reports ok while dropping the timezone
-pre-migration (warning surfaced, stays on page); (5) getAppTimezone logs
-unexpected errors instead of swallowing outages into the fallback;
-(6) getSetLogWindow got a MAX_FETCH_PAGES=20 runaway guard.
-
----
-
-## ✅ BUILD COMPLETE (2026-07-28)
-
-**Shipped:** /trends analytics hub (6th nav tab) — e1RM spotlights (top-4 by
-recent volume, delta badges, links to history), weekly sets+tonnage per
-muscle group (8-week zero-filled bars), nutrition 30-day calorie+protein
-bands vs target zone (partial-today excluded from averages), bodyweight
-quick-log + trend (migration-gated with graceful pre-migration state);
-history exercise chart upgraded to e1RM (reps fallback for bodyweight
-exercises); shared chart family (ChartFrame + line/bar/band siblings);
-app-timezone day clock with Settings picker (the "jumped to next day" bug,
-fixed at the root).
-
-**Verification totals:** 47 fixture assertions (analytics math, timezone
-boundaries, mutation-tested against surviving mutants) + 9 chart render
-smoke cases + tsc + eslint green; authed Playwright drives of all 5 touched
-pages at mobile+desktop, key chart values independently hand-computed
-against seeded data (e1RM 245/+33, tonnage 46.4k, kcal avg 1772 — all exact
-matches); static RLS audit: 22/22 tables have RLS + policies; live
-TZ=UTC repro of the reported bug before/after.
-
-**Roast rounds:** 5 councils, 16 adversarial reviews, 17 must-fixes found
-and implemented pre-ship (incl. 1000-row silent truncations ×2, UTC day
-bucketing, seed-script blast radius, double-counted muscle tags, partial-
-success UI lie, timezone-save lie). All converged; nothing ships with a
-known unaddressed must-fix.
-
-**To go live (Marcus):**
-
-1. Apply migrations 021 + 022 (`supabase db push`, or paste both files into
-   the Supabase dashboard SQL editor) — BEFORE merging, which makes the
-   deploy window a non-issue (both are backward-compatible with deployed code).
-2. Merge redesign/instrument → main, push (Vercel auto-deploys).
-3. Optional: `supabase gen types` to regenerate types.ts.
-
-Everything is uncommitted on redesign/instrument — commit when ready.
-
----
-
-## Post-ship fix — workout logger week-2 lockout 🔴 (2026-08-04)
-
-Marcus hit this live: "it is a new week, but it says that workout is complete.
-Everything worked perfectly last week, but this week when I opened the app on
-Monday, it showed last Monday's workout as complete and I was unable to log my
-workout."
-
-**Root cause (structural, not a refresh bug):** `set_logs` had no session
-scoping — only `workout_id`, which a weekly plan reuses every Monday forever.
-Week 2 loaded week 1's sets. `isBlockComplete` derives `failure`-block
-completion from `set_index` count and `failure` is the DEFAULT block type, so
-every block read as done → `findLastIncompleteBlock` returned `-1` →
-`/log/[workout_id]` **wrote `completed_at` during its GET render** and
-redirected. Hence "Completed" on Today and the lockout. A query-only fix was
-impossible: `UNIQUE (user_id, workout_id, block_id, set_index)` (migration 011)
-made re-logging set 1 a `23505`, which `classify.ts` marks non-retryable.
-
-**Built:** migration `023_set_logs_completion_scope.sql` (`set_logs.completion_id`
-FK + `logged_at`-based backfill + constraint re-scoped to the completion);
-`/log/[workout_id]` split into `getWorkoutStructure` + `getSessionSetLogs`
-(completion-scoped) with the completion resolved first, plus a
-`blocks.length === 0` guard so an empty workout can never auto-complete;
-`completion_id` threaded through LoggerShell → protocols → SetEntryForm and
-`SetLogInsertPayload`; summary page switched from a `logged_at` window to
-`completion_id` (fixes queued sets that drain after the session ends silently
-vanishing from the summary); `scripts/repair-023-bogus-completions.sql` to
-reopen the phantom completions already written.
-
-**Verified:** NEW `scripts/verify-logger.ts` — 12 fixture assertions including
-the regression itself (prior-session sets → `-1`; fresh session → `0`) and the
-empty-blocks case the new page guard depends on. `ralph-verify.sh` GREEN
-(format/typecheck/lint/build); analytics + chart suites still pass.
-**Live verification pending** — reproduces only against week-old data, so it
-needs migration 023 → deploy → repair script, in that order.
-
-**Roast (council of 6: Bug Hunter · Security · Operator · Test Skeptic ·
-Maintainer · Scope Gate): FIX FIRST → all 5 must-fixes implemented same
-round:** (1) my own `ON DELETE RESTRICT` on the new FK would have aborted the
-plan-delete cascade (`set_logs` and `workout_completions` are siblings off one
-`workouts` delete) and made any plan with logged history permanently
-undeletable → default `NO ACTION`, which still blocks a bare completion delete;
-(2) `getCompletedSession` selected set logs by `workout_id` with no scoping —
-harmless only because the constraint this migration DROPS was capping rows at
-one session per workout, so shipping 023 would have merged every week's sets
-into every `/history` session detail → scoped to `completion_id`; (3) offline
-rows queued pre-023 carry no `completion_id`, and the column is nullable, so
-they inserted successfully, dequeued, showed "Synced", and became invisible to
-every read path → handler now resolves the session with the backfill's rule and
-refuses rather than orphaning; (4) the rollout order I documented
-(migration → repair → deploy) undoes its own repair, because the old code
-re-writes `completed_at` on first open → corrected to migration → deploy →
-repair, with both failure modes written down; (5) the repair predicate ("no
-sets in window") also matched a session genuinely ended early with no sets, and
-the UPDATE reset `was_ended_early` to false, falsifying real history → narrowed
-to `was_ended_early = false` + sub-60s duration, plus a backup table and an
-explicit reviewed-id list instead of a re-evaluated predicate. Also adopted:
-composite `(user_id, completion_id)` FK so session ownership is structural (a
-completion_id-only FK lets a client attach sets to another user's completion —
-referential checks bypass RLS). **Flagged, deliberately not changed:**
-`set_logs` has UPDATE/DELETE RLS policies contradicting CLAUDE.md's append-only
-rule (pre-existing, structural — needs its own decision).
-
-**Not converged into this round:** the council's re-review has not been run, so
-the ralph-loop convergence signal is unconfirmed.
-
-**Also found, NOT fixed (separate from this bug):** `LoggerShell` captures all
-server props into `useState`/`useRef` initializers with no prop→state sync and
-no `key`, so every `router.refresh()` into it is a no-op; `sync/drain.ts` never
-refreshes after a successful drain; `revalidatePath`/`revalidateTag` appear
-nowhere in `src/`.
-
-**Rolled out 2026-08-05** (migration → deploy → repair, in that order):
-migration 023 applied via `supabase db push`; merged to `main` (`dc89800`),
-Vercel production READY; repair executed. Backfill on live data: 238 set logs,
-139 linked, 99 NULL — all 99 NULLs are the e2e test user's (its seed writes set
-logs with no completions); every one of the owner's sets linked. Diagnose found
-exactly one phantom — the 2026-08-03 "Upper", duration **0.114s**, zero sets —
-reopened after a full backup. The e2e user's other 0.1s completion was skipped
-(9 linked sets) and the owner's genuine 2026-05-04 ended-early session was
-protected by the `was_ended_early` predicate, both as designed. Production
-`/today` and `/login` serve 200.
-
-Root cause confirmed by the data: "Upper" recurs several times a week, and its
-`failure` blocks accumulated `set_index` values across sessions. Aug 3 was when
-the last block crossed the ≥3 threshold, flipping `findLastIncompleteBlock`
-from a valid index to `-1` — which is exactly why week 1 worked and week 2 did
-not.
+**Verified:** `pnpm exec tsx scripts/verify-set-scheme.ts` → 15/15 pass;
+`scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build).

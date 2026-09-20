@@ -5,7 +5,10 @@ import type {
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/workout-state";
-import { getSetSchemeSteps } from "@/lib/methodology/workout-state";
+import {
+  getSetSchemeSteps,
+  isLastSchemeSet,
+} from "@/lib/methodology/workout-state";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
 
@@ -32,7 +35,6 @@ export function FailureProtocol({
   // WU/W1/W2 triple: N warm-ups then M working sets, the last carrying the
   // failure checkbox iff the block is toFailure.
   const failureSteps = getSetSchemeSteps(block);
-  const lastSetIndex = failureSteps.length;
   const loggedSets = [...block.setLogs].sort(
     (left, right) => left.set_index - right.set_index,
   );
@@ -84,7 +86,7 @@ export function FailureProtocol({
             onSaved={(setLog) => {
               onSetSaved(setLog);
 
-              if (setLog.set_index === lastSetIndex) {
+              if (isLastSchemeSet(block, setLog.set_index)) {
                 onComplete();
               }
             }}

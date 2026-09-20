@@ -9,6 +9,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { BankComposition } from "@/app/(app)/library/_components/BankComposition";
 import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -49,6 +50,9 @@ function getDefaultValues(
     block_name: initialValues?.block_name ?? "",
     block_category: "lifting",
     block_type: initialValues?.block_type ?? null,
+    warmup_sets: initialValues?.warmup_sets ?? 1,
+    working_sets: initialValues?.working_sets ?? 2,
+    to_failure: initialValues?.to_failure ?? false,
     bank: initialValues?.bank ?? [],
   };
 }
@@ -104,6 +108,9 @@ export function BlockForm({
         block_name: values.block_name,
         block_category: "lifting",
         block_type: blockType,
+        warmup_sets: values.warmup_sets,
+        working_sets: values.working_sets,
+        to_failure: values.to_failure,
         bank: values.bank,
       });
 
@@ -127,6 +134,9 @@ export function BlockForm({
     const result = await updateBlock(supabase, blockId!, {
       block_name: values.block_name,
       block_type: blockType,
+      warmup_sets: values.warmup_sets,
+      working_sets: values.working_sets,
+      to_failure: values.to_failure,
       bank: values.bank,
     });
 
@@ -225,6 +235,77 @@ export function BlockForm({
                       Lifting block · the bank athletes pick from at session
                       time
                     </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="warmup_sets"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Warm-up sets</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={Number.isNaN(field.value) ? "" : field.value}
+                          inputMode="numeric"
+                          type="number"
+                          min={0}
+                          onChange={(event) =>
+                            field.onChange(event.currentTarget.valueAsNumber)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="working_sets"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Working sets</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={Number.isNaN(field.value) ? "" : field.value}
+                          inputMode="numeric"
+                          type="number"
+                          min={1}
+                          onChange={(event) =>
+                            field.onChange(event.currentTarget.valueAsNumber)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="to_failure"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked === true)
+                          }
+                        />
+                      </FormControl>
+                      <FormLabel className="!mt-0 cursor-default">
+                        Last working set taken to failure
+                      </FormLabel>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

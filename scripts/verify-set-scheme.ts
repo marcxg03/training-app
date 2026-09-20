@@ -13,7 +13,10 @@
 // the {warmup:0, working:2, to_failure:true} case with 2 sets returns false
 // where it must return true.
 import {
+  getSetLabel,
+  getSetSchemeSteps,
   isBlockComplete,
+  isLastSchemeSet,
   type LoggerBlock,
   type LoggerSetLog,
 } from "../src/lib/methodology/workout-state";
@@ -190,6 +193,57 @@ check(
     ["block-1"],
   ),
   true,
+);
+
+// --- (d) getSetSchemeSteps: the failure-checkbox gate (guards the D11 regression) ---
+// The last step carries showFailureCheckbox iff the block is toFailure. This is
+// the pair the migration-025 backfill exists to protect: a legacy failure block
+// must land on toFailure:true so its last set still renders the toggle.
+
+check(
+  "{1,2,toFailure:true}: last step shows the failure checkbox",
+  getSetSchemeSteps({ warmupSets: 1, workingSets: 2, toFailure: true }).at(-1)
+    ?.showFailureCheckbox,
+  true,
+);
+
+check(
+  "{1,2,toFailure:false}: last step hides the failure checkbox",
+  getSetSchemeSteps({ warmupSets: 1, workingSets: 2, toFailure: false }).at(-1)
+    ?.showFailureCheckbox,
+  false,
+);
+
+// --- (e) getSetSchemeSteps labels: warmup=0 must not emit a WU slot ---
+
+check(
+  "{0,2,failure}: labels are the two working sets only (no WU)",
+  getSetSchemeSteps({ warmupSets: 0, workingSets: 2, toFailure: true }).map(
+    (step) => step.label,
+  ),
+  ["W1", "W2"],
+);
+
+// --- (f) getSetLabel: out-of-scheme index falls back to `Set N` ---
+
+check(
+  "{0,2}: set index 3 is outside the 2-set scheme → `Set 3` fallback",
+  getSetLabel({ warmupSets: 0, workingSets: 2, toFailure: false }, 3),
+  "Set 3",
+);
+
+// --- (g) isLastSchemeSet: the completion trigger, both branches for {0,2} ---
+
+check(
+  "{0,2}: saved index 2 IS the last scheme set (fires completion)",
+  isLastSchemeSet({ warmupSets: 0, workingSets: 2 }, 2),
+  true,
+);
+
+check(
+  "{0,2}: saved index 1 is NOT the last scheme set",
+  isLastSchemeSet({ warmupSets: 0, workingSets: 2 }, 1),
+  false,
 );
 
 if (failures > 0) {
