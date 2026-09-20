@@ -62,3 +62,9 @@ Built:
 
 Verified: `scripts/verify-schedule-validation.ts` written test-first (RED: 3 fail — the two no-rest-day hard-bucket assertions + the soft-resurface check) → GREEN 6/6 after the change; proves the soft layer (cardio-order + resurfaced min-rest-day) still populates. `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build).
 Forced decision (not in ledger): exported the previously-internal `validateTrainingPlan` (additive; no signature change) so the free in-isolation seed assertion is possible without a live Supabase.
+
+## ✅ B2 — Cut the validation guardrails — DONE (2026-09-20)
+Commit: `778c90a`.
+Built: removed `weekRestDayError` (min-rest-day HARD rule); `validateSchedule` now returns `hardErrors:[]` always (signature preserved); DayEditForm's dead `blocked`/hard-error UI removed, soft-warning "Save anyway" path kept; seed `methodology-rules.validateTrainingPlan` downgrades all former hardViolations (48h recovery, push/pull, min-rest, sauna, missing-muscle, hot-yoga) → softWarnings; `hardViolations` kept as always-empty array (no type churn).
+Verify (coordinator re-ran): verify-schedule-validation.ts 6/6 (RED→GREEN); ralph-verify.sh GREEN.
+Roast (focused): CONVERGED — no dangling refs, no consumer loses a needed guard (seed throw now no-ops by intent), submit-in-flight guard retained. Enables B3 (Block II has no full rest day).
