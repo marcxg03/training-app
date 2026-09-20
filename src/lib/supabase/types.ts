@@ -218,6 +218,9 @@ export type Database = {
           block_type: Database["public"]["Enums"]["block_type_enum"] | null;
           display_order: number;
           owner_user_id: string;
+          to_failure: boolean;
+          warmup_sets: number;
+          working_sets: number;
         };
         Insert: {
           bank_source_block_id?: string | null;
@@ -227,6 +230,9 @@ export type Database = {
           block_type?: Database["public"]["Enums"]["block_type_enum"] | null;
           display_order: number;
           owner_user_id: string;
+          to_failure?: boolean;
+          warmup_sets?: number;
+          working_sets?: number;
         };
         Update: {
           bank_source_block_id?: string | null;
@@ -236,6 +242,9 @@ export type Database = {
           block_type?: Database["public"]["Enums"]["block_type_enum"] | null;
           display_order?: number;
           owner_user_id?: string;
+          to_failure?: boolean;
+          warmup_sets?: number;
+          working_sets?: number;
         };
         Relationships: [];
       };

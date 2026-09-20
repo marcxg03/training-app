@@ -35,9 +35,77 @@ export type LoggerBlock = {
   block_name: string;
   block_type: NonNullable<Tables<"blocks">["block_type"]>;
   display_order: number;
+  /** Per-block set scheme (migration 025). Legacy blocks default to
+   * warmupSets:1 / workingSets:2 / toFailure:false — the old fixed 3-set
+   * WU + W1 + W2 shape. */
+  warmupSets: number;
+  workingSets: number;
+  toFailure: boolean;
   exercises: LoggerExercise[];
   setLogs: LoggerSetLog[];
 };
+
+/** One prescribed set slot in a block's scheme. Roles are DERIVED from
+ * set_index position (no set_role column): the first `warmupSets` slots are
+ * warm-ups, the rest working sets; the last working set carries the failure
+ * checkbox iff the block is `toFailure`. set_index is 1-based. */
+export type SetSchemeStep = {
+  label: string;
+  setIndex: number;
+  isWarmup: boolean;
+  isLast: boolean;
+  showFailureCheckbox: boolean;
+};
+
+/** The total number of prescribed sets — the auto-complete threshold for a
+ * 'failure' block. */
+export function blockSetCount(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets">,
+) {
+  return block.warmupSets + block.workingSets;
+}
+
+/** Expands a block's scheme into its ordered set slots. Warm-ups label
+ * WU, WU2, WU3…; working sets label W1..Wm. Used by the logger to render the
+ * right number of slots and by set-label lookup on completed sets. */
+export function getSetSchemeSteps(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets" | "toFailure">,
+): SetSchemeStep[] {
+  const total = block.warmupSets + block.workingSets;
+  const steps: SetSchemeStep[] = [];
+
+  for (let setIndex = 1; setIndex <= total; setIndex += 1) {
+    const isWarmup = setIndex <= block.warmupSets;
+    const isLast = setIndex === total;
+    const label = isWarmup
+      ? setIndex === 1
+        ? "WU"
+        : `WU${setIndex}`
+      : `W${setIndex - block.warmupSets}`;
+
+    steps.push({
+      label,
+      setIndex,
+      isWarmup,
+      isLast,
+      showFailureCheckbox: isLast && block.toFailure,
+    });
+  }
+
+  return steps;
+}
+
+/** The label for a completed set at `setIndex` under a block's scheme, with a
+ * `Set N` fallback for any index outside the scheme (e.g. a legacy stray). */
+export function getSetLabel(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets" | "toFailure">,
+  setIndex: number,
+) {
+  return (
+    getSetSchemeSteps(block).find((step) => step.setIndex === setIndex)
+      ?.label ?? `Set ${setIndex}`
+  );
+}
 
 export type LoggerWorkout = {
   workout_id: string;
@@ -94,7 +162,10 @@ export function isBlockComplete(
   completedBlockIds: readonly string[],
 ) {
   if (block.block_type === "failure") {
-    return new Set(block.setLogs.map((setLog) => setLog.set_index)).size >= 3;
+    return (
+      new Set(block.setLogs.map((setLog) => setLog.set_index)).size >=
+      blockSetCount(block)
+    );
   }
 
   return completedBlockIds.includes(block.block_id);

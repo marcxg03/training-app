@@ -5,6 +5,7 @@ import type {
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/workout-state";
+import { getSetSchemeSteps } from "@/lib/methodology/workout-state";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
 
@@ -18,12 +19,6 @@ type FailureProtocolProps = {
   onSetSaved: (setLog: LoggerSetLog) => void;
 };
 
-const failureSteps = [
-  { label: "WU", setIndex: 1 },
-  { label: "W1", setIndex: 2 },
-  { label: "W2", setIndex: 3 },
-] as const;
-
 export function FailureProtocol({
   block,
   completionId,
@@ -33,6 +28,11 @@ export function FailureProtocol({
   onComplete,
   onSetSaved,
 }: FailureProtocolProps) {
+  // Set slots come from the block's scheme (migration 025), not a fixed
+  // WU/W1/W2 triple: N warm-ups then M working sets, the last carrying the
+  // failure checkbox iff the block is toFailure.
+  const failureSteps = getSetSchemeSteps(block);
+  const lastSetIndex = failureSteps.length;
   const loggedSets = [...block.setLogs].sort(
     (left, right) => left.set_index - right.set_index,
   );
@@ -78,13 +78,13 @@ export function FailureProtocol({
             label={step.label}
             workoutId={workoutId}
             setIndex={step.setIndex}
-            showFailureCheckbox={step.setIndex === 3}
-            defaultFailureChecked={step.setIndex === 3}
+            showFailureCheckbox={step.showFailureCheckbox}
+            defaultFailureChecked={step.showFailureCheckbox}
             userId={userId}
             onSaved={(setLog) => {
               onSetSaved(setLog);
 
-              if (setLog.set_index === 3) {
+              if (setLog.set_index === lastSetIndex) {
                 onComplete();
               }
             }}

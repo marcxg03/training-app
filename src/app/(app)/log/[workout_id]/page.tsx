@@ -77,7 +77,10 @@ async function getWorkoutStructure(workoutId: string) {
         blocks!inner (
           block_id,
           block_name,
-          block_type
+          block_type,
+          warmup_sets,
+          working_sets,
+          to_failure
         )
       `,
     )
@@ -100,6 +103,9 @@ async function getWorkoutStructure(workoutId: string) {
                 block_name: block.block_name,
                 block_type: block.block_type,
                 display_order: row.display_order,
+                warmupSets: block.warmup_sets,
+                workingSets: block.working_sets,
+                toFailure: block.to_failure,
               },
             ]
           : [],

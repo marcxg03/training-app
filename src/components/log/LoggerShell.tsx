@@ -13,6 +13,7 @@ import type {
 import {
   findLastIncompleteBlock,
   getSelectedExerciseIdForBlock,
+  getSetLabel,
   isBlockComplete,
 } from "@/lib/methodology/workout-state";
 import { createClient } from "@/lib/supabase/client";
@@ -515,8 +516,7 @@ export function LoggerShell({
                             key={setLog.set_log_id}
                             label={
                               block.block_type === "failure"
-                                ? (["WU", "W1", "W2"][setLog.set_index - 1] ??
-                                  `Set ${setLog.set_index}`)
+                                ? getSetLabel(block, setLog.set_index)
                                 : `Set ${setLog.set_index}`
                             }
                             setLog={setLog}
