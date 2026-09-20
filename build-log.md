@@ -84,3 +84,17 @@ Built:
 Verified: `pnpm exec tsx scripts/verify-block-ii-parse.ts` → RED (missing files) then 15/15 GREEN; `verify-set-scheme.ts` still 15/15; `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build). `syncGlobalBlocks` DB-write verified by code-reading (no live DB, per stub): scheme columns are in the insert payload and the compared shape.
 Doc-sync note for coordinator: the vault's human `current-plan.md` v4 (prose "Sessions" + a `Day | Session | Conditioning` table) does NOT match the parser grammar (`Day | Session | Gym | Add-ons` + per-workout `Block | Primary | Secondary | Type | Sets` tables + `Running Sessions`/`Warm-Up Protocols`). The seed is authored in parser grammar; steady-state Tue/Thu/Sun cardio and Monday plyos/track are omitted from the schedule (kept only in Running Sessions) since they have no matching cardio-catalog entry — a divergence to reconcile if those are wanted in-app.
 Forced decision (not in ledger): `spec/BLOCK_II_SEED.md` named in D8/the brief does not exist anywhere in the worktree; authored the seed from the vault's `current-plan.md` v4 + the DoD spec instead. Reported to coordinator.
+
+## ✅ B3 — Seed Block II — DONE (2026-09-20)
+Commit: `2d08df7` (+ `10f324a` adds BLOCK_II_SEED.md to the worktree).
+Built: reverse-engineered the seed parser grammar; authored supabase/seed/wiki/*.md for Block II (7-day split); added a "Sets" column + parseSetScheme → warmupSets/workingSets/toFailure on ParsedBlock; syncGlobalBlocks writes the scheme columns in insert + idempotent diff.
+Verify (coordinator re-ran): verify-block-ii-parse.ts 15/15; ralph GREEN. Parser edge-cases (en-dash, ×/x, `1 WU + 2×failure`, missing/garbage) all safe-default, no NaN to DB. Exactly one block (Push dips) seeds to_failure=true.
+Roast (focused): CONVERGED — parseSetScheme correct, idempotency diff symmetric, to_failure seeding correct (no B1 regression), all 20 block names resolve.
+⚠️ CONTENT-FIDELITY (coordinator finding, NOT code): Monday Rounds 1&2 dropped the chest slot; rounds modeled as single blocks vs the "3 muscle-slots, pick from bank per exercise" structure. Mechanism correct, content compressed → FUTURE_WORK; needs Marcus's review before relying on the seeded plan in-app.
+
+## ✅ BUILD COMPLETE — 2026-09-20
+Branch `redesign/block-ii-adjustable-sets`, 8 commits off main @edf2446. NOT merged.
+Whole-build verify (coordinator): verify-set-scheme 15/15 · verify-schedule-validation 6/6 · verify-block-ii-parse 15/15 · verify-logger (existing regression) PASS · ralph-verify.sh GREEN (format/typecheck/lint/build). Each slice roast-converged; B1 took 2 ralph rounds (2 data-integrity must-fixes fixed).
+NOT done here (needs live Supabase): `npm run seed` + headed logger/plan e2e UI drive. Migration 025 must be `supabase db push`ed before `gen types` (KNOWN_ISSUES / D14).
+Out of scope (by design): mono reskin (design-led pass) · Creator-Program community (B4, post-Nov-16).
+Run: from the worktree, `pnpm dev` (localhost:3000) after a `db push` + `npm run seed` against a Supabase project.
