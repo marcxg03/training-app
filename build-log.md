@@ -64,7 +64,23 @@ Verified: `scripts/verify-schedule-validation.ts` written test-first (RED: 3 fai
 Forced decision (not in ledger): exported the previously-internal `validateTrainingPlan` (additive; no signature change) so the free in-isolation seed assertion is possible without a live Supabase.
 
 ## ✅ B2 — Cut the validation guardrails — DONE (2026-09-20)
+
 Commit: `778c90a`.
 Built: removed `weekRestDayError` (min-rest-day HARD rule); `validateSchedule` now returns `hardErrors:[]` always (signature preserved); DayEditForm's dead `blocked`/hard-error UI removed, soft-warning "Save anyway" path kept; seed `methodology-rules.validateTrainingPlan` downgrades all former hardViolations (48h recovery, push/pull, min-rest, sauna, missing-muscle, hot-yoga) → softWarnings; `hardViolations` kept as always-empty array (no type churn).
 Verify (coordinator re-ran): verify-schedule-validation.ts 6/6 (RED→GREEN); ralph-verify.sh GREEN.
 Roast (focused): CONVERGED — no dangling refs, no consumer loses a needed guard (seed throw now no-ops by intent), submit-in-flight guard retained. Enables B3 (Block II has no full rest day).
+
+## ✅ B3 — Seed Marcus's Block II as the active plan — DONE (2026-09-20)
+
+Goal (D8/D15): `parsePlanFromWiki` on the authored Block II seed yields a `TrainingPlanSpec` with the 7-day split (Mon Upper / Tue Lower / Wed Basketball / Thu Push / Fri Pull / Sat HYROX / Sun ATG recovery), lifting blocks + banks, and the per-block set-schemes populated; `validateTrainingPlan` emits no `hardViolations`; `syncGlobalBlocks` writes the scheme columns.
+Built:
+
+- `supabase/seed/wiki/*.md` (6 files, gitignored → force-added with `git add -f` so the build is reproducible and the seed path is the one `npm run seed` reads): `current-plan.md` (Weekly Schedule + per-workout Block tables with an added `Sets` column + Running Sessions/Warm-Up Protocols) plus minimal valid `overview.md`, `master-plan.md`, `training-log.md`, `nutrition.md`, `plan-decisions.md`.
+- `supabase/seed/lib/types.ts` — `ParsedBlock` gains additive `warmupSets`/`workingSets`/`toFailure`.
+- `supabase/seed/lib/methodology-rules.ts` — new `parseSetScheme` reads the optional `Sets` column ("2 × 6–8" / "2 × failure" / "1 WU + 2 × failure"); `parseWorkoutBlocks` threads it onto each block (continuation rows don't override); default {1,2,false} when the column is absent (back-compat).
+- `supabase/seed/seed-from-wiki.ts` — `syncGlobalBlocks` insert AND the idempotent diff (comparableExisting/comparableDesired) now carry `warmup_sets`/`working_sets`/`to_failure`; lifting rows from the parsed block (D11: Block II failure blocks seeded `to_failure=false`, only Thu dips true), cardio/recovery at column defaults.
+- `scripts/verify-block-ii-parse.ts` — written test-first (RED on missing md + un-emitted schemes), GREEN after: 15 assertions (day count/order, session types, Monday 3 rounds + banks, Thu dips to_failure=true/workingSets=2, the 2-working-set lifts to_failure=false, only-dips-is-to-failure, hardViolations empty).
+
+Verified: `pnpm exec tsx scripts/verify-block-ii-parse.ts` → RED (missing files) then 15/15 GREEN; `verify-set-scheme.ts` still 15/15; `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build). `syncGlobalBlocks` DB-write verified by code-reading (no live DB, per stub): scheme columns are in the insert payload and the compared shape.
+Doc-sync note for coordinator: the vault's human `current-plan.md` v4 (prose "Sessions" + a `Day | Session | Conditioning` table) does NOT match the parser grammar (`Day | Session | Gym | Add-ons` + per-workout `Block | Primary | Secondary | Type | Sets` tables + `Running Sessions`/`Warm-Up Protocols`). The seed is authored in parser grammar; steady-state Tue/Thu/Sun cardio and Monday plyos/track are omitted from the schedule (kept only in Running Sessions) since they have no matching cardio-catalog entry — a divergence to reconcile if those are wanted in-app.
+Forced decision (not in ledger): `spec/BLOCK_II_SEED.md` named in D8/the brief does not exist anywhere in the worktree; authored the seed from the vault's `current-plan.md` v4 + the DoD spec instead. Reported to coordinator.

@@ -641,6 +641,13 @@ async function syncGlobalBlocks(
       block_type: block.blockType,
       display_order: 0,
       block_category: "lifting" as const,
+      // Adjustable per-block set-scheme (B1/D4/D15). Written explicitly from the
+      // parsed block: for Block II most lifts are block_type='failure' (structured
+      // scheme) but NOT to failure, so to_failure must be seeded false rather than
+      // left to the migration-025 backfill (D11). Only e.g. Thursday dips = true.
+      warmup_sets: block.warmupSets,
+      working_sets: block.workingSets,
+      to_failure: block.toFailure,
     })),
     {
       owner_user_id: userId,
@@ -648,6 +655,11 @@ async function syncGlobalBlocks(
       block_type: null,
       display_order: 0,
       block_category: "cardio" as const,
+      // Scheme is conceptually lifting-only (D12); keep cardio/recovery at the
+      // column defaults so the idempotent diff stays stable across runs.
+      warmup_sets: 1,
+      working_sets: 2,
+      to_failure: false,
     },
     {
       owner_user_id: userId,
@@ -655,6 +667,9 @@ async function syncGlobalBlocks(
       block_type: null,
       display_order: 0,
       block_category: "recovery" as const,
+      warmup_sets: 1,
+      working_sets: 2,
+      to_failure: false,
     },
   ];
 
@@ -699,6 +714,9 @@ async function syncGlobalBlocks(
       block_type: existing.block_type,
       display_order: existing.display_order,
       block_category: existing.block_category,
+      warmup_sets: existing.warmup_sets,
+      working_sets: existing.working_sets,
+      to_failure: existing.to_failure,
     };
     const comparableDesired = {
       owner_user_id: desired.owner_user_id,
@@ -706,6 +724,9 @@ async function syncGlobalBlocks(
       block_type: desired.block_type,
       display_order: desired.display_order,
       block_category: desired.block_category,
+      warmup_sets: desired.warmup_sets,
+      working_sets: desired.working_sets,
+      to_failure: desired.to_failure,
     };
 
     if (equalRows(comparableExisting, comparableDesired)) {
