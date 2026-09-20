@@ -42,9 +42,23 @@ block_type = 'failure';` so legacy failure blocks keep the last-set-to-failure
 `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build).
 
 ## ✅ B1 — Adjustable set-scheme per block — DONE (2026-09-20)
+
 Commits: `bbb953e` (slice) → `c88389c` (roast fixes) → format fix.
 Built: migration 025 (additive warmup_sets/working_sets/to_failure on blocks + backfill to_failure=true for legacy failure blocks + lifting-scoped working_sets CHECK); `isBlockComplete` auto-completes at warmup+working; `getSetSchemeSteps`/`getSetLabel`/`isLastSchemeSet` helpers; FailureProtocol + LoggerShell scheme-driven; log-page projection threads the columns; createBlock/updateBlock write + reconcile the scheme; BlockForm inputs.
 Verify (coordinator re-ran): verify-set-scheme.ts 15/15; ralph-verify.sh GREEN (format/typecheck/lint/build).
 Roast: 🟡 FIX FIRST → 2 must-fix (migration data-regression on is_to_failure; feature inert / no write path) + 3 should-fix (lifting-scoped CHECK, missing scheme tests, block_type/to_failure naming). All fixed. Convergence re-roast: CONVERGED, no new must-fix.
 Deferred (should-fix, out of scope): form block_type-flip could leave an inert to_failure=true on a corrective block (harmless — gated by block_type==='failure'). Reskin of these inputs → the separate mono design pass.
 Seam for B3: most Block II lifts are block_type='failure' (structured scheme) but NOT to failure — B3 MUST set to_failure explicitly (false for 2-working-set lifts, true only for Thu dips); createBlock/seed honors an explicit false.
+
+## ✅ B2 — Cut the methodology validation guardrails — DONE (2026-09-20)
+
+Goal (D5/D10): a 7-day plan with ZERO full rest days (Block II — Sunday is ATG recovery, not rest) must save without a hard block, and the seed pipeline must emit no `hardViolations` for it.
+Built:
+
+- `src/lib/methodology/plan-schedule.ts` — cut the `weekRestDayError` hard rule; `validateSchedule` now always returns `hardErrors: []` (signature + `ScheduleValidation` shape preserved) and keeps only the informational SOFT layer (`daySoftWarnings`, cardio-before-lift).
+- `src/app/(app)/plan/[day]/_components/DayEditForm.tsx` — removed the now-dead `blocked` flag + hard-error UI block + the `blocked`-gated submit-button disables; kept the soft-warning card and the "Save anyway — overriding N warning(s)" affordance.
+- `supabase/seed/lib/methodology-rules.ts` — downgraded every former-hard rule in `validateTrainingPlan` (48h recovery, compound window, push/pull balance, min rest day, sauna cap, missing-muscle, hot yoga + sauna) to `softWarnings`; `hardViolations` retained as an always-empty array (ValidationResult shape unchanged). Function exported so the verify script can assert it.
+- NOT touched: `plan/mutations.ts` integrity guards (no-remove-logged-session, blocks-frozen) — data-integrity, not methodology.
+
+Verified: `scripts/verify-schedule-validation.ts` written test-first (RED: 3 fail — the two no-rest-day hard-bucket assertions + the soft-resurface check) → GREEN 6/6 after the change; proves the soft layer (cardio-order + resurfaced min-rest-day) still populates. `scripts/ralph-verify.sh` → GREEN (format/typecheck/lint/build).
+Forced decision (not in ledger): exported the previously-internal `validateTrainingPlan` (additive; no signature change) so the free in-isolation seed assertion is possible without a live Supabase.

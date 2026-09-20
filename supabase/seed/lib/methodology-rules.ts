@@ -1121,7 +1121,13 @@ export function parseHistoricalPRs(
   return prs;
 }
 
-function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
+export function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
+  // Slice B2 (D5/D10): the rich methodology rules (48h recovery, compound
+  // window, push/pull balance, min rest day, sauna cap, missing-muscle, hot
+  // yoga + sauna) are now NON-BLOCKING advisory output — every check writes to
+  // softWarnings. hardViolations is retained as an always-empty array (shape
+  // preserved, ValidationResult unchanged) so a legitimate block with no full
+  // rest day (Block II) seeds clean. Nothing writes to hardViolations by design.
   const hardViolations: string[] = [];
   const softWarnings: string[] = [];
   const lastSeenDayByMuscleGroup = new Map<string, number>();
@@ -1145,7 +1151,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
     }
 
     if (recoveryNames.includes("Hot Yoga") && recoveryNames.includes("Sauna")) {
-      hardViolations.push(
+      softWarnings.push(
         `${day.dayLabel}: hot yoga and sauna cannot be scheduled on the same day.`,
       );
     }
@@ -1199,7 +1205,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       }
 
       if (workout.focusMuscleGroups.length === 0) {
-        hardViolations.push(
+        softWarnings.push(
           `${day.dayLabel}: lifting workout "${workout.workoutName}" is missing inferred muscle groups.`,
         );
       }
@@ -1209,7 +1215,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       const previousDayIndex = lastSeenDayByMuscleGroup.get(group);
 
       if (previousDayIndex !== undefined && index - previousDayIndex < 2) {
-        hardViolations.push(
+        softWarnings.push(
           `${day.dayLabel}: ${group} repeats before 48 hours of recovery.`,
         );
       }
@@ -1252,19 +1258,19 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
   }
 
   if (restDayCount < 1) {
-    hardViolations.push(
+    softWarnings.push(
       "The weekly plan must include at least one full rest day.",
     );
   }
 
   if (guaranteedSaunaCount > 2) {
-    hardViolations.push(
+    softWarnings.push(
       "The weekly plan cannot guarantee more than two sauna sessions.",
     );
   }
 
   if (Math.abs(pushWorkouts - pullWorkouts) > 1) {
-    hardViolations.push(
+    softWarnings.push(
       "Push and pull workout counts are out of weekly balance.",
     );
   }
