@@ -165,6 +165,11 @@ async function main() {
   check("Tuesday deadlift workingSets", deadlift.workingSets, 2);
   check("Tuesday deadlift toFailure", deadlift.toFailure, false);
 
+  // Content-fidelity: named-but-dropped blocks restored.
+  check("Tuesday Lower has 6 blocks (Back/Glute Extension restored)", lower.blocks.length, 6);
+  const fridayPull = findLifting(findDay(spec.days, "Friday"), "Pull");
+  check("Friday Pull has 6 blocks (SA pulldown/pullover + face pull restored)", fridayPull.blocks.length, 6);
+
   // Every failure-typed block that is NOT the dips block must be toFailure=false
   // (D11 B3: structured scheme, block_type='failure' but not taken to failure).
   const strayFailure = spec.liftingBlocks.filter(

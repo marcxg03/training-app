@@ -49,6 +49,7 @@ Cardio AM first (steady-state, tracked separately). Power then strength.
 | Deadlift Hinge | BB RDL, DB RDL | Sumo Deadlift | Compound | 2 × 4–6 |
 | Back Squat | Heel Elevated BB Back Squat | Single Leg BB Squat | Compound | 2 × 4–6 |
 | Quad Accessory | Walking Lunges | | Isolation | 2 × 20 |
+| Hamstring Accessory | Back/Glute Extension | Glute-Ham Raise, 45° Hyperextension | Isolation | 2 × 6–8 |
 | Calves | Calf Raise | | Isolation | 2 × 8–10 |
 | Abs | Hanging Leg Raise, Cable Wood Chopper | Pallof Press | Isolation | 2 × 8–10 |
 
@@ -71,10 +72,12 @@ Pull work, then basketball ~1–2 h.
 
 | Block | Primary Exercises | Secondary Exercises | Type | Sets |
 |-------|-------------------|---------------------|------|------|
-| Vertical Pull | Lat Pulldown | | Compound | 2 × 6–8 |
-| Horizontal Pull | Chest Supported Row | Bent Over BB Row | Compound | 2 × 6–8 |
-| Rear Delts | Rear Delt Fly Machine | Cable Rope Face Pulls | Isolation | 2 × 8–10 |
-| Biceps | Barbell Curl | Preacher Curl | Isolation | 2 × 10 |
+| Vertical Pull | Lat Pulldown | Neutral-Grip Pulldown, Wide-Grip Pulldown | Compound | 2 × 6–8 |
+| Horizontal Pull | Chest Supported Row | DB Row, Bent Over BB Row | Compound | 2 × 6–8 |
+| Vertical Pull — SA Kneeling / Pullover | SA Cable Kneeling Pulldown | DB Pullover, Cable Pullover | Compound | 2 × 6–8 |
+| Rear Delts — Face Pull | Cable Face Pull | Rope Face Pull | Isolation | 2 × 8–10 |
+| Rear Delts — Fly | Rear Delt Fly Machine | SA Cable Rear Delt Fly | Isolation | 2 × 8–10 |
+| Biceps | Barbell Curl | Preacher Curl, DB Curl | Isolation | 2 × 10 |
 
 ## Lower ATG — Recovery
 
