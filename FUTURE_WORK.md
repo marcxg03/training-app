@@ -1,8 +1,8 @@
 # Future Work — Block II / Adjustable-Sets redesign
 
-## Content (Marcus's review — highest)
+## Content (Marcus's review)
 
-1. **Seed content fidelity.** The B3 seed captured the mechanism (schemes, 7 days, to-failure) but compressed the plan: Monday Upper Rounds 1 & 2 lost the **chest** slot (handwriting = back·chest·shoulders per round), and each "round" is one block rather than the 3 muscle-slots your "choose from the bank per exercise" structure implies. Re-author `supabase/seed/wiki/current-plan.md` faithfully (3 blocks per round; chest included) — or refine in-app via the Library editor.
+1. ✅ **DONE (2026-09-21) — Seed content fidelity.** Re-authored so every named movement is present and faithfully modeled: Monday Upper = 9 blocks (3 rounds × back/chest/shoulder, **chest restored**); Tuesday **Back/Glute Extension restored**; Friday **SA-cable pulldown/pullover + face-pull restored** (6 blocks). Tests assert the counts + chest presence. Sunday ATG kept as a 3-block mobility circuit (all 6 movements present in the banks — a circuit, not per-slot). Remaining judgment for Marcus: whether the invented _secondary_ bank options (alternate exercises) match his intent — tweak in-app via the Library editor.
 2. **Steady-state cardio + Monday plyos/track** live only in the "Running Sessions" section, not the weekly schedule as sessions — add them as sessions if you want them to appear/log in-app.
 3. **Doc-sync.** The vault's human `current-plan.md` v4 diverges in format from the seed's parser grammar. Keep the two content-synced (a converter, or align the formats).
 
