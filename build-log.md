@@ -86,13 +86,15 @@ Doc-sync note for coordinator: the vault's human `current-plan.md` v4 (prose "Se
 Forced decision (not in ledger): `spec/BLOCK_II_SEED.md` named in D8/the brief does not exist anywhere in the worktree; authored the seed from the vault's `current-plan.md` v4 + the DoD spec instead. Reported to coordinator.
 
 ## ✅ B3 — Seed Block II — DONE (2026-09-20)
+
 Commit: `2d08df7` (+ `10f324a` adds BLOCK_II_SEED.md to the worktree).
-Built: reverse-engineered the seed parser grammar; authored supabase/seed/wiki/*.md for Block II (7-day split); added a "Sets" column + parseSetScheme → warmupSets/workingSets/toFailure on ParsedBlock; syncGlobalBlocks writes the scheme columns in insert + idempotent diff.
+Built: reverse-engineered the seed parser grammar; authored supabase/seed/wiki/\*.md for Block II (7-day split); added a "Sets" column + parseSetScheme → warmupSets/workingSets/toFailure on ParsedBlock; syncGlobalBlocks writes the scheme columns in insert + idempotent diff.
 Verify (coordinator re-ran): verify-block-ii-parse.ts 15/15; ralph GREEN. Parser edge-cases (en-dash, ×/x, `1 WU + 2×failure`, missing/garbage) all safe-default, no NaN to DB. Exactly one block (Push dips) seeds to_failure=true.
 Roast (focused): CONVERGED — parseSetScheme correct, idempotency diff symmetric, to_failure seeding correct (no B1 regression), all 20 block names resolve.
 ⚠️ CONTENT-FIDELITY (coordinator finding, NOT code): Monday Rounds 1&2 dropped the chest slot; rounds modeled as single blocks vs the "3 muscle-slots, pick from bank per exercise" structure. Mechanism correct, content compressed → FUTURE_WORK; needs Marcus's review before relying on the seeded plan in-app.
 
 ## ✅ BUILD COMPLETE — 2026-09-20
+
 Branch `redesign/block-ii-adjustable-sets`, 8 commits off main @edf2446. NOT merged.
 Whole-build verify (coordinator): verify-set-scheme 15/15 · verify-schedule-validation 6/6 · verify-block-ii-parse 15/15 · verify-logger (existing regression) PASS · ralph-verify.sh GREEN (format/typecheck/lint/build). Each slice roast-converged; B1 took 2 ralph rounds (2 data-integrity must-fixes fixed).
 NOT done here (needs live Supabase): `npm run seed` + headed logger/plan e2e UI drive. Migration 025 must be `supabase db push`ed before `gen types` (KNOWN_ISSUES / D14).

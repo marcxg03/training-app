@@ -30,9 +30,15 @@ Superset-style rounds (start with back — feels good). Warm-ups as needed.
 
 | Block | Primary Exercises | Secondary Exercises | Type | Sets |
 |-------|-------------------|---------------------|------|------|
-| Round 1 — Vertical Pull | Lat Pulldown | Overhead Press | Compound | 2 × 6–8 |
-| Round 2 — Horizontal Pull | Chest Supported Row | Lateral Raise | Compound | 2 × 6–8 |
-| Round 3 — Lower Chest / Triceps | Dips | Cable Rear Delt Fly, Barbell Curl | Isolation | 2 × 7–10 |
+| Round 1 — Back Vertical Pull | Lat Pulldown | Neutral-Grip Pulldown, Assisted Pull-Up | Compound | 2 × 6–8 |
+| Round 1 — Upper Chest | Incline DB Press | Incline Smith Press, Incline Cable Press | Compound | 2 × 6–8 |
+| Round 1 — Shoulder Press | Overhead Press | Seated DB Press, Machine Shoulder Press | Compound | 2 × 6–8 |
+| Round 2 — Horizontal Pull | Chest Supported Row | Bent Over BB Row, Seated Cable Row | Compound | 2 × 6–8 |
+| Round 2 — Mid Chest | Flat DB Press | Flat Barbell Press, Machine Chest Press | Compound | 2 × 6–8 |
+| Round 2 — Shoulder Lateral Raise | DB Lateral Raise | Cable Lateral Raise, Machine Lateral Raise | Isolation | 2 × 6–8 |
+| Round 3 — Lower Chest & Triceps | Dips | Decline Press | Isolation | 2 × 7–10 |
+| Round 3 — Rear Delts | Cable Rear Delt Fly | Rear Delt Fly Machine, Reverse Pec Deck | Isolation | 2 × 7–10 |
+| Round 3 — Biceps | Barbell Curl | Preacher Curl, DB Curl | Isolation | 2 × 7–10 |
 
 ## Lower — Power + Strength
 

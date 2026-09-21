@@ -126,12 +126,24 @@ async function main() {
     ],
   );
 
-  // --- (c) Monday "Upper" → 3 rounds, each a non-empty bank ---
+  // --- (c) Monday "Upper" → 3 rounds × 3 muscle-slots = 9 blocks, each a
+  // non-empty bank, and CHEST is present in every round (the content-fidelity
+  // fix: the earlier seed compressed each round to one block and dropped chest). ---
   const upper = findLifting(monday, "Upper");
-  check("Monday Upper has 3 rounds/blocks", upper.blocks.length, 3);
+  check("Monday Upper has 9 blocks (3 rounds × back/chest/shoulder-slots)", upper.blocks.length, 9);
   check(
-    "each Monday round carries a non-empty exercise bank",
+    "each Monday block carries a non-empty exercise bank",
     upper.blocks.every((block) => block.exercises.length >= 1),
+    true,
+  );
+  // Chest must be back in Monday (the regression this fix targets): Rounds 1 & 2
+  // each carry an upper/mid-chest press.
+  const mondayChestBlocks = upper.blocks.filter((block) =>
+    block.exercises.some((exercise) => /chest press|incline .*press|flat .*press/i.test(exercise.name)),
+  );
+  check(
+    "Monday has ≥2 chest-press blocks (chest restored in Rounds 1 & 2)",
+    mondayChestBlocks.length >= 2,
     true,
   );
 
