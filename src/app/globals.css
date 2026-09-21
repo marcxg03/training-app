@@ -8,13 +8,13 @@
        stored as space-separated RGB for Tailwind's rgb(var(--x) / <alpha>). */
     --background: 10 10 11; /* #0A0A0B app base */
     --foreground: 244 244 245; /* #F4F4F5 primary text */
-    --accent: 155 127 212; /* #9B7FD4 purple — CTAs, active nav, weight PR, lift */
+    --accent: 237 237 240; /* #EDEDF0 near-white — mono CTAs, active nav, weight PR, lift (was #9B7FD4 purple) */
     --card: 19 19 22; /* #131316 card surface */
     --card-alt: 13 13 15; /* #0d0d0f recessed / secondary card */
     --card-foreground: 244 244 245;
     --input: 30 30 35; /* #1E1E23 input / current-slot fill */
     --border: 35 35 42; /* #23232A borders, dividers */
-    --ring: 155 127 212;
+    --ring: 120 120 128; /* #78788 0 mid-gray focus ring (mono) */
     --muted: 13 13 15; /* recessed surface (tabs, secondary) */
     --muted-foreground: 138 138 146; /* #8a8a92 tertiary text (text-3) */
     --subtle: 207 207 212; /* #cfcfd4 secondary text (text-2) */
@@ -24,7 +24,7 @@
     --warning: 251 191 36; /* #FBBF24 under target, syncing */
     --danger: 248 113 113; /* #F87171 over target, destructive */
     --cardio: 94 200 200; /* #5EC8C8 cardio sessions */
-    --radius: 1.125rem; /* 18px — cards/containers */
+    --radius: 0.5rem; /* 8px — tighter, technical mono feel (was 18px) */
   }
 
   * {
