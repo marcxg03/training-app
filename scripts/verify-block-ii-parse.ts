@@ -87,6 +87,9 @@ async function main() {
   const files = await readWikiFiles();
   const spec = parsePlanFromWiki(files);
 
+  // Plan name derived from the current-plan.md H1 (not the stale hardcoded name).
+  check("plan name is 'Block II' (derived from the doc H1)", spec.name, "Block II");
+
   // --- (a) seven days, Mon..Sun in order ---
   check(
     "day count is 7",

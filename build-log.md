@@ -102,6 +102,7 @@ Out of scope (by design): mono reskin (design-led pass) · Creator-Program commu
 Run: from the worktree, `pnpm dev` (localhost:3000) after a `db push` + `npm run seed` against a Supabase project.
 
 ## ✅ B-flex — Flexible working sets (soft target, both ways) — DONE (2026-09-22)
+
 Commits: `a8ed8eb` (slice) → `0bd9657` (verify-logger test migration) → this (roast fix).
 Built (D16): `working_sets` is a soft TARGET, not an auto-complete cap. `isBlockComplete` now manual-only (completedBlockIds) for ALL block types; FailureProtocol renders warm-up + target working slots, then "+ Add working set" (W3, W4…) + "Complete block"; `getSetLabel` continues W-numbering past target; `hasLoggedWorkingSet` helper. to_failure stays a per-set toggle.
 Verify (coordinator re-ran): verify-set-scheme + verify-logger + gate GREEN. Caught a regression the implementer's gate missed — verify-logger had 3 stale auto-complete assertions (ralph-verify doesn't run it); migrated them to the manual model (and the week-2 lockout is now structurally impossible).

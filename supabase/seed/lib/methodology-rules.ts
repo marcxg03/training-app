@@ -1503,8 +1503,16 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
 
   const liftingBlocks = parseLiftingBlocksGlobal(orderedDays);
 
+  // Derive the plan name from the current-plan.md H1 (e.g. "Current Training
+  // Plan — Block II" → "Block II") rather than hardcoding a stale block name;
+  // fall back to the full title, then a default.
+  const planTitle = extractDocumentTitle(files.currentPlan);
+  const planName = planTitle?.includes("—")
+    ? (planTitle.split("—").pop()?.trim() ?? planTitle)
+    : (planTitle ?? "Block II");
+
   return {
-    name: "Marcus Hybrid HYROX v3.0",
+    name: planName,
     overviewTitle: extractDocumentTitle(files.overview),
     masterPlanTitle: extractDocumentTitle(files.masterPlan),
     days: orderedDays,
