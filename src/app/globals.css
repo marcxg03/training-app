@@ -24,9 +24,9 @@
     --faint: 130 130 140; /* #82828C labels / muted (text-4) */
     --ghost: 168 168 178; /* #A8A8B2 faint / captions (text-5) */
     --success: 34 197 94; /* #22C55E synced, in-range, rep PR (deepened for white bg) */
-    --warning: 217 119 6; /* #D97706 under target, syncing (deepened for white bg) */
-    --danger: 220 38 38; /* #DC2626 over target, destructive (deepened for white bg) */
-    --cardio: 13 148 136; /* #0D9488 cardio sessions (deepened for white bg) */
+    --warning: 234 179 8; /* #EAB308 bright yellow — under target, syncing */
+    --danger: 220 38 38; /* #DC2626 over target, destructive */
+    --cardio: 20 184 166; /* #14B8A6 bright teal — cardio (matches success/danger tone) */
     --radius: 0.5rem; /* 8px — tighter, technical feel */
   }
 
