@@ -24,7 +24,7 @@ export function BankItemRow({
   return (
     <li className="flex items-center gap-3 rounded-xl border border-accent bg-accent/10 px-3.5 py-3">
       <span className="flex h-5 w-5 flex-none items-center justify-center rounded-md bg-accent">
-        <Check className="h-3.5 w-3.5 text-black" />
+        <Check className="h-3.5 w-3.5 text-accent-foreground" />
       </span>
       <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
         {name}

@@ -37,6 +37,9 @@ export default async function EditBlockPage({ params }: EditBlockPageProps) {
           block_name: block.block_name,
           block_category: "lifting",
           block_type: block.block_type,
+          warmup_sets: block.warmup_sets,
+          working_sets: block.working_sets,
+          to_failure: block.to_failure,
           bank: block.exercises.map((exercise) => ({
             exercise_id: exercise.exercise_id,
             display_order: exercise.display_order,

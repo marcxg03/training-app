@@ -19,6 +19,13 @@ type BlockPayload = {
   block_name: string;
   block_category: BlockCategory;
   block_type: BlockType;
+  // Per-block set scheme (migration 025). Optional so programmatic callers can
+  // omit them: createBlock falls back to the DB defaults (1 warm-up / 2 working)
+  // and derives to_failure from block_type; updateBlock leaves an unspecified
+  // field untouched, reconciling to_failure only when block_type changes.
+  warmup_sets?: number;
+  working_sets?: number;
+  to_failure?: boolean;
   bank: BlockFormValues["bank"];
 };
 type ExercisePayload = Omit<ExerciseFormValues, "own_id">;
@@ -199,6 +206,12 @@ export async function createBlock(
       block_category: input.block_category,
       block_type: input.block_type,
       display_order: displayOrderResult.data,
+      // Scheme (D13). Fall back to the DB defaults when unspecified; derive
+      // to_failure from block_type so a caller that omits it can't create a
+      // failure block that silently opts out of the to-failure flag.
+      warmup_sets: input.warmup_sets ?? 1,
+      working_sets: input.working_sets ?? 2,
+      to_failure: input.to_failure ?? input.block_type === "failure",
     })
     .select("block_id, block_category")
     .single();
@@ -232,16 +245,25 @@ export async function createBlock(
 export async function updateBlock(
   supabase: BrowserClient,
   blockId: string,
-  input: Pick<BlockPayload, "block_name" | "block_type" | "bank">,
+  input: Pick<
+    BlockPayload,
+    | "block_name"
+    | "block_type"
+    | "bank"
+    | "warmup_sets"
+    | "working_sets"
+    | "to_failure"
+  >,
 ): Promise<MutationResult<null>> {
   // Resolve the bank owner BEFORE writing anything. Checking afterwards left
   // the rename/type change committed while reporting failure — the user was
   // told nothing saved when block_type (which drives how the logger completes
-  // the block) had already changed.
+  // the block) had already changed. Also read the current block_type so a
+  // block_type flip can reconcile to_failure (D13) when the form doesn't set it.
   const { data: block, error: bankSourceError } = await supabase
     .from("blocks")
     .select(
-      "bank_source_block_id, blocks!blocks_bank_source_block_id_fkey (block_name)",
+      "block_type, bank_source_block_id, blocks!blocks_bank_source_block_id_fkey (block_name)",
     )
     .eq("block_id", blockId)
     .maybeSingle();
@@ -256,12 +278,33 @@ export async function updateBlock(
     };
   }
 
+  const blockUpdate: Database["public"]["Tables"]["blocks"]["Update"] = {
+    block_name: normalizeText(input.block_name),
+    block_type: input.block_type,
+  };
+
+  if (input.warmup_sets !== undefined) {
+    blockUpdate.warmup_sets = input.warmup_sets;
+  }
+
+  if (input.working_sets !== undefined) {
+    blockUpdate.working_sets = input.working_sets;
+  }
+
+  // to_failure (D13): an explicit form value always wins. Otherwise, only touch
+  // it when block_type actually changes — reconciling it to the new type so a
+  // type flip can't leave a self-contradictory block (e.g. a now-non-failure
+  // block still flagged to_failure). An unchanged type with no explicit value
+  // leaves the stored to_failure alone.
+  if (input.to_failure !== undefined) {
+    blockUpdate.to_failure = input.to_failure;
+  } else if (block && block.block_type !== input.block_type) {
+    blockUpdate.to_failure = input.block_type === "failure";
+  }
+
   const { error } = await supabase
     .from("blocks")
-    .update({
-      block_name: normalizeText(input.block_name),
-      block_type: input.block_type,
-    })
+    .update(blockUpdate)
     .eq("block_id", blockId);
 
   if (error) {

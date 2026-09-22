@@ -68,6 +68,15 @@ export const blockSchema = z
       .max(80, "Block name must be 80 characters or fewer."),
     block_category: blockCategorySchema,
     block_type: blockTypeSchema.nullable(),
+    // Per-block set scheme (migration 025). warm-ups may be zero; a loggable
+    // lifting block needs at least one working set. to_failure marks the last
+    // working set as taken to failure.
+    warmup_sets: z.number().int().min(0, "Warm-up sets cannot be negative."),
+    working_sets: z
+      .number()
+      .int()
+      .min(1, "At least one working set is required."),
+    to_failure: z.boolean(),
     bank: z.array(bankItemSchema),
   })
   .refine(

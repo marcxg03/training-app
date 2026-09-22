@@ -32,6 +32,9 @@ export type LiftingBlockDetail = {
   block_id: string;
   block_name: string;
   block_type: "failure" | "mobility" | "corrective";
+  warmup_sets: number;
+  working_sets: number;
+  to_failure: boolean;
   exercises: LiftingExerciseInBlock[];
 };
 

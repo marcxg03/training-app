@@ -76,7 +76,9 @@ export async function getBlockDetail(
   const supabase = await createClient();
   const { data: block, error: blockError } = await supabase
     .from("blocks")
-    .select("block_id, block_name, block_type")
+    .select(
+      "block_id, block_name, block_type, warmup_sets, working_sets, to_failure",
+    )
     .eq("block_id", blockId)
     .eq("block_category", "lifting")
     .maybeSingle();
@@ -116,6 +118,9 @@ export async function getBlockDetail(
     block_id: block.block_id,
     block_name: block.block_name,
     block_type: block.block_type,
+    warmup_sets: block.warmup_sets,
+    working_sets: block.working_sets,
+    to_failure: block.to_failure,
     exercises: items.flatMap((item) =>
       toRelationArray(item.exercises).map((exercise) => ({
         exercise_id: exercise.exercise_id,

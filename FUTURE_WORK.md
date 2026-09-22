@@ -1,36 +1,23 @@
-# Future Work — Trends & Analytics build (2026-07-28)
+# Future Work — Block II / Adjustable-Sets redesign
 
-Deferred deliberately; none block the shipped build.
+## Content (Marcus's review)
 
-## Charts / analytics
+1. ✅ **DONE (2026-09-21) — Seed content fidelity.** Re-authored so every named movement is present and faithfully modeled: Monday Upper = 9 blocks (3 rounds × back/chest/shoulder, **chest restored**); Tuesday **Back/Glute Extension restored**; Friday **SA-cable pulldown/pullover + face-pull restored** (6 blocks). Tests assert the counts + chest presence. Sunday ATG kept as a 3-block mobility circuit (all 6 movements present in the banks — a circuit, not per-slot). Remaining judgment for Marcus: whether the invented _secondary_ bank options (alternate exercises) match his intent — tweak in-app via the Library editor.
+2. **Steady-state cardio + Monday plyos/track** live only in the "Running Sessions" section, not the weekly schedule as sessions — add them as sessions if you want them to appear/log in-app.
+3. **Doc-sync.** The vault's human `current-plan.md` v4 diverges in format from the seed's parser grammar. Keep the two content-synced (a converter, or align the formats).
 
-- **Range toggles** (7/30/90-day) on Trends sections — builders are already
-  parameterized; a searchParams-driven re-render is all it needs.
-- **Consistency heatmap** (workouts/week calendar) and **cardio load**
-  (duration × perceived intensity from activity_completions) — the two chart
-  ideas cut at scoping.
-- **Historical meal dates**: evening meals logged before the timezone fix
-  (2026-07-28) may carry the next day's `date` (they were filed by the UTC
-  server clock). Cosmetic in trend charts; correct at source if it ever
-  matters.
+## Engineering (follow-ups)
 
-## Housekeeping
+4. `parsePlanFromWiki` hardcodes `name: "Marcus Hybrid HYROX v3.0"` — rename to "Block II".
+5. Migration 025 must be `supabase db push`ed BEFORE any `supabase gen types` regen (else the 3 scheme columns get wiped → NaN auto-complete lockout). See KNOWN_ISSUES.md (D14).
+6. Block editor: flipping block_type off 'failure' leaves an inert `to_failure=true` (harmless — gated by block_type==='failure'); reconcile on flip if the block-type control is exposed in the reskin.
+7. E2E: `npm run seed` + a headed Playwright drive of the logger (2-working-set block + legacy 3-set) and the plan editor (no-rest-day save) were not run (no local Supabase in the build). Run against a staging Supabase.
 
-- **Regenerate `src/lib/supabase/types.ts`** after applying migrations
-  021+022+023 (`supabase gen types`) — the bodyweight_logs,
-  profiles.timezone, and set_logs.completion_id entries were hand-added to
-  match the migrations and regen will also re-alphabetize them.
-- **e2e hardening (D5)**: committed test password in `seed-auth.mjs`
-  (pre-existing) — generate at runtime; e2e test-user email constant is
-  duplicated across `env.ts` and the .mjs scripts — single-source it.
-- **Analytics day-math home**: `dayKeyOf`/`weekKeyOf`/`dayLabelOf` still live
-  in `analytics/projections.ts` (dayKeyDaysAgo already moved to `lib/time`).
-  If a 4th consumer appears, finish the move (decision D7).
-- **profiles UPDATE policies** rely on Postgres's implicit WITH CHECK
-  defaulting; writing explicit `WITH CHECK` app-wide would make intent
-  self-documenting (Security, cosmetic).
+## Deliberately out of scope this run (separate work)
 
-## Product ideas (unscoped)
+8. **Minimalist-mono reskin** — design-led `frontend-engineer` pass (D3/D7). The BlockForm scheme inputs B1 added are functional/unstyled and want the reskin's treatment.
+9. **Creator-Program community layer** (B4) — held to post-Nov-16 (D1/D2/D7). Spec is REDESIGN_BRIEF §0 §8-REVISED.
 
-- Backdated bodyweight/meal entry (log for a past day).
-- Per-exercise e1RM goal lines on the progression charts.
+## Feature requests (folded in for later)
+
+10. **Persist the AI-estimator photo + description with the logged meal.** When a meal is logged via the AI calorie estimator (photo capture OR text description → macro pre-fill, `src/app/api/estimate-macros/route.ts`), currently only the resulting macros are saved. Also save the **source photo** (→ Supabase Storage, store the path/URL on the meal) and the **description text** (new column) on the `meal_entries` row, so a logged meal keeps its evidence — viewable/editable later and useful for re-estimation. Touches: `meal_entries` schema (add `photo_path text` + `source_description text`, additive migration), the log-meal mutation (`src/lib/nutrition/mutations.ts` logMeal/updateMeal), the log-meal sheet UI (pass the photo/description through), and a Storage bucket + RLS for the images. Requested by Marcus 2026-09-22.

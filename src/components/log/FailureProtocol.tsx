@@ -1,10 +1,19 @@
 "use client";
 
+import { useState } from "react";
+import { Plus } from "lucide-react";
+
 import type {
   LoggerBlock,
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/workout-state";
+import {
+  getSetLabel,
+  getSetSchemeSteps,
+  hasLoggedWorkingSet,
+} from "@/lib/methodology/workout-state";
+import { Button } from "@/components/ui/button";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
 
@@ -14,15 +23,9 @@ type FailureProtocolProps = {
   exercise: LoggerExercise;
   workoutId: string;
   userId: string;
-  onComplete: () => void;
+  onComplete: () => Promise<void>;
   onSetSaved: (setLog: LoggerSetLog) => void;
 };
-
-const failureSteps = [
-  { label: "WU", setIndex: 1 },
-  { label: "W1", setIndex: 2 },
-  { label: "W2", setIndex: 3 },
-] as const;
 
 export function FailureProtocol({
   block,
@@ -33,16 +36,62 @@ export function FailureProtocol({
   onComplete,
   onSetSaved,
 }: FailureProtocolProps) {
+  // D16: `working_sets` is a SOFT TARGET. Set slots come from the block's scheme
+  // (migration 025) — N warm-ups then M target working sets, the last carrying
+  // the failure checkbox iff the block is toFailure. Once the target is met the
+  // block does NOT auto-complete: the user may add further working sets (W3, W4…)
+  // and completes the block only via the explicit "Complete block" action.
+  const targetSteps = getSetSchemeSteps(block);
+  const targetCount = block.warmupSets + block.workingSets;
   const loggedSets = [...block.setLogs].sort(
     (left, right) => left.set_index - right.set_index,
   );
-  const nextStep = failureSteps.find(
+
+  // Working sets logged beyond the scheme's target slots.
+  const addedSets = loggedSets.filter(
+    (setLog) => setLog.set_index > targetCount,
+  );
+
+  // The next unlogged TARGET slot (sequential unlock). Undefined once the whole
+  // target scheme is logged — that's when the add/complete affordances appear.
+  const nextTargetStep = targetSteps.find(
     (step) => !loggedSets.some((setLog) => setLog.set_index === step.setIndex),
   );
+  const targetComplete = !nextTargetStep;
+
+  const maxLoggedIndex = loggedSets.reduce(
+    (max, setLog) => Math.max(max, setLog.set_index),
+    0,
+  );
+  const nextAddedIndex = Math.max(maxLoggedIndex + 1, targetCount + 1);
+
+  const [error, setError] = useState<string | null>(null);
+  const [isAddingSet, setIsAddingSet] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  async function handleComplete() {
+    setError(null);
+    setIsCompleting(true);
+
+    try {
+      await onComplete();
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Could not finish this block right now.";
+
+      setError(message);
+      setIsCompleting(false);
+      return;
+    }
+
+    setIsCompleting(false);
+  }
 
   return (
     <div className="space-y-4">
-      {failureSteps.map((step) => {
+      {targetSteps.map((step) => {
         const savedSet = loggedSets.find(
           (setLog) => setLog.set_index === step.setIndex,
         );
@@ -58,7 +107,7 @@ export function FailureProtocol({
           );
         }
 
-        if (!nextStep || nextStep.setIndex !== step.setIndex) {
+        if (!nextTargetStep || nextTargetStep.setIndex !== step.setIndex) {
           return (
             <div
               key={step.setIndex}
@@ -78,19 +127,70 @@ export function FailureProtocol({
             label={step.label}
             workoutId={workoutId}
             setIndex={step.setIndex}
-            showFailureCheckbox={step.setIndex === 3}
-            defaultFailureChecked={step.setIndex === 3}
+            showFailureCheckbox={step.showFailureCheckbox}
+            defaultFailureChecked={step.showFailureCheckbox}
             userId={userId}
-            onSaved={(setLog) => {
-              onSetSaved(setLog);
-
-              if (setLog.set_index === 3) {
-                onComplete();
-              }
-            }}
+            onSaved={(setLog) => onSetSaved(setLog)}
           />
         );
       })}
+
+      {/* Added working sets beyond the target keep the W-numbering (W3, W4…). */}
+      {addedSets.map((setLog) => (
+        <SetLogRow
+          key={setLog.set_log_id}
+          label={getSetLabel(block, setLog.set_index)}
+          setLog={setLog}
+          exercise={exercise}
+        />
+      ))}
+
+      {/* Once every target slot is logged, offer another working set (W3, W4…).
+          The block NEVER auto-locks at the count. */}
+      {targetComplete &&
+        (isAddingSet ? (
+          <SetEntryForm
+            blockId={block.block_id}
+            completionId={completionId}
+            exercise={exercise}
+            label={getSetLabel(block, nextAddedIndex)}
+            workoutId={workoutId}
+            setIndex={nextAddedIndex}
+            showFailureCheckbox={block.toFailure}
+            defaultFailureChecked={block.toFailure}
+            userId={userId}
+            onSaved={(setLog) => {
+              onSetSaved(setLog);
+              setIsAddingSet(false);
+            }}
+          />
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsAddingSet(true)}
+            className="w-full gap-2 uppercase tracking-[0.06em]"
+          >
+            <Plus className="h-4 w-4" />
+            Add working set
+          </Button>
+        ))}
+
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      {/* "Complete block" is reachable as soon as ≥1 working set is logged, so a
+          weak day (1 of 2) can finish and advance — the target is soft BOTH ways,
+          not just upward. Never gated on the full target being met. */}
+      {hasLoggedWorkingSet(block) ? (
+        <Button
+          type="button"
+          onClick={handleComplete}
+          disabled={isCompleting}
+          className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
+        >
+          {isCompleting ? "Saving…" : "Complete block"}
+        </Button>
+      ) : null}
     </div>
   );
 }

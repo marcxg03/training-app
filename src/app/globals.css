@@ -6,25 +6,28 @@
   :root {
     /* Instrument palette — exact hex from the design system (Frame 01),
        stored as space-separated RGB for Tailwind's rgb(var(--x) / <alpha>). */
-    --background: 10 10 11; /* #0A0A0B app base */
-    --foreground: 244 244 245; /* #F4F4F5 primary text */
-    --accent: 155 127 212; /* #9B7FD4 purple — CTAs, active nav, weight PR, lift */
-    --card: 19 19 22; /* #131316 card surface */
-    --card-alt: 13 13 15; /* #0d0d0f recessed / secondary card */
-    --card-foreground: 244 244 245;
-    --input: 30 30 35; /* #1E1E23 input / current-slot fill */
-    --border: 35 35 42; /* #23232A borders, dividers */
-    --ring: 155 127 212;
-    --muted: 13 13 15; /* recessed surface (tabs, secondary) */
-    --muted-foreground: 138 138 146; /* #8a8a92 tertiary text (text-3) */
-    --subtle: 207 207 212; /* #cfcfd4 secondary text (text-2) */
-    --faint: 106 106 114; /* #6A6A72 labels / muted (text-4) */
-    --ghost: 69 69 77; /* #45454d faint / captions (text-5) */
-    --success: 74 222 128; /* #4ADE80 synced, in-range, rep PR */
-    --warning: 251 191 36; /* #FBBF24 under target, syncing */
-    --danger: 248 113 113; /* #F87171 over target, destructive */
-    --cardio: 94 200 200; /* #5EC8C8 cardio sessions */
-    --radius: 1.125rem; /* 18px — cards/containers */
+    /* LIGHT theme — white base, dark/black accents (Marcus 2026-09-22).
+       Semantic colors (success/warning/danger/cardio) kept from the dark set. */
+    --background: 255 255 255; /* #FFFFFF app base */
+    --foreground: 17 17 19; /* #111113 primary text (near-black) */
+    --accent: 17 17 19; /* #111113 dark/black — CTAs, active nav, weight PR, lift */
+    --accent-foreground: 250 250 250; /* #FAFAFA text/icons ON the accent */
+    --card: 255 255 255; /* #FFFFFF card surface (defined by hairline border) */
+    --card-alt: 245 245 246; /* #F5F5F6 recessed / secondary card */
+    --card-foreground: 17 17 19;
+    --input: 245 245 246; /* #F5F5F6 input / current-slot fill */
+    --border: 226 226 230; /* #E2E2E6 borders, dividers (hairline) */
+    --ring: 17 17 19; /* dark focus ring */
+    --muted: 245 245 246; /* recessed surface (tabs, secondary) */
+    --muted-foreground: 113 113 122; /* #71717A tertiary text (text-3) */
+    --subtle: 63 63 70; /* #3F3F46 secondary text (text-2) */
+    --faint: 130 130 140; /* #82828C labels / muted (text-4) */
+    --ghost: 168 168 178; /* #A8A8B2 faint / captions (text-5) */
+    --success: 34 197 94; /* #22C55E synced, in-range, rep PR (deepened for white bg) */
+    --warning: 234 179 8; /* #EAB308 bright yellow — under target, syncing */
+    --danger: 220 38 38; /* #DC2626 over target, destructive */
+    --cardio: 20 184 166; /* #14B8A6 bright teal — cardio (matches success/danger tone) */
+    --radius: 0.5rem; /* 8px — tighter, technical feel */
   }
 
   * {

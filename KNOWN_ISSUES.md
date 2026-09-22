@@ -615,3 +615,17 @@ block, the picker shows "Add one in the Library first" and the session stays
 empty. The schema permits an empty cardio/recovery session, so it saves — and
 an empty session bounces out of the logger. Seeded accounts always have both
 blocks, so this only bites a hand-built Library.
+
+## Slice B1 — Adjustable Set-Scheme
+
+### 🔴 High — types.ts is hand-edited; `supabase db push` migration 025 BEFORE any `supabase gen types` regen (D14)
+
+`src/lib/supabase/types.ts` was hand-edited to add `warmup_sets` /
+`working_sets` / `to_failure` to the `blocks` Row/Insert/Update because the
+worktree has no live DB. This is a pre-push stopgap: migration 025 MUST be
+`supabase db push`ed before anyone runs `supabase gen types`, or the regen —
+reading a DB that lacks the columns — deletes `warmup_sets` / `working_sets` /
+`to_failure` from the generated types. `blockSetCount` then computes
+`undefined + undefined = NaN`, `isBlockComplete`'s failure branch compares
+`>= NaN` (always false), and failure blocks never auto-complete — the same
+lockout class as migration 023. Push the migration first, then regen.

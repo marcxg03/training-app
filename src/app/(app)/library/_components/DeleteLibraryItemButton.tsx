@@ -151,7 +151,7 @@ export function DeleteLibraryItemButton({
                 type="button"
                 onClick={confirmDelete}
                 disabled={checking || deleting}
-                className="bg-danger text-black hover:bg-danger/90"
+                className="bg-danger text-accent-foreground hover:bg-danger/90"
               >
                 {deleting ? "Deleting…" : "Delete"}
               </Button>

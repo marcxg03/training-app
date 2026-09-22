@@ -39,35 +39,25 @@ export function daySoftWarnings(workouts: EditableWorkout[]): string[] {
     : [];
 }
 
-/** Hard rule: the week must keep at least one rest day. */
-export function weekRestDayError(
-  editedDayIsRest: boolean,
-  otherDaysHaveRest: boolean,
-): string | null {
-  if (editedDayIsRest || otherDaysHaveRest) {
-    return null;
-  }
-  return "Keep at least one rest day in your week.";
-}
-
 export type ScheduleValidation = {
   hardErrors: string[];
   softWarnings: string[];
 };
 
+// Slice B2 (D5/D10): the methodology guardrails no longer HARD-block the editor.
+// The only former hard rule here — "keep at least one rest day" — is cut, because
+// a valid block can legitimately have no full rest day (Block II's Sunday is ATG
+// recovery, not rest). validateSchedule therefore never returns hardErrors; it
+// keeps the informational SOFT layer (cardio-before-lift) so the "Save anyway"
+// affordance still surfaces advice without blocking. Signature preserved so
+// DayEditForm keeps compiling.
 export function validateSchedule(input: {
   isRestDay: boolean;
   workouts: EditableWorkout[];
   otherDaysHaveRest: boolean;
 }): ScheduleValidation {
-  const hardErrors: string[] = [];
-  const restError = weekRestDayError(input.isRestDay, input.otherDaysHaveRest);
-  if (restError) {
-    hardErrors.push(restError);
-  }
-
   // A rest day carries no workout-timing warnings.
   const softWarnings = input.isRestDay ? [] : daySoftWarnings(input.workouts);
 
-  return { hardErrors, softWarnings };
+  return { hardErrors: [], softWarnings };
 }

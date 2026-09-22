@@ -19,7 +19,7 @@ export function AddRecoveryActivityButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-accent-foreground transition-colors hover:bg-accent/90"
       >
         <Plus className="h-[18px] w-[18px]" />
         Add Recovery

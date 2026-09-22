@@ -76,6 +76,12 @@ export type ParsedBlock = {
   blockName: string;
   blockType: BlockType;
   displayOrder: number;
+  // Adjustable per-block set-scheme (D4/D9/D15). Additive; defaults reproduce the
+  // legacy WU + W1 + W2 (1 warm-up + 2 working) behaviour. `toFailure` says the
+  // last working set is taken to failure. Rep ranges stay on the exercises.
+  warmupSets: number;
+  workingSets: number;
+  toFailure: boolean;
   exercises: ParsedExerciseSpec[];
 };
 

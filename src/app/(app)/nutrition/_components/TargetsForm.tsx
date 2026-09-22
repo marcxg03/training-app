@@ -193,7 +193,7 @@ export function TargetsForm({
                     aria-current={mode.value === goalMode ? "true" : undefined}
                     className={
                       mode.value === goalMode
-                        ? "flex-1 rounded-lg bg-accent py-2.5 text-center font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-black"
+                        ? "flex-1 rounded-lg bg-accent py-2.5 text-center font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-accent-foreground"
                         : "flex-1 rounded-lg py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
                     }
                   >

@@ -223,7 +223,7 @@ export function ProfileForm({
                             className={cn(
                               "flex-1 rounded-lg px-2 py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-wide transition-colors",
                               selected
-                                ? "bg-accent text-black"
+                                ? "bg-accent text-accent-foreground"
                                 : "text-subtle hover:text-foreground",
                             )}
                           >

@@ -89,6 +89,9 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
   });
 
   const watched = useWatch({ control: form.control });
+  // Slice B2 (D5/D10): validateSchedule no longer hard-blocks — it returns
+  // only the informational SOFT layer (cardio-before-lift). The methodology
+  // guardrails never prevent a save; they advise.
   const validation = validateSchedule({
     isRestDay: watched.is_rest_day ?? data.is_rest_day,
     workouts: (watched.workouts ?? []).map((w, index) => ({
@@ -98,15 +101,11 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
     })),
     otherDaysHaveRest: data.other_days_have_rest,
   });
-  const blocked = validation.hardErrors.length > 0;
 
   const goBack = () => router.push(`/plan/${day}`);
 
   const handleSubmit = async (values: DayFormValues) => {
     setSubmitError(null);
-    if (validation.hardErrors.length > 0) {
-      return;
-    }
 
     const currentIds = new Set(
       values.workouts
@@ -168,7 +167,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
           <button
             type="submit"
             form="day-edit-form"
-            disabled={blocked || form.formState.isSubmitting}
+            disabled={form.formState.isSubmitting}
             className="font-mono text-[13px] font-bold uppercase tracking-[0.03em] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
           >
             Save
@@ -304,7 +303,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                                       aria-pressed={active}
                                       className={
                                         active
-                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-accent-foreground"
                                           : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
                                       }
                                     >
@@ -340,7 +339,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                                       aria-pressed={active}
                                       className={
                                         active
-                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                          ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-accent-foreground"
                                           : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
                                       }
                                     >
@@ -390,7 +389,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
                                     aria-pressed={active}
                                     className={
                                       active
-                                        ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                                        ? "flex-1 rounded-lg bg-accent px-2 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-accent-foreground"
                                         : "flex-1 rounded-lg border border-border px-2 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle transition-colors hover:border-faint"
                                     }
                                   >
@@ -475,15 +474,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
               </button>
             </div>
 
-            {blocked ? (
-              <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
-                {validation.hardErrors.map((error) => (
-                  <p key={error}>{error}</p>
-                ))}
-              </div>
-            ) : null}
-
-            {!blocked && validation.softWarnings.length > 0 ? (
+            {validation.softWarnings.length > 0 ? (
               <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
                 {validation.softWarnings.map((warning) => (
                   <p key={warning}>{warning}</p>
@@ -505,10 +496,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={blocked || form.formState.isSubmitting}
-              >
+              <Button type="submit" disabled={form.formState.isSubmitting}>
                 {submitLabel}
               </Button>
             </div>

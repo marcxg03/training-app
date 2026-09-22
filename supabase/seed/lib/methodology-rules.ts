@@ -438,6 +438,52 @@ function parseExerciseBank(
   });
 }
 
+// Parse the adjustable per-block set-scheme (D4/D9/D15) from the plan's own
+// notation in the optional "Sets" column, e.g. "2 × 6–8", "2 × failure",
+// "1 WU + 2 × failure". Defaults reproduce the legacy 1 warm-up + 2 working
+// (3-set) behaviour when the cell is absent or unparseable. Rep ranges are NOT
+// read here — they stay on the exercises (prescribed_min/max).
+function parseSetScheme(rawSets: string): {
+  warmupSets: number;
+  workingSets: number;
+  toFailure: boolean;
+} {
+  const text = normalizeWhitespace(rawSets).toLowerCase();
+  let warmupSets = 1;
+  let workingSets = 2;
+  let toFailure = false;
+
+  if (!text) {
+    return { warmupSets, workingSets, toFailure };
+  }
+
+  // Optional warm-up prefix: "no wu", "1 wu +", "2 warm-up +".
+  if (/\bno\s+(?:wu|warm)/.test(text)) {
+    warmupSets = 0;
+  } else {
+    const warmupMatch = text.match(/(\d+)\s*(?:x\s*)?(?:wu|warm-?ups?)/);
+
+    if (warmupMatch) {
+      warmupSets = Number.parseInt(warmupMatch[1], 10);
+    }
+  }
+
+  // Working sets = the count before "×"/"x". When a warm-up prefix uses "+",
+  // read the working segment after it so the warm-up count isn't picked up.
+  const workingSegment = text.includes("+")
+    ? (text.split("+").pop() ?? text)
+    : text;
+  const workingMatch = workingSegment.match(/(\d+)\s*(?:x|×)/);
+
+  if (workingMatch) {
+    workingSets = Number.parseInt(workingMatch[1], 10);
+  }
+
+  toFailure = /failure/.test(text);
+
+  return { warmupSets, workingSets, toFailure };
+}
+
 function ensureSectionTable(sectionContent: string, workoutName: string) {
   const [table] = extractTables(sectionContent);
 
@@ -552,6 +598,9 @@ export function parseWorkoutBlocks(
     (header) => header === "Secondary Exercises",
   );
   const typeIndex = table.headers.findIndex((header) => header === "Type");
+  // The set-scheme column is optional (D15). When absent (index < 0) the block
+  // falls back to the legacy 1 warm-up + 2 working default via parseSetScheme.
+  const setsIndex = table.headers.findIndex((header) => header === "Sets");
 
   if (
     [blockIndex, primaryIndex, secondaryIndex, typeIndex].some(
@@ -568,6 +617,7 @@ export function parseWorkoutBlocks(
     primaryExercises: string;
     secondaryExercises: string;
     typeValue: string;
+    setsValue: string;
   }> = [];
 
   for (const row of table.rows) {
@@ -575,6 +625,8 @@ export function parseWorkoutBlocks(
     const primaryExercises = normalizeWhitespace(row[primaryIndex] ?? "");
     const secondaryExercises = normalizeWhitespace(row[secondaryIndex] ?? "");
     const typeValue = normalizeWhitespace(row[typeIndex] ?? "");
+    const setsValue =
+      setsIndex >= 0 ? normalizeWhitespace(row[setsIndex] ?? "") : "";
 
     if (!blockName && mergedRows.length > 0) {
       const currentRow = mergedRows[mergedRows.length - 1];
@@ -596,6 +648,12 @@ export function parseWorkoutBlocks(
         currentRow.typeValue = typeValue;
       }
 
+      // The block-level scheme lives on the block's first row; a continuation
+      // row (empty Block) doesn't override it, but may fill it if unset.
+      if (!currentRow.setsValue && setsValue) {
+        currentRow.setsValue = setsValue;
+      }
+
       continue;
     }
 
@@ -604,6 +662,7 @@ export function parseWorkoutBlocks(
       primaryExercises,
       secondaryExercises,
       typeValue,
+      setsValue,
     });
   }
 
@@ -629,10 +688,15 @@ export function parseWorkoutBlocks(
             notesByExercise,
           );
 
+    const scheme = parseSetScheme(row.setsValue);
+
     return {
       blockName: normalizedBlockName,
       blockType: inferBlockType(workoutName, normalizedBlockName, index + 1),
       displayOrder: index + 1,
+      warmupSets: scheme.warmupSets,
+      workingSets: scheme.workingSets,
+      toFailure: scheme.toFailure,
       exercises,
     };
   });
@@ -1121,7 +1185,13 @@ export function parseHistoricalPRs(
   return prs;
 }
 
-function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
+export function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
+  // Slice B2 (D5/D10): the rich methodology rules (48h recovery, compound
+  // window, push/pull balance, min rest day, sauna cap, missing-muscle, hot
+  // yoga + sauna) are now NON-BLOCKING advisory output — every check writes to
+  // softWarnings. hardViolations is retained as an always-empty array (shape
+  // preserved, ValidationResult unchanged) so a legitimate block with no full
+  // rest day (Block II) seeds clean. Nothing writes to hardViolations by design.
   const hardViolations: string[] = [];
   const softWarnings: string[] = [];
   const lastSeenDayByMuscleGroup = new Map<string, number>();
@@ -1145,7 +1215,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
     }
 
     if (recoveryNames.includes("Hot Yoga") && recoveryNames.includes("Sauna")) {
-      hardViolations.push(
+      softWarnings.push(
         `${day.dayLabel}: hot yoga and sauna cannot be scheduled on the same day.`,
       );
     }
@@ -1199,7 +1269,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       }
 
       if (workout.focusMuscleGroups.length === 0) {
-        hardViolations.push(
+        softWarnings.push(
           `${day.dayLabel}: lifting workout "${workout.workoutName}" is missing inferred muscle groups.`,
         );
       }
@@ -1209,7 +1279,7 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
       const previousDayIndex = lastSeenDayByMuscleGroup.get(group);
 
       if (previousDayIndex !== undefined && index - previousDayIndex < 2) {
-        hardViolations.push(
+        softWarnings.push(
           `${day.dayLabel}: ${group} repeats before 48 hours of recovery.`,
         );
       }
@@ -1252,19 +1322,19 @@ function validateTrainingPlan(days: ParsedDaySpec[]): ValidationResult {
   }
 
   if (restDayCount < 1) {
-    hardViolations.push(
+    softWarnings.push(
       "The weekly plan must include at least one full rest day.",
     );
   }
 
   if (guaranteedSaunaCount > 2) {
-    hardViolations.push(
+    softWarnings.push(
       "The weekly plan cannot guarantee more than two sauna sessions.",
     );
   }
 
   if (Math.abs(pushWorkouts - pullWorkouts) > 1) {
-    hardViolations.push(
+    softWarnings.push(
       "Push and pull workout counts are out of weekly balance.",
     );
   }
@@ -1433,8 +1503,16 @@ export function parsePlanFromWiki(files: WikiFiles): TrainingPlanSpec {
 
   const liftingBlocks = parseLiftingBlocksGlobal(orderedDays);
 
+  // Derive the plan name from the current-plan.md H1 (e.g. "Current Training
+  // Plan — Block II" → "Block II") rather than hardcoding a stale block name;
+  // fall back to the full title, then a default.
+  const planTitle = extractDocumentTitle(files.currentPlan);
+  const planName = planTitle?.includes("—")
+    ? (planTitle.split("—").pop()?.trim() ?? planTitle)
+    : (planTitle ?? "Block II");
+
   return {
-    name: "Marcus Hybrid HYROX v3.0",
+    name: planName,
     overviewTitle: extractDocumentTitle(files.overview),
     masterPlanTitle: extractDocumentTitle(files.masterPlan),
     days: orderedDays,

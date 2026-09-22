@@ -166,7 +166,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
           </div>
           <button
             type="submit"
-            className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
+            className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-accent-foreground transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
             disabled={isBusy || code.trim().length < MIN_CODE_LENGTH}
           >
             {status === "verifying" ? "Verifying..." : "Verify & sign in"}
@@ -188,7 +188,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
   return (
     <div>
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-black">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
           <Zap className="h-5 w-5 fill-current" />
         </span>
         <span className="text-xl font-bold tracking-tight text-foreground">
@@ -224,7 +224,7 @@ export function LoginForm({ initialError = null }: LoginFormProps) {
         </div>
         <button
           type="submit"
-          className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
+          className="w-full rounded-xl bg-accent px-4 py-4 text-xs font-bold uppercase tracking-wider text-accent-foreground transition-colors hover:bg-accent/90 disabled:pointer-events-none disabled:opacity-50"
           disabled={isBusy}
         >
           {isBusy ? "Sending..." : "Send code"}
