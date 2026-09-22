@@ -7,6 +7,9 @@
 // workout_id instead of by completion_id, week 1's WU/W1/W2 made every
 // 'failure' block look permanently complete, findLastIncompleteBlock returned
 // -1, and the logger page auto-wrote completed_at and locked the user out.
+// D16 (2026-09-22) further hardens this: 'failure' blocks no longer auto-complete
+// by set count at all (manual completion only), so the count-based lockout path
+// is now structurally impossible regardless of which set_logs are loaded.
 import {
   findLastIncompleteBlock,
   getSelectedExerciseIdForBlock,
@@ -64,7 +67,10 @@ function block(
   };
 }
 
-// --- isBlockComplete: 'failure' blocks derive completion from set count ---
+// --- isBlockComplete: ALL blocks complete manually via completedBlockIds ---
+// (D16, 2026-09-22: working_sets is a SOFT TARGET, not an auto-complete cap —
+// a 'failure' block no longer auto-completes by set count; it completes only
+// when the user taps "Complete block", like free-form/mobility blocks.)
 
 check(
   "failure block with no sets is incomplete",
@@ -73,10 +79,19 @@ check(
 );
 
 check(
-  "failure block with 3 distinct set indexes is complete",
+  "failure block with target sets logged is STILL incomplete until manually completed",
   isBlockComplete(
     block({ block_id: "block-1", setLogs: [setLog(1), setLog(2), setLog(3)] }),
     [],
+  ),
+  false,
+);
+
+check(
+  "failure block is complete once its id is in completedBlockIds",
+  isBlockComplete(
+    block({ block_id: "block-1", setLogs: [setLog(1), setLog(2), setLog(3)] }),
+    ["block-1"],
   ),
   true,
 );
@@ -90,9 +105,10 @@ check(
   false,
 );
 
-// Two exercises logged at the same set_index must not add up to "3 sets".
+// Completion is count-independent now: no number of set logs completes a block
+// on its own (only completedBlockIds does).
 check(
-  "duplicate set indexes do not count toward the 3-set threshold",
+  "set count never drives completion (count-independent, manual model)",
   isBlockComplete(
     block({
       block_id: "block-1",
@@ -144,17 +160,20 @@ check(
   0,
 );
 
+// D16 strengthens the week-2 guarantee: a block carrying a prior session's sets
+// is NOT auto-complete (completion is manual), so it reports as the active block
+// (index 0), never -1 → the auto-complete lockout is now structurally impossible.
 check(
-  "week-2 regression: a block carrying a PRIOR session's 3 sets reports -1",
+  "week-2: a block carrying a PRIOR session's sets is NOT auto-complete → still incomplete (0), no lockout",
   findLastIncompleteBlock(
     [block({ block_id: "block-1", setLogs: [setLog(1), setLog(2), setLog(3)] })],
     [],
   ),
-  -1,
+  0,
 );
 
 check(
-  "advances past a genuinely finished block within one session",
+  "advances past a manually-completed block within one session",
   findLastIncompleteBlock(
     [
       block({
@@ -163,7 +182,7 @@ check(
       }),
       block({ block_id: "block-2", display_order: 2 }),
     ],
-    [],
+    ["block-1"],
   ),
   1,
 );
