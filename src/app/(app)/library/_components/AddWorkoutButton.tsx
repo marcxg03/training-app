@@ -13,7 +13,7 @@ export function AddWorkoutButton({ className }: AddWorkoutButtonProps) {
     <Link
       href={workoutCreateHref()}
       className={cn(
-        "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-black transition-colors hover:bg-accent/90",
+        "flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3.5 text-[13px] font-bold uppercase tracking-[0.08em] text-accent-foreground transition-colors hover:bg-accent/90",
         className,
       )}
     >

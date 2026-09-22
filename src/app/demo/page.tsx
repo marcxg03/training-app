@@ -73,7 +73,7 @@ export default function DemoPage() {
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-10">
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent text-black">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accent-foreground">
             ⚡
           </div>
           <h1 className="text-lg font-semibold">Training — Mono Reskin Demo</h1>
@@ -120,7 +120,7 @@ export default function DemoPage() {
             readOnly
           />
           <div className="flex items-center gap-2 text-sm text-subtle">
-            <span className="flex h-5 w-5 items-center justify-center rounded border border-border bg-accent text-xs text-black">
+            <span className="flex h-5 w-5 items-center justify-center rounded border border-border bg-accent text-xs text-accent-foreground">
               ✓
             </span>
             Taken to failure
@@ -130,7 +130,7 @@ export default function DemoPage() {
 
       <Section title="Badges">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-accent px-2 py-0.5 font-semibold text-black">
+          <span className="rounded-full bg-accent px-2 py-0.5 font-semibold text-accent-foreground">
             PR ▲
           </span>
           <span className="rounded-full bg-success/15 px-2 py-0.5 font-medium text-success">
@@ -151,12 +151,17 @@ export default function DemoPage() {
         </div>
       </Section>
 
-      <Section title="Set scheme (B1 — adjustable)">
+      <Section title="Set scheme — warm-up + working sets">
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Every set is a warm-up or a working set. Working sets default to 2,
+          but you can add a 3rd or 4th any day — the count is a target, not a
+          cap.
+        </p>
         <div className="flex flex-col gap-2">
           {[
-            { label: "WU", detail: "warm-up" },
-            { label: "W1", detail: "working" },
-            { label: "W2 · to failure", detail: "2 × failure" },
+            { label: "Warm-up", detail: "optional" },
+            { label: "Working 1", detail: "target" },
+            { label: "Working 2", detail: "target" },
           ].map((row) => (
             <div
               key={row.label}
@@ -173,6 +178,9 @@ export default function DemoPage() {
               </span>
             </div>
           ))}
+          <button className="rounded-md border border-dashed border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted">
+            + Add working set
+          </button>
         </div>
       </Section>
 

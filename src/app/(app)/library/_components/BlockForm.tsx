@@ -221,7 +221,7 @@ export function BlockForm({
                               className={cn(
                                 "flex-1 rounded-[9px] px-3 py-2.5 text-center text-xs font-semibold tracking-[0.04em] transition-colors",
                                 isActive
-                                  ? "bg-accent text-black"
+                                  ? "bg-accent text-accent-foreground"
                                   : "text-muted-foreground hover:text-foreground",
                               )}
                             >

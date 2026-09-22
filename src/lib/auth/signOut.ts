@@ -51,7 +51,7 @@ async function showQueuedSignOutDialog(queueLength: number) {
     const confirmButton = document.createElement("button");
     confirmButton.type = "button";
     confirmButton.className =
-      "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-accent/90";
+      "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90";
     confirmButton.textContent = "Sign out anyway";
 
     footer.append(cancelButton, confirmButton);

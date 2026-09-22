@@ -177,7 +177,7 @@ export function AddExerciseSheet({
               aria-pressed={mode === tab.value}
               className={
                 mode === tab.value
-                  ? "flex-1 rounded-lg bg-accent px-3 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-black"
+                  ? "flex-1 rounded-lg bg-accent px-3 py-2 text-center font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-accent-foreground"
                   : "flex-1 rounded-lg border border-border px-3 py-2 text-center font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle"
               }
             >

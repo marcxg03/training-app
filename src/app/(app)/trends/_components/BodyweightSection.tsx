@@ -115,7 +115,7 @@ export function BodyweightSection({
             <button
               type="submit"
               disabled={isPending || value.trim() === ""}
-              className="text-accent-foreground h-11 shrink-0 rounded-[var(--radius)] bg-accent px-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition-opacity disabled:opacity-50"
+              className="h-11 shrink-0 rounded-[var(--radius)] bg-accent px-4 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent-foreground transition-opacity disabled:opacity-50"
             >
               {isPending ? "Saving…" : "Log"}
             </button>

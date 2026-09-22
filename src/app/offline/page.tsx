@@ -33,7 +33,7 @@ export default function OfflinePage() {
 
       <Link
         href="/today"
-        className="mt-3.5 w-full max-w-sm rounded-xl bg-accent px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-black transition-colors hover:bg-accent/90"
+        className="mt-3.5 w-full max-w-sm rounded-xl bg-accent px-4 py-3.5 text-center text-xs font-bold uppercase tracking-wider text-accent-foreground transition-colors hover:bg-accent/90"
       >
         Go to Today
       </Link>
