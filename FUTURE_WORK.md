@@ -17,3 +17,7 @@
 
 8. **Minimalist-mono reskin** — design-led `frontend-engineer` pass (D3/D7). The BlockForm scheme inputs B1 added are functional/unstyled and want the reskin's treatment.
 9. **Creator-Program community layer** (B4) — held to post-Nov-16 (D1/D2/D7). Spec is REDESIGN_BRIEF §0 §8-REVISED.
+
+## Feature requests (folded in for later)
+
+10. **Persist the AI-estimator photo + description with the logged meal.** When a meal is logged via the AI calorie estimator (photo capture OR text description → macro pre-fill, `src/app/api/estimate-macros/route.ts`), currently only the resulting macros are saved. Also save the **source photo** (→ Supabase Storage, store the path/URL on the meal) and the **description text** (new column) on the `meal_entries` row, so a logged meal keeps its evidence — viewable/editable later and useful for re-estimation. Touches: `meal_entries` schema (add `photo_path text` + `source_description text`, additive migration), the log-meal mutation (`src/lib/nutrition/mutations.ts` logMeal/updateMeal), the log-meal sheet UI (pass the photo/description through), and a Storage bucket + RLS for the images. Requested by Marcus 2026-09-22.
