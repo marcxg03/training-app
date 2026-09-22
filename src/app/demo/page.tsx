@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 
 /**
@@ -69,6 +71,11 @@ function MacroBar({
 }
 
 export default function DemoPage() {
+  // Dev-only design harness — never expose it on the production deploy.
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 py-10">
       <header className="flex flex-col gap-1">
