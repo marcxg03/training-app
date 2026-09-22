@@ -110,16 +110,31 @@ export function isLastSchemeSet(
   return savedIndex === blockSetCount(block);
 }
 
-/** The label for a completed set at `setIndex` under a block's scheme, with a
- * `Set N` fallback for any index outside the scheme (e.g. a legacy stray). */
+/** The label for a completed set at `setIndex` under a block's scheme.
+ *
+ * D16: `working_sets` is a soft target, so a user may log working sets BEYOND
+ * the scheme's target slots ("+ Add working set"). Those added sets continue the
+ * working-set numbering — an index past `warmupSets + workingSets` labels
+ * `W{setIndex - warmupSets}` (W3, W4…). The `Set N` fallback is reserved for a
+ * truly invalid index (<= 0). */
 export function getSetLabel(
   block: Pick<LoggerBlock, "warmupSets" | "workingSets" | "toFailure">,
   setIndex: number,
 ) {
-  return (
-    getSetSchemeSteps(block).find((step) => step.setIndex === setIndex)
-      ?.label ?? `Set ${setIndex}`
+  const targetStep = getSetSchemeSteps(block).find(
+    (step) => step.setIndex === setIndex,
   );
+
+  if (targetStep) {
+    return targetStep.label;
+  }
+
+  // An index beyond the warm-ups is an added working set — keep counting Ws.
+  if (setIndex > block.warmupSets) {
+    return `W${setIndex - block.warmupSets}`;
+  }
+
+  return `Set ${setIndex}`;
 }
 
 export type LoggerWorkout = {
@@ -176,16 +191,12 @@ export function isBlockComplete(
   block: LoggerBlock,
   completedBlockIds: readonly string[],
 ) {
-  // block_type === "failure" = "uses the structured set-scheme protocol" (see
-  // LoggerBlock.block_type). The separate `toFailure` column decides whether the
-  // last working set is taken to failure; it does not gate completion here.
-  if (block.block_type === "failure") {
-    return (
-      new Set(block.setLogs.map((setLog) => setLog.set_index)).size >=
-      blockSetCount(block)
-    );
-  }
-
+  // D16 (2026-09-22): `working_sets` is a SOFT TARGET, not an auto-complete cap.
+  // A scheme block ('failure') NO LONGER auto-completes when the logged set count
+  // reaches warmupSets + workingSets — the user can always add more working sets
+  // (W3, W4…). Every block, scheme or free-form, completes ONLY when its id is in
+  // completedBlockIds via the manual "Complete block" / "Done with this block"
+  // action. `toFailure` remains a per-set concern, never a completion trigger.
   return completedBlockIds.includes(block.block_id);
 }
 

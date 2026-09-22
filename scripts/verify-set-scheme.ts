@@ -1,17 +1,24 @@
-// Fixture tests for the adjustable per-block set-scheme (Slice B1).
+// Fixture tests for the adjustable per-block set-scheme (Slice B1 + D16 revision).
 // Run with:
 //   pnpm exec tsx scripts/verify-set-scheme.ts
 // Exits non-zero on any failure. No test framework needed.
 //
 // The set scheme is three additive columns on `blocks`
 // (warmup_sets / working_sets / to_failure, migration 025) projected onto
-// LoggerBlock as warmupSets / workingSets / toFailure. isBlockComplete must
-// auto-complete a 'failure' block at warmupSets + workingSets distinct set
-// indexes — NOT the hardcoded 3 it used before this slice.
+// LoggerBlock as warmupSets / workingSets / toFailure.
 //
-// WRITTEN TO FAIL FIRST: against the pre-slice code (threshold hardcoded to 3)
-// the {warmup:0, working:2, to_failure:true} case with 2 sets returns false
-// where it must return true.
+// D16 (2026-09-22): `working_sets` is a SOFT TARGET, not a hard auto-complete
+// cap. isBlockComplete NO LONGER auto-completes a 'failure' block by set count —
+// a scheme block completes ONLY when its block_id is in completedBlockIds
+// (manual "Complete block" tap), exactly like the non-failure free-form path.
+// getSetSchemeSteps still expands the TARGET slots (warmups + target working);
+// getSetLabel continues the working-set numbering for ADDED sets beyond the
+// target (W3, W4…), keeping `Set N` only for truly invalid indexes.
+//
+// WRITTEN TO FAIL FIRST: against the pre-D16 code (isBlockComplete auto-completes
+// a 'failure' block at warmupSets+workingSets distinct indexes) the cases below
+// that log the full target count with an EMPTY completedBlockIds return true
+// where the new model requires false.
 import {
   getSetLabel,
   getSetSchemeSteps,
@@ -70,10 +77,12 @@ function block(
   };
 }
 
-// --- (a) Legacy default block {warmup:1, working:2} → threshold 3 ---
+// --- (a) D16: a 'failure' block is MANUAL-complete, count-independent ---
+// The set count NEVER auto-completes the block. Only completedBlockIds membership
+// does. These are the RED assertions: pre-D16 code returns true at the count.
 
 check(
-  "legacy default {1,2}: 2 distinct set indexes is INCOMPLETE",
+  "failure {1,2}: 2 logged sets, not in completedBlockIds → INCOMPLETE",
   isBlockComplete(
     block({ block_id: "block-1", setLogs: [setLog(1), setLog(2)] }),
     [],
@@ -82,35 +91,32 @@ check(
 );
 
 check(
-  "legacy default {1,2}: 3 distinct set indexes is COMPLETE",
+  "failure {1,2}: 3 logged sets (target met) but NOT in completedBlockIds → INCOMPLETE",
   isBlockComplete(
     block({ block_id: "block-1", setLogs: [setLog(1), setLog(2), setLog(3)] }),
-    [],
-  ),
-  true,
-);
-
-// --- (b) 2 working sets to failure {warmup:0, working:2} → threshold 2 ---
-// This is the RED assertion: pre-slice code hardcodes >= 3, so 2 sets returns
-// false where the scheme requires true.
-
-check(
-  "{0,2,failure}: 1 distinct set index is INCOMPLETE",
-  isBlockComplete(
-    block({
-      block_id: "block-1",
-      warmupSets: 0,
-      workingSets: 2,
-      toFailure: true,
-      setLogs: [setLog(1)],
-    }),
     [],
   ),
   false,
 );
 
 check(
-  "{0,2,failure}: 2 distinct set indexes is COMPLETE",
+  "failure {1,2}: 3 logged sets AND in completedBlockIds → COMPLETE",
+  isBlockComplete(
+    block({ block_id: "block-1", setLogs: [setLog(1), setLog(2), setLog(3)] }),
+    ["block-1"],
+  ),
+  true,
+);
+
+check(
+  "failure {1,2}: ZERO logged sets but in completedBlockIds → COMPLETE (manual)",
+  isBlockComplete(block({ block_id: "block-1", setLogs: [] }), ["block-1"]),
+  true,
+);
+
+// {0,2,failure}: even the exact target count does not auto-complete.
+check(
+  "failure {0,2}: 2 logged sets (target met), empty completedBlockIds → INCOMPLETE",
   isBlockComplete(
     block({
       block_id: "block-1",
@@ -121,17 +127,33 @@ check(
     }),
     [],
   ),
-  true,
+  false,
 );
 
-// A wider scheme {2,3} → threshold 5, to prove it is not fixed at 2 or 3.
 check(
-  "{2,3}: 4 distinct set indexes is INCOMPLETE",
+  "failure {0,2}: 2 logged sets AND in completedBlockIds → COMPLETE",
   isBlockComplete(
     block({
       block_id: "block-1",
-      warmupSets: 2,
-      workingSets: 3,
+      warmupSets: 0,
+      workingSets: 2,
+      toFailure: true,
+      setLogs: [setLog(1), setLog(2)],
+    }),
+    ["block-1"],
+  ),
+  true,
+);
+
+// Added working sets BEYOND the target still don't auto-complete.
+check(
+  "failure {0,2}: 4 logged sets (2 over target), empty completedBlockIds → INCOMPLETE",
+  isBlockComplete(
+    block({
+      block_id: "block-1",
+      warmupSets: 0,
+      workingSets: 2,
+      toFailure: true,
       setLogs: [setLog(1), setLog(2), setLog(3), setLog(4)],
     }),
     [],
@@ -139,40 +161,10 @@ check(
   false,
 );
 
-check(
-  "{2,3}: 5 distinct set indexes is COMPLETE",
-  isBlockComplete(
-    block({
-      block_id: "block-1",
-      warmupSets: 2,
-      workingSets: 3,
-      setLogs: [setLog(1), setLog(2), setLog(3), setLog(4), setLog(5)],
-    }),
-    [],
-  ),
-  true,
-);
-
-// Duplicate set indexes (two exercises at the same slot) still count once.
-check(
-  "{0,2,failure}: duplicate set indexes do not double-count",
-  isBlockComplete(
-    block({
-      block_id: "block-1",
-      warmupSets: 0,
-      workingSets: 2,
-      toFailure: true,
-      setLogs: [setLog(1, "ex-1"), setLog(1, "ex-2")],
-    }),
-    [],
-  ),
-  false,
-);
-
-// --- (c) Non-failure block: explicit-complete path, ignores the scheme ---
+// --- (b) Non-failure block: explicit-complete path (unchanged by D16) ---
 
 check(
-  "mobility block ignores set count and gates on completedBlockIds (incomplete)",
+  "mobility block gates on completedBlockIds (incomplete despite logged sets)",
   isBlockComplete(
     block({
       block_id: "block-1",
@@ -195,10 +187,18 @@ check(
   true,
 );
 
-// --- (d) getSetSchemeSteps: the failure-checkbox gate (guards the D11 regression) ---
-// The last step carries showFailureCheckbox iff the block is toFailure. This is
-// the pair the migration-025 backfill exists to protect: a legacy failure block
-// must land on toFailure:true so its last set still renders the toggle.
+// D16 parity: failure and non-failure blocks now share the SAME completion rule.
+check(
+  "failure and mobility blocks complete identically on completedBlockIds membership",
+  [
+    isBlockComplete(block({ block_id: "b", block_type: "failure" }), ["b"]),
+    isBlockComplete(block({ block_id: "b", block_type: "mobility" }), ["b"]),
+  ],
+  [true, true],
+);
+
+// --- (c) getSetSchemeSteps: the failure-checkbox gate (guards the D11 regression) ---
+// The last TARGET step carries showFailureCheckbox iff the block is toFailure.
 
 check(
   "{1,2,toFailure:true}: last step shows the failure checkbox",
@@ -214,34 +214,69 @@ check(
   false,
 );
 
-// --- (e) getSetSchemeSteps labels: warmup=0 must not emit a WU slot ---
+// --- (d) getSetSchemeSteps labels the TARGET slots (warmup=0 emits no WU) ---
 
 check(
-  "{0,2,failure}: labels are the two working sets only (no WU)",
+  "{0,2,failure}: target labels are the two working sets only (no WU)",
   getSetSchemeSteps({ warmupSets: 0, workingSets: 2, toFailure: true }).map(
     (step) => step.label,
   ),
   ["W1", "W2"],
 );
 
-// --- (f) getSetLabel: out-of-scheme index falls back to `Set N` ---
-
 check(
-  "{0,2}: set index 3 is outside the 2-set scheme → `Set 3` fallback",
-  getSetLabel({ warmupSets: 0, workingSets: 2, toFailure: false }, 3),
-  "Set 3",
+  "{1,2}: target labels are WU + W1 + W2",
+  getSetSchemeSteps({ warmupSets: 1, workingSets: 2, toFailure: false }).map(
+    (step) => step.label,
+  ),
+  ["WU", "W1", "W2"],
 );
 
-// --- (g) isLastSchemeSet: the completion trigger, both branches for {0,2} ---
+// --- (e) D16: getSetLabel continues working-set numbering PAST the target ---
+// Added working sets (index beyond warmup+working) label W3, W4… — NOT `Set N`.
 
 check(
-  "{0,2}: saved index 2 IS the last scheme set (fires completion)",
+  "{0,2}: added set index 3 (target=2) labels W3, not `Set 3`",
+  getSetLabel({ warmupSets: 0, workingSets: 2, toFailure: false }, 3),
+  "W3",
+);
+
+check(
+  "{0,2}: added set index 4 labels W4 (sequence continues)",
+  getSetLabel({ warmupSets: 0, workingSets: 2, toFailure: false }, 4),
+  "W4",
+);
+
+check(
+  "{1,2}: added set index 4 (after WU+W1+W2) labels W3",
+  getSetLabel({ warmupSets: 1, workingSets: 2, toFailure: false }, 4),
+  "W3",
+);
+
+check(
+  "{1,2}: in-scheme index 3 still labels W2 (target slot)",
+  getSetLabel({ warmupSets: 1, workingSets: 2, toFailure: false }, 3),
+  "W2",
+);
+
+// `Set N` fallback survives only for a truly invalid index (<= 0).
+check(
+  "{0,2}: invalid index 0 falls back to `Set 0`",
+  getSetLabel({ warmupSets: 0, workingSets: 2, toFailure: false }, 0),
+  "Set 0",
+);
+
+// --- (f) isLastSchemeSet: still identifies the final TARGET slot ---
+// (No longer a completion trigger under D16, but remains a valid scheme predicate.)
+
+check(
+  "{0,2}: index 2 IS the last target scheme set",
   isLastSchemeSet({ warmupSets: 0, workingSets: 2 }, 2),
   true,
 );
 
 check(
-  "{0,2}: saved index 1 is NOT the last scheme set",
+  "{0,2}: index 1 is NOT the last target scheme set",
   isLastSchemeSet({ warmupSets: 0, workingSets: 2 }, 1),
   false,
 );

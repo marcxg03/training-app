@@ -465,18 +465,9 @@ export function LoggerShell({
                             setLog,
                           )
                         }
-                        onComplete={() => {
-                          void handleFreeFormComplete(block.block_id).catch(
-                            (error: unknown) => {
-                              const message =
-                                error instanceof Error
-                                  ? error.message
-                                  : "Could not advance to the next block.";
-
-                              setActionError(message);
-                            },
-                          );
-                        }}
+                        onComplete={() =>
+                          handleFreeFormComplete(block.block_id)
+                        }
                       />
                     ) : (
                       <FreeFormProtocol
