@@ -22,6 +22,7 @@
 import {
   getSetLabel,
   getSetSchemeSteps,
+  hasLoggedWorkingSet,
   isBlockComplete,
   isLastSchemeSet,
   type LoggerBlock,
@@ -278,6 +279,30 @@ check(
 check(
   "{0,2}: index 1 is NOT the last target scheme set",
   isLastSchemeSet({ warmupSets: 0, workingSets: 2 }, 1),
+  false,
+);
+
+// --- hasLoggedWorkingSet: gates "Complete block" (soft target DOWNWARD) ---
+check(
+  "no working set yet (only warm-up logged) → cannot complete early",
+  hasLoggedWorkingSet(block({ block_id: "b", warmupSets: 1, setLogs: [setLog(1)] })),
+  false,
+);
+check(
+  "1 of 2 working sets logged (WU + W1) → CAN complete early (weak day)",
+  hasLoggedWorkingSet(
+    block({ block_id: "b", warmupSets: 1, setLogs: [setLog(1), setLog(2)] }),
+  ),
+  true,
+);
+check(
+  "warmup=0: first logged set is a working set → can complete",
+  hasLoggedWorkingSet(block({ block_id: "b", warmupSets: 0, setLogs: [setLog(1)] })),
+  true,
+);
+check(
+  "no sets logged at all → cannot complete",
+  hasLoggedWorkingSet(block({ block_id: "b", warmupSets: 1, setLogs: [] })),
   false,
 );
 

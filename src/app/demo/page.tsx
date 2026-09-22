@@ -181,6 +181,9 @@ export default function DemoPage() {
           <button className="rounded-md border border-dashed border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted">
             + Add working set
           </button>
+          <Button size="sm" className="mt-1 w-full uppercase tracking-wider">
+            Complete block
+          </Button>
         </div>
       </Section>
 

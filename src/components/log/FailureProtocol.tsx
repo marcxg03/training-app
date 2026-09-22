@@ -11,6 +11,7 @@ import type {
 import {
   getSetLabel,
   getSetSchemeSteps,
+  hasLoggedWorkingSet,
 } from "@/lib/methodology/workout-state";
 import { Button } from "@/components/ui/button";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
@@ -144,49 +145,51 @@ export function FailureProtocol({
         />
       ))}
 
-      {/* Once every target slot is logged: offer another working set and the
-          manual completion action. The block NEVER auto-locks at the count. */}
-      {targetComplete ? (
-        <>
-          {isAddingSet ? (
-            <SetEntryForm
-              blockId={block.block_id}
-              completionId={completionId}
-              exercise={exercise}
-              label={getSetLabel(block, nextAddedIndex)}
-              workoutId={workoutId}
-              setIndex={nextAddedIndex}
-              showFailureCheckbox={block.toFailure}
-              defaultFailureChecked={block.toFailure}
-              userId={userId}
-              onSaved={(setLog) => {
-                onSetSaved(setLog);
-                setIsAddingSet(false);
-              }}
-            />
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsAddingSet(true)}
-              className="w-full gap-2 uppercase tracking-[0.06em]"
-            >
-              <Plus className="h-4 w-4" />
-              Add working set
-            </Button>
-          )}
-
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-
+      {/* Once every target slot is logged, offer another working set (W3, W4…).
+          The block NEVER auto-locks at the count. */}
+      {targetComplete &&
+        (isAddingSet ? (
+          <SetEntryForm
+            blockId={block.block_id}
+            completionId={completionId}
+            exercise={exercise}
+            label={getSetLabel(block, nextAddedIndex)}
+            workoutId={workoutId}
+            setIndex={nextAddedIndex}
+            showFailureCheckbox={block.toFailure}
+            defaultFailureChecked={block.toFailure}
+            userId={userId}
+            onSaved={(setLog) => {
+              onSetSaved(setLog);
+              setIsAddingSet(false);
+            }}
+          />
+        ) : (
           <Button
             type="button"
-            onClick={handleComplete}
-            disabled={isCompleting}
-            className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
+            variant="outline"
+            onClick={() => setIsAddingSet(true)}
+            className="w-full gap-2 uppercase tracking-[0.06em]"
           >
-            {isCompleting ? "Saving…" : "Complete block"}
+            <Plus className="h-4 w-4" />
+            Add working set
           </Button>
-        </>
+        ))}
+
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+
+      {/* "Complete block" is reachable as soon as ≥1 working set is logged, so a
+          weak day (1 of 2) can finish and advance — the target is soft BOTH ways,
+          not just upward. Never gated on the full target being met. */}
+      {hasLoggedWorkingSet(block) ? (
+        <Button
+          type="button"
+          onClick={handleComplete}
+          disabled={isCompleting}
+          className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
+        >
+          {isCompleting ? "Saving…" : "Complete block"}
+        </Button>
       ) : null}
     </div>
   );

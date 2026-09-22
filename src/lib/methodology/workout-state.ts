@@ -187,6 +187,16 @@ export function getSelectedExerciseIdForBlock(block: LoggerBlock) {
   return block.setLogs[0]?.exercise_id ?? null;
 }
 
+/** True once at least one WORKING set (a set past the warm-ups) is logged. This
+ * gates the "Complete block" action so a block can be finished EARLY — stop at 1
+ * of 2 working sets on a weak day. The target (working_sets) is soft both ways:
+ * add more above it (getSetSchemeSteps + add-set), or finish below it here. */
+export function hasLoggedWorkingSet(
+  block: Pick<LoggerBlock, "warmupSets" | "setLogs">,
+) {
+  return block.setLogs.some((setLog) => setLog.set_index > block.warmupSets);
+}
+
 export function isBlockComplete(
   block: LoggerBlock,
   completedBlockIds: readonly string[],
