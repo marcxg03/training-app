@@ -22,11 +22,14 @@ import {
 import { upsertTargets } from "@/lib/nutrition/mutations";
 import type { NutritionTargets } from "@/lib/nutrition/projections";
 import { targetsSchema, type TargetsFormValues } from "@/lib/nutrition/schemas";
+import { updateGoalMode } from "@/lib/settings/mutations";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils/cn";
 
 type TargetsFormProps = {
   userId: string;
   initialValues: NutritionTargets | null;
+  /** The goal mode persisted on the profile — the saved baseline, not state. */
   goalMode: GoalMode;
 };
 
@@ -112,9 +115,27 @@ export function TargetsForm({
     defaultValues,
     mode: "onBlur",
   });
+
+  // Goal mode is a profile field, not a targets field, so it rides alongside the
+  // form rather than inside it — but it is still part of THIS screen's unsaved
+  // state, so it must feed the dirty check or the discard guard would let a
+  // pending mode change get dropped silently.
+  const [selectedGoalMode, setSelectedGoalMode] = useState<GoalMode>(goalMode);
+  const goalModeDirty = selectedGoalMode !== goalMode;
+
   const { discardDialog, requestConfirmation } = useDiscardChangesGuard({
-    isDirty: form.formState.isDirty,
+    isDirty: form.formState.isDirty || goalModeDirty,
   });
+
+  const handleGoalModeChange = (next: GoalMode) => {
+    setSelectedGoalMode(next);
+    // Nothing saved yet and the numbers are still the untouched prefill, so
+    // re-seed them to the new mode's defaults — otherwise the banner would
+    // promise one mode's numbers while the fields showed another's.
+    if (seeded && !form.formState.isDirty) {
+      form.reset(goalModeDefaultTargets(next));
+    }
+  };
 
   const watched = useWatch({ control: form.control });
   const consistency = useMemo(() => {
@@ -140,6 +161,24 @@ export function TargetsForm({
     if (!result.ok) {
       setSubmitError(result.error);
       return;
+    }
+
+    // Two tables, so two writes. Targets go first: if the goal-mode write then
+    // fails the numbers are still saved and we say exactly what didn't persist,
+    // rather than silently reporting success.
+    if (goalModeDirty) {
+      const modeResult = await updateGoalMode(
+        supabase,
+        userId,
+        selectedGoalMode,
+      );
+
+      if (!modeResult.ok) {
+        setSubmitError(
+          `Targets saved, but goal mode didn't: ${modeResult.error}`,
+        );
+        return;
+      }
     }
 
     router.push("/nutrition");
@@ -170,8 +209,8 @@ export function TargetsForm({
 
         {seeded ? (
           <p className="text-sm text-muted-foreground">
-            Pre-filled with {goalMode.replace("_", " ")} defaults — adjust to
-            your numbers and save.
+            Pre-filled with {selectedGoalMode.replace("_", " ")} defaults —
+            adjust to your numbers and save.
           </p>
         ) : null}
 
@@ -186,21 +225,36 @@ export function TargetsForm({
           >
             <div className="space-y-2">
               <p className="eyebrow tracking-[0.16em]">Goal mode</p>
-              <div className="flex gap-1.5 rounded-xl border border-border bg-input p-1.5">
-                {GOAL_MODES.map((mode) => (
-                  <span
-                    key={mode.value}
-                    aria-current={mode.value === goalMode ? "true" : undefined}
-                    className={
-                      mode.value === goalMode
-                        ? "flex-1 rounded-lg bg-accent py-2.5 text-center font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-accent-foreground"
-                        : "flex-1 rounded-lg py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
-                    }
-                  >
-                    {mode.label}
-                  </span>
-                ))}
+              <div
+                role="group"
+                aria-label="Goal mode"
+                className="flex gap-1.5 rounded-xl border border-border bg-input p-1.5"
+              >
+                {GOAL_MODES.map((mode) => {
+                  const selected = mode.value === selectedGoalMode;
+                  return (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => handleGoalModeChange(mode.value)}
+                      aria-pressed={selected}
+                      className={cn(
+                        "min-h-11 flex-1 rounded-lg py-2.5 text-center font-mono text-[11px] uppercase tracking-[0.04em] transition-colors",
+                        selected
+                          ? "bg-accent font-bold text-accent-foreground"
+                          : "font-semibold text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {mode.label}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="font-mono text-[11px] tracking-[0.04em] text-faint">
+                {goalModeDirty
+                  ? "Save to apply the new goal mode."
+                  : "Sets the day-type framework on Nutrition."}
+              </p>
             </div>
 
             <div className="space-y-2">

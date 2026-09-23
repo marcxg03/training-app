@@ -4,6 +4,7 @@ import { SessionRow } from "@/components/shared/SessionRow";
 import { workoutDetailHref } from "@/lib/history/crossLinks";
 import type { RecentTimelineItem } from "@/lib/progress/overview";
 import type { AllWorkoutsRow, PRTimelineRow } from "@/lib/history/projections";
+import { PR_TYPE_STYLE } from "@/lib/methodology/pr-colors";
 import { formatWeight } from "@/lib/units";
 
 // Relative "Today" / "Yesterday" / weekday / short-date label, in the app tz.
@@ -51,7 +52,7 @@ function prValue(row: PRTimelineRow): string {
 }
 
 function prLabel(row: PRTimelineRow): string {
-  return row.pr_type === "in_range_rep" ? "rep PR" : "weight PR";
+  return PR_TYPE_STYLE[row.pr_type].inlineLabel;
 }
 
 function sessionName(row: AllWorkoutsRow): string {
@@ -86,6 +87,9 @@ export function RecentTimeline({
                 key={`pr:${item.pr.pr_id}`}
                 icon="▲"
                 iconVariant="accent"
+                // Overrides the accent square so the marker carries the PR
+                // type's own color (blue = weight, violet = rep).
+                iconClassName={PR_TYPE_STYLE[item.pr.pr_type].pill}
                 title={item.pr.exercise_name}
                 subtitle={`${prValue(item.pr)} — ${prLabel(item.pr)}`}
                 trailing={

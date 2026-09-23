@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, Sparkles, Trash2 } from "lucide-react";
+import { Camera, ImageIcon, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -40,15 +40,12 @@ import { mealSchema, type MealFormValues } from "@/lib/nutrition/schemas";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Which of the 3-way log entry paths opened the sheet. On open the sheet nudges
- * the right control: `describe` focuses the description, `manual` focuses the
- * name so the user goes straight to entering P/C/F by hand (calories
- * auto-derive — no AI step). `snap` does NOT auto-open the picker (iOS blocks
- * non-gesture file pickers) — the visible Photo button is the affordance.
- * Undefined = editing an existing meal (no auto-action).
+ * The single meal-entry surface. All three input paths live in here — photo,
+ * description + AI estimate, and manual P/C/F — and the user picks whichever
+ * one they want once the sheet is open. Nutrition therefore shows ONE "Log
+ * meal" button rather than three pre-committing entry buttons (Marcus,
+ * 2026-09-23); there is deliberately no `intent` nudge or auto-focus.
  */
-export type MealLogIntent = "snap" | "describe" | "manual";
-
 type LogMealSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,8 +54,6 @@ type LogMealSheetProps = {
   meal?: MealEntry;
   /** Whether the Claude-vision photo estimator is configured (ANTHROPIC_API_KEY). */
   aiEnabled: boolean;
-  /** The entry path that opened this sheet (drives the on-open focus nudge). */
-  intent?: MealLogIntent;
   /** When editing, a request to delete this meal (parent owns the confirm). */
   onDelete?: () => void;
 };
@@ -123,7 +118,6 @@ export function LogMealSheet({
   date,
   meal,
   aiEnabled,
-  intent,
   onDelete,
 }: LogMealSheetProps) {
   const router = useRouter();
@@ -135,6 +129,7 @@ export function LogMealSheet({
   );
   const [rangeMode, setRangeMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
@@ -161,30 +156,6 @@ export function LogMealSheet({
         : false,
     );
   }, [defaultValues, form, open, meal]);
-
-  // On-open nudge for the 3-way entry flow. A short delay lets the bottom sheet
-  // mount/animate before we move focus. `snap` does NOT auto-open the OS picker:
-  // iOS Safari blocks file pickers not opened from a direct user gesture, so the
-  // visible Photo button is the primary affordance — the user taps it. For
-  // `describe`/`manual` we only move focus if nothing in the sheet is focused
-  // yet, so we never yank focus out from under a mid-keystroke user.
-  useEffect(() => {
-    if (!open || !intent || intent === "snap") {
-      return;
-    }
-    const timer = setTimeout(() => {
-      const active = document.activeElement;
-      if (active != null && active !== document.body) {
-        return;
-      }
-      if (intent === "describe") {
-        form.setFocus("note");
-      } else {
-        form.setFocus("meal_type");
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [open, intent, form]);
 
   const watched = useWatch({ control: form.control });
   const calMin = macroCalories(
@@ -344,8 +315,9 @@ export function LogMealSheet({
           <SheetHeader>
             <SheetTitle>{isEdit ? "Edit meal" : "Log meal"}</SheetTitle>
             <SheetDescription>
-              Enter grams of protein, carbs, and fat — calories are derived
-              automatically. Toggle ranges to log an estimate.
+              {aiEnabled
+                ? "Three ways, your pick: add a photo, describe it and let AI estimate, or enter protein, carbs, and fat yourself. Calories always derive automatically."
+                : "Enter grams of protein, carbs, and fat — calories are derived automatically. Toggle ranges to log an estimate."}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
@@ -400,11 +372,23 @@ export function LogMealSheet({
 
                 {aiEnabled ? (
                   <div className="space-y-1.5">
+                    {/* Two inputs so the primary control is camera-first
+                        (Marcus's call) while an existing photo is still
+                        reachable: `capture="environment"` jumps straight to
+                        the rear camera on iOS/Android; the library input omits
+                        `capture` so the OS shows the photo picker. */}
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      className="hidden"
+                      onChange={handlePhoto}
+                    />
+                    <input
+                      ref={libraryInputRef}
+                      type="file"
+                      accept="image/*"
                       className="hidden"
                       onChange={handlePhoto}
                     />
@@ -428,6 +412,15 @@ export function LogMealSheet({
                         Description
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      disabled={estimating}
+                      onClick={() => libraryInputRef.current?.click()}
+                      className="flex min-h-11 w-full items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-subtle disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                      Choose an existing photo
+                    </button>
                     <p className="text-xs text-muted-foreground">
                       {estimating
                         ? "Estimating…"
@@ -437,6 +430,13 @@ export function LogMealSheet({
                       <p className="text-sm text-danger">{estimateError}</p>
                     ) : null}
                   </div>
+                ) : null}
+
+                {/* The third path: entering P/C/F by hand. Labelled so it reads
+                    as a real option next to the two AI controls above, not as
+                    the leftover fields they happen to fill. */}
+                {aiEnabled ? (
+                  <p className="eyebrow pt-1">Or enter macros yourself</p>
                 ) : null}
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">

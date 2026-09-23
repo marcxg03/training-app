@@ -29,6 +29,8 @@ const config: Config = {
         warning: "rgb(var(--warning) / <alpha-value>)",
         danger: "rgb(var(--danger) / <alpha-value>)",
         cardio: "rgb(var(--cardio) / <alpha-value>)",
+        "pr-weight": "rgb(var(--pr-weight) / <alpha-value>)",
+        "pr-rep": "rgb(var(--pr-rep) / <alpha-value>)",
       },
       borderRadius: {
         lg: "var(--radius)",

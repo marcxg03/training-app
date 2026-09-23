@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, Trophy } from "lucide-react";
 
+import { PR_TYPE_STYLE } from "@/lib/methodology/pr-colors";
 import type { Enums } from "@/lib/supabase/types";
 import { formatWeight } from "@/lib/units";
 import { buttonVariants } from "@/components/ui/button";
@@ -32,10 +33,6 @@ function formatCompletionDate(completedAt: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(completedAt));
-}
-
-function formatPrLabel(prType: Enums<"pr_type_enum">) {
-  return prType === "weight" ? "Weight PR" : "In-range rep PR";
 }
 
 function formatSetValue(setLog: WorkoutSummaryProps["setLogs"][number]) {
@@ -97,23 +94,18 @@ export function WorkoutSummary({
         {prs.length > 0 ? (
           <ul className="space-y-2">
             {prs.map((pr) => {
-              const isRepPr = pr.prType === "in_range_rep";
+              const style = PR_TYPE_STYLE[pr.prType];
 
               return (
                 <li
                   key={pr.prId}
                   className={cn(
                     "flex items-center gap-3 rounded-[13px] border px-3.5 py-3",
-                    isRepPr
-                      ? "border-success/30 bg-success/[0.08]"
-                      : "border-accent/40 bg-accent/10",
+                    style.surface,
                   )}
                 >
                   <Trophy
-                    className={cn(
-                      "h-5 w-5 shrink-0",
-                      isRepPr ? "text-success" : "text-accent",
-                    )}
+                    className={cn("h-5 w-5 shrink-0", style.text)}
                     fill="currentColor"
                   />
                   <div className="min-w-0 flex-1">
@@ -123,10 +115,10 @@ export function WorkoutSummary({
                     <p
                       className={cn(
                         "mt-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em]",
-                        isRepPr ? "text-success" : "text-accent",
+                        style.text,
                       )}
                     >
-                      {formatPrLabel(pr.prType)}
+                      {style.label}
                     </p>
                   </div>
                   <span className="font-mono text-[15px] font-semibold tabular-nums text-foreground">

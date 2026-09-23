@@ -1,5 +1,7 @@
+import { PR_TYPE_STYLE } from "@/lib/methodology/pr-colors";
 import type { LoggerSetLog } from "@/lib/methodology/workout-state";
 import { formatWeight } from "@/lib/units";
+import { cn } from "@/lib/utils/cn";
 
 type SetLogRowProps = {
   label: string;
@@ -8,8 +10,9 @@ type SetLogRowProps = {
 
 // Styled to match the shared SetRow / demo LoggerSetRow so logged rows and
 // target slots align in one stacked list: w-16 sans label, text-lg tabular-nums
-// value, a green ✓ on done rows, the inline PR ▲ pill. Keeps the Failure badge
-// and notes — real info the shared SetRow can't carry.
+// value, a green ✓ on done rows, the inline PR pill (blue "PR ▲" for a weight
+// PR, violet "REP PR ▲" for an in-range rep PR — see lib/methodology/pr-colors).
+// Keeps the Failure badge and notes — real info the shared SetRow can't carry.
 export function SetLogRow({ label, setLog }: SetLogRowProps) {
   const hasPr = setLog.prTypes.length > 0;
 
@@ -32,9 +35,12 @@ export function SetLogRow({ label, setLog }: SetLogRowProps) {
             setLog.prTypes.map((prType) => (
               <span
                 key={prType}
-                className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-foreground"
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                  PR_TYPE_STYLE[prType].pill,
+                )}
               >
-                PR ▲
+                {PR_TYPE_STYLE[prType].shortLabel}
               </span>
             ))
           ) : (

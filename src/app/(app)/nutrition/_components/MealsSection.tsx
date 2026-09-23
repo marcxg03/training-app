@@ -1,13 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Keyboard, PenLine } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import {
-  LogMealSheet,
-  type MealLogIntent,
-} from "@/app/(app)/nutrition/_components/LogMealSheet";
+import { LogMealSheet } from "@/app/(app)/nutrition/_components/LogMealSheet";
 import { SessionRowButton } from "@/components/shared";
 import {
   Dialog,
@@ -26,6 +23,7 @@ type MealsSectionProps = {
   meals: MealEntry[];
   userId: string;
   date: string;
+  /** Whether the Claude macro estimator is configured (ANTHROPIC_API_KEY). */
   aiEnabled: boolean;
 };
 
@@ -43,22 +41,21 @@ export function MealsSection({
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | undefined>(undefined);
-  const [intent, setIntent] = useState<MealLogIntent | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<MealEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // The 3-way log flow — each entry path opens the same sheet with its intent.
-  const openCreate = (nextIntent: MealLogIntent) => {
+  // ONE entry point (Marcus, 2026-09-23). The sheet itself already carries all
+  // three input paths — photo, description + AI estimate, manual P/C/F — so the
+  // user picks inside it rather than committing to a path out here.
+  const openCreate = () => {
     setEditing(undefined);
-    setIntent(nextIntent);
     setSheetOpen(true);
   };
 
-  // A tapped meal row opens the sheet in edit mode (no auto-action).
+  // A tapped meal row opens the same sheet in edit mode.
   const openEdit = (meal: MealEntry) => {
     setEditing(meal);
-    setIntent(undefined);
     setSheetOpen(true);
   };
 
@@ -86,7 +83,7 @@ export function MealsSection({
 
       {meals.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No meals logged yet today. Snap, describe, or log one manually below.
+          No meals logged yet today.
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
@@ -126,67 +123,31 @@ export function MealsSection({
         </div>
       )}
 
-      {/* log flow — Snap / Describe / Manual (AI paths hidden when unconfigured) */}
+      {/* ONE log button — photo / description+AI / manual all live in the sheet */}
       <div className="flex flex-col gap-2 pt-1.5">
-        {aiEnabled ? (
-          <>
-            <button
-              type="button"
-              onClick={() => openCreate("snap")}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-[12px] font-bold uppercase tracking-wider text-accent-foreground transition-opacity hover:opacity-90"
-            >
-              <Camera className="h-4 w-4" />
-              Snap a meal
-            </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => openCreate("describe")}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3.5 text-[12px] font-bold uppercase tracking-wider text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
-              >
-                <PenLine className="h-4 w-4" />
-                Describe
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreate("manual")}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-3.5 text-[12px] font-bold uppercase tracking-wider text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
-              >
-                <Keyboard className="h-4 w-4" />
-                Log manually
-              </button>
-            </div>
-            <p className="px-1 text-[11px] leading-relaxed text-faint">
-              Snap or describe → AI estimates macros for you to review. Or enter
-              P/C/F yourself — calories auto-derive.
-            </p>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => openCreate("manual")}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-[12px] font-bold uppercase tracking-wider text-accent-foreground transition-opacity hover:opacity-90"
-            >
-              <Keyboard className="h-4 w-4" />
-              Log a meal
-            </button>
-            <p className="px-1 text-[11px] leading-relaxed text-faint">
-              Enter protein, carbs, and fat — calories auto-derive.
-            </p>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={openCreate}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-[12px] font-bold uppercase tracking-wider text-accent-foreground transition-opacity hover:opacity-90"
+        >
+          <Plus className="h-4 w-4" />
+          Log meal
+        </button>
+        <p className="px-1 text-[11px] leading-relaxed text-faint">
+          {aiEnabled
+            ? "Photo, description, or enter P/C/F yourself."
+            : "Enter protein, carbs, and fat — calories auto-derive."}
+        </p>
       </div>
 
       <LogMealSheet
-        key={`${editing?.meal_id ?? "new"}-${intent ?? "edit"}`}
+        key={editing?.meal_id ?? "new"}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         userId={userId}
         date={date}
         meal={editing}
         aiEnabled={aiEnabled}
-        intent={intent}
         onDelete={
           editing
             ? () => {
