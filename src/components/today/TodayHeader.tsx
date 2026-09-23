@@ -11,6 +11,11 @@ type TodayHeaderProps = {
   date: Date;
   /** False when viewing another day of the plan (read-only). */
   isToday: boolean;
+  /**
+   * The day-type headline for today (e.g. the primary session name, "Upper").
+   * When absent (a rest day) the title falls back to "Today".
+   */
+  dayType?: string | null;
 };
 
 function formatDateEyebrow(date: Date) {
@@ -23,17 +28,23 @@ function formatDateEyebrow(date: Date) {
     .replace(",", " ·");
 }
 
-export function TodayHeader({ dayOfWeek, date, isToday }: TodayHeaderProps) {
+export function TodayHeader({
+  dayOfWeek,
+  date,
+  isToday,
+  dayType,
+}: TodayHeaderProps) {
   const dayLabel = dayOfWeekLabel(dayOfWeek);
+  const title = isToday ? (dayType ?? "Today") : dayLabel;
 
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
           {isToday ? formatDateEyebrow(date) : "Plan preview · read-only"}
         </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-          {isToday ? "Today" : dayLabel}
+        <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground">
+          {title}
         </h1>
         <p className="sr-only">{dayLabel}</p>
       </div>

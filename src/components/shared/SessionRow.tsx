@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -27,11 +25,11 @@ export interface SessionRowProps {
   /** When set, the whole row navigates (renders a Link). */
   href?: string;
   /**
-   * When set, the whole row is a button that fires this on tap — for in-place
-   * actions like opening the edit/log sheet (Today "Also today", Nutrition meal
-   * rows). Takes precedence over `href`. Requires a client parent.
+   * Quiet styling: renders the title normal-weight `text-sm` (drops
+   * `font-semibold`) for the recessed Today "Also today" list. Default false
+   * keeps the emphasized `font-semibold` title.
    */
-  onClick?: () => void;
+  quiet?: boolean;
   className?: string;
 }
 
@@ -41,9 +39,11 @@ export interface SessionRowProps {
  * One row; compose rows inside a divided list container, e.g.
  * `<div className="divide-y divide-border rounded-xl border border-border bg-card">`.
  *
- * Interaction: pass `onClick` for an in-place action (opens a sheet/modal),
- * `href` to navigate, or neither for a static row. `onClick` wins over `href`.
- * It is a client component so the `onClick` variant works directly.
+ * SERVER-safe: this row only navigates (`href` → Link) or renders statically
+ * (`<div>`), so it stays a server component and does not drag its callers across
+ * the client boundary. An in-place tap (open a sheet without navigating) — which
+ * S3 (Nutrition) will need — must NOT be added here by making this client again;
+ * add a SEPARATE small client component (e.g. `SessionRowButton`) in S3 instead.
  */
 export function SessionRow({
   title,
@@ -53,7 +53,7 @@ export function SessionRow({
   iconClassName,
   trailing,
   href,
-  onClick,
+  quiet = false,
   className,
 }: SessionRowProps) {
   const iconNode =
@@ -77,7 +77,9 @@ export function SessionRow({
     <>
       {iconNode}
       <div className="flex flex-1 flex-col text-left">
-        <span className="text-sm font-semibold">{title}</span>
+        <span className={cn("text-sm", !quiet && "font-semibold")}>
+          {title}
+        </span>
         {subtitle != null && (
           <span className="text-[11px] text-muted-foreground">{subtitle}</span>
         )}
@@ -87,14 +89,6 @@ export function SessionRow({
   );
 
   const rowClasses = cn("flex w-full items-center gap-3 px-4 py-3", className);
-
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className={rowClasses}>
-        {content}
-      </button>
-    );
-  }
 
   if (href) {
     return (

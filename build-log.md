@@ -113,10 +113,21 @@ Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being m
 # Mobile IA Rewire (redesign phase 2) — branch redesign/mobile-ia-wire
 
 ## Slice S0 — Nav + IA scaffold + owner-gate + shared primitives ✅
+
 **Built:** 5-tab BottomTabBar (Today · Plan · Nutrition · Progress · Community; Library/Trends/History removed from nav; Fuel→Nutrition). Owner-gate: `src/lib/auth/owner.ts` (`isOwner`, env `OWNER_USER_IDS`, fail-closed) + `requireOwner.ts` server guard wired into `/library/**` (route-group layout), `/plan/edit`, `/plan/[day]/edit`. 6 shared primitives in `src/components/shared/` (FocalCard, MacroRangeBar, SetRow, SegmentedControl, StatCard, SessionRow) + barrel. Placeholders: `/community` (coming-soon), `/progress` (redirect→/history until S5). Pure `isTabActive` extracted to `src/lib/nav/tabs.ts`.
 **Verified:** `verify-owner-gate.ts` (13 assertions, red→green), `verify-tab-active.ts` (12 assertions), `ralph-verify.sh` GREEN (format/typecheck/lint/build). Live-auth nav/gate Playwright deferred to Final e2e (no test-user creds mid-slice).
-**Roast (Security + BugHunter/Maintainer + implied Scope):** 
+**Roast (Security + BugHunter/Maintainer + implied Scope):**
+
 - MUST-FIX (implemented): BH-F2 nav filled stroke-only Lucide icons → removed `fill` (blob active state); BH-F1 MacroRangeBar's fill/color/band were 3 disjoint numbers w/ cosmetic 45/82 defaults → rewrote to DERIVE geometry+state from real `current`/`rangeMin`/`rangeMax` (no cosmetic band defaults); BH-F3 SessionRow had href but no onClick → made it a client component w/ `onClick` for in-place sheet taps.
 - DEFERRED (logged D24/D25 + KNOWN_ISSUES): SEC-F1/F2 owner-gate is UI-only; authoring mutations run client-side under per-user RLS so a non-owner can write their OWN silo (not a cross-user breach, not a regression, no followers this build) — data-boundary enforcement lands with the community/admin-hub build. SEC-F3 → adopt `(owner)/` route group at S6.
 - Solid (per Security): `requireOwner` uses `getUser()` (verified JWT, not spoofable session), fail-closes; library route-group coverage is structural.
-**Decisions added:** D24, D25.
+  **Decisions added:** D24, D25.
+
+## Slice S1 — Today (rebuilt + wired) ✅
+**Built:** `/today` recomposed to the /demo TodayScreen — focal black Start card (FocalCard), "Also today" quiet list (SessionRow), nutrition glance (MacroRangeBar range-fill), numbered week strip. Data flow UNCHANGED (getTodaySessions, buildMacroBars, sumMealTotals reused); presentational rewire only. New: TodayFocalCard, TodayAlsoList, types.ts. Deleted orphaned TodaySessionCard/List.
+**Verified:** ralph-verify GREEN. Live-authed visual deferred to Final e2e.
+**Roast (Bug Hunter + design-fidelity, 2 focused reviewers):**
+- MUST-FIX (fixed): BH1 nutrition glance painted authoritative color but positioned fill from range MIDPOINT → could contradict (e.g. [0,400] renders center-green); fixed by adding RANGE fill (currentMin/currentMax span) to MacroRangeBar + TodayFuelCard feeds [totalMin,totalMax]+state. BH3 completed focal lift = dead card → now Links to detail ("✓ Completed — View session"). DF1 header title text-3xl out-sized the focal card → text-xl font-bold.
+- SHOULD-FIX (fixed): BH2 2nd lift lost Start affordance → "Also today" lift rows route to /log/[id] + show completion. DF2 rows too loud → quiet one-line (SessionRow `quiet` prop, detail as faint trailing). DF3 SessionRow needlessly client → reverted to server-safe; S3's in-place tap will be a separate SessionRowButton.
+- Verified-correct: start behavior preserved (actionHref=/log/[id]); null workoutId N/A (non-null PK); buildWeekDates correct across month/DST; tokens clean.
+**Primitive seam updates:** MacroRangeBar +currentMin/currentMax (range fill, 3 modes). SessionRow → server-safe + `quiet`, onClick removed (moved to future SessionRowButton for S3).

@@ -2,12 +2,11 @@ import type { Enums } from "@/lib/supabase/types";
 import { TodayHeader } from "@/components/today/TodayHeader";
 import { TodayWeekStrip } from "@/components/today/TodayWeekStrip";
 import { TodayFuelCard } from "@/components/today/TodayFuelCard";
-import {
-  TodaySessionList,
-  type TodaySessionListItem,
-} from "@/components/today/TodaySessionList";
+import { TodayFocalCard } from "@/components/today/TodayFocalCard";
+import { TodayAlsoList } from "@/components/today/TodayAlsoList";
+import type { TodaySession } from "@/components/today/types";
 import { RestDayEmpty } from "@/components/today/RestDayEmpty";
-import { dayOfWeekLabel, parseDayOfWeek } from "@/lib/methodology/today";
+import { DAYS_OF_WEEK, parseDayOfWeek } from "@/lib/methodology/today";
 import { getMealsForDate, getNutritionTargets } from "@/lib/nutrition/queries";
 import { getAppDayOfWeek, getAppToday } from "@/lib/time/server";
 import { getAppTimezone } from "@/lib/time/server";
@@ -42,6 +41,30 @@ function formatCardioZone(zone: Enums<"cardio_target_zone_enum"> | null) {
   return zone
     .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/**
+ * Real day-of-month numbers for each weekday in the week containing `todayDate`.
+ * `todayDate` is anchored at local noon, so day arithmetic is DST-safe.
+ */
+function buildWeekDates(
+  todayDate: Date,
+  actualDay: Enums<"day_of_week_enum">,
+): Record<Enums<"day_of_week_enum">, number> {
+  const mondayOffset = DAYS_OF_WEEK.indexOf(actualDay);
+  const monday = new Date(todayDate);
+  monday.setDate(todayDate.getDate() - mondayOffset);
+
+  const entries = DAYS_OF_WEEK.map((day, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return [day, date.getDate()] as const;
+  });
+
+  return Object.fromEntries(entries) as Record<
+    Enums<"day_of_week_enum">,
+    number
+  >;
 }
 
 function sortWorkouts(left: TodayWorkoutRow, right: TodayWorkoutRow) {
@@ -166,7 +189,7 @@ async function getTodaySessions(
 
   return {
     isRestDay: schedule.is_rest_day,
-    sessions: sortedWorkouts.map<TodaySessionListItem>((workout) => ({
+    sessions: sortedWorkouts.map<TodaySession>((workout) => ({
       workoutId: workout.workout_id,
       workoutType: workout.workout_type,
       workoutName: workout.workout_name,
@@ -209,32 +232,66 @@ export default async function TodayPage({ searchParams }: TodayPageProps) {
     isToday ? getMealsForDate(todayKey) : Promise.resolve([]),
   ]);
 
-  const hasSessions = Boolean(
-    selectedSchedule && selectedSchedule.sessions.length > 0,
-  );
+  const sessions = selectedSchedule?.sessions ?? [];
+  const hasSessions = sessions.length > 0;
   const fuelBars = isToday
     ? buildMacroBars(targets, sumMealTotals(meals))
     : null;
 
+  // The focal (dominant) card is the primary lift; else the first session of
+  // the day. Everything else drops to the quiet "Also today" list.
+  const focalSession =
+    sessions.find((session) => session.workoutType === "lifting") ??
+    sessions[0] ??
+    null;
+  const alsoSessions = focalSession
+    ? sessions.filter((session) => session.workoutId !== focalSession.workoutId)
+    : [];
+
+  // Header day-type headline (today only): the focal session's name.
+  const dayType = isToday && focalSession ? focalSession.workoutName : null;
+
+  // Nutrition day-type label, derived from today's sessions (no extra query).
+  const nutritionDayLabel = sessions.some((s) => s.workoutType === "lifting")
+    ? "lifting day"
+    : sessions.some((s) => s.workoutType === "cardio")
+      ? "cardio day"
+      : "rest day";
+
+  const weekDates = buildWeekDates(todayDate, actualDay);
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <TodayHeader dayOfWeek={selectedDay} date={todayDate} isToday={isToday} />
-      <TodayWeekStrip selectedDay={selectedDay} actualDay={actualDay} />
-      {hasSessions && selectedSchedule ? (
-        <TodaySessionList
-          sessions={selectedSchedule.sessions}
-          day={selectedDay}
-          readOnly={!isToday}
-          heading={
-            isToday
-              ? "Today's sessions"
-              : `${dayOfWeekLabel(selectedDay)} sessions`
-          }
-        />
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+      <TodayHeader
+        dayOfWeek={selectedDay}
+        date={todayDate}
+        isToday={isToday}
+        dayType={dayType}
+      />
+      {hasSessions && focalSession ? (
+        <>
+          <TodayFocalCard
+            session={focalSession}
+            day={selectedDay}
+            isToday={isToday}
+          />
+          <TodayAlsoList
+            sessions={alsoSessions}
+            day={selectedDay}
+            isToday={isToday}
+          />
+        </>
       ) : (
         <RestDayEmpty />
       )}
-      {fuelBars ? <TodayFuelCard bars={fuelBars} /> : null}
+      {fuelBars ? (
+        <TodayFuelCard bars={fuelBars} dayLabel={nutritionDayLabel} />
+      ) : null}
+      <TodayWeekStrip
+        selectedDay={selectedDay}
+        actualDay={actualDay}
+        weekDates={weekDates}
+      />
     </div>
   );
 }
