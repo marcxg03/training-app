@@ -149,11 +149,23 @@ Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being m
   **Helpers added:** nextAddedSetIndex(block), getSchemeActions(block)→{showAdd,showComplete}, formatBlockType(blockType).
 
 ## Slice S3 — Nutrition (rebuilt + wired, + manual log) ✅
+
 **Built:** `/nutrition` recomposed to /demo NutritionScreen — calorie headline (totalMin–max / target range + status badge), P/C/F MacroRangeBars, meal log (SessionRowButton tap→edit), 3-way log flow (Snap/Describe/Manual). Manual path reuses existing logMeal → auto-derives calories (P×4+C×4+F×9), no AI call. New client SessionRowButton (sibling to server SessionRow). Data layer reused unchanged.
 **Verified:** ralph-verify GREEN. Live-authed (log a real meal, real estimator) deferred to Final e2e.
 **Roast (Bug Hunter + Maintainer/fidelity):**
+
 - MUST-FIX (fixed): F1 MacroRangeBar range-mode rendered ZERO-WIDTH fill for exact-logged meals (min==max, the common case) → macro bars showed nothing on BOTH Today + Nutrition (regression from S1's range-fill). Fixed: left-anchored 0→currentMax progress fill (matches /demo), state authoritative. F2 meal row with a note LOST its P/C/F macros (`note ?? macros`) → now shows both.
 - SHOULD-FIX (fixed): focus-nudge stole focus mid-typing + iOS file-picker-in-timeout risk → guarded (no snap auto-click, describe/manual focus only if nothing focused); deleted genuinely-orphaned DayTypeFrameworkCard (implementer's "still used" was false); extracted shared SessionRowInner for SessionRow/SessionRowButton (had drifted: overflow-hidden mismatch).
 - Verified-correct: manual→logMeal→auto-derived calories estimator-free; Snap/Describe unchanged; delete reachable via sheet footer; no-targets fallback safe.
 - DEFERRED: consolidate MacroProgressBar (nutrition/history/[date]) → MacroRangeBar — FUTURE_WORK.
-**Seam:** MacroRangeBar fill = left-anchored 0→currentMax (fixes Today too). SessionRowButton (client) + SessionRowInner (shared presentational).
+  **Seam:** MacroRangeBar fill = left-anchored 0→currentMax (fixes Today too). SessionRowButton (client) + SessionRowInner (shared presentational).
+
+## Slice S4 — Plan (rebuilt + wired, + selector) ✅
+**Built:** `/plan` recomposed to /demo PlanScreen — plan selector (PlanSelector client, reuses existing activatePlan mutation → router.refresh, re-drives Today via is_active), week as 7 typed day cards (plan-dots.ts: lift=accent, cond=cardio-teal, rest=border, priority-ordered), view-only + dashed desktop-authoring note. No authoring affordances surfaced on mobile. Subscribed plans omitted (D21 — no backend; not fabricated). New: PlanSelector, plan-dots.ts (+ verify-plan-dots.ts).
+**Verified:** verify-plan-dots GREEN, ralph-verify GREEN. Live switch→Today deferred to Final e2e.
+**Roast (Bug Hunter + Maintainer/fidelity, 1 combined):**
+- MUST-FIX (fixed): F1 D18 defeated via day route — `/plan/[day]` still showed an Edit pencil, and since Marcus IS owner the gate passed on mobile → authoring reachable. Fixed: day-detail Edit made desktop-only (`hidden md:inline-flex`); route stays owner-gated for deep links.
+- SHOULD-FIX (fixed): F3 scheduleless "Open day" cards linked to a route that notFound()s → now non-navigable (Link only when openable = isRestDay || sessions>0).
+- DEFERRED (logged KNOWN_ISSUES + FUTURE_WORK #14): F2 activatePlan non-atomic (2 writes, no txn) → partial failure leaves zero active plans; pre-existing, rare, self-healing on retry; proper fix = transactional RPC.
+- Verified-correct: plan-dots pure/priority-ordered; PlanSelector guards double-submit, no-op same-plan, surfaces errors; activatePlan flips old active off on happy path. "sport"/warning dot unreachable = acceptable (no schema value; basketball=cardio).
+**Note:** PlanControls.tsx orphaned — kept for the future desktop hub (D18).
