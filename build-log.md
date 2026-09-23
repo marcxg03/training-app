@@ -161,11 +161,22 @@ Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being m
   **Seam:** MacroRangeBar fill = left-anchored 0→currentMax (fixes Today too). SessionRowButton (client) + SessionRowInner (shared presentational).
 
 ## Slice S4 — Plan (rebuilt + wired, + selector) ✅
+
 **Built:** `/plan` recomposed to /demo PlanScreen — plan selector (PlanSelector client, reuses existing activatePlan mutation → router.refresh, re-drives Today via is_active), week as 7 typed day cards (plan-dots.ts: lift=accent, cond=cardio-teal, rest=border, priority-ordered), view-only + dashed desktop-authoring note. No authoring affordances surfaced on mobile. Subscribed plans omitted (D21 — no backend; not fabricated). New: PlanSelector, plan-dots.ts (+ verify-plan-dots.ts).
 **Verified:** verify-plan-dots GREEN, ralph-verify GREEN. Live switch→Today deferred to Final e2e.
 **Roast (Bug Hunter + Maintainer/fidelity, 1 combined):**
+
 - MUST-FIX (fixed): F1 D18 defeated via day route — `/plan/[day]` still showed an Edit pencil, and since Marcus IS owner the gate passed on mobile → authoring reachable. Fixed: day-detail Edit made desktop-only (`hidden md:inline-flex`); route stays owner-gated for deep links.
 - SHOULD-FIX (fixed): F3 scheduleless "Open day" cards linked to a route that notFound()s → now non-navigable (Link only when openable = isRestDay || sessions>0).
 - DEFERRED (logged KNOWN_ISSUES + FUTURE_WORK #14): F2 activatePlan non-atomic (2 writes, no txn) → partial failure leaves zero active plans; pre-existing, rare, self-healing on retry; proper fix = transactional RPC.
 - Verified-correct: plan-dots pure/priority-ordered; PlanSelector guards double-submit, no-op same-plan, surfaces errors; activatePlan flips old active off on happy path. "sport"/warning dot unreachable = acceptable (no schema value; basketball=cardio).
-**Note:** PlanControls.tsx orphaned — kept for the future desktop hub (D18).
+  **Note:** PlanControls.tsx orphaned — kept for the future desktop hub (D18).
+
+## Slice S5 — Progress (merge Trends + History → 3-segment tab) ✅
+**Built:** `/progress` replaces the S0 redirect placeholder — SegmentedControl (Overview · Trends · History), server-first (all segments server-rendered, hidden-toggled, no refetch). Overview = 3 StatCards (workouts/PRs/streak) + featured e1rm chart + Recent timeline (PRs ▲ / sessions ✓ via SessionRow). Trends = full E1rmSection + WeeklyVolume + Bodyweight + NutritionTrend. History = PR timeline + all-workouts. Old /trends + /history → redirect("/progress"); deep-link detail routes preserved. New: overview.ts (deriveOverviewStats + buildRecentTimeline pure helpers), verify-progress-overview.ts, ProgressSegments/RecentTimeline/ProgressShowAllToggle.
+**Verified:** verify-progress-overview + verify-tab-active + ralph-verify GREEN. Live-authed visual deferred to Final e2e.
+**Roast (FULL council: Bug Hunter + Maintainer/fidelity + Test-Skeptic):**
+- MUST-FIX (fixed): BH-F1 isCounted counted ended_early (abandoned) sessions → streak + workouts-this-month over-counted (comment said "genuinely-completed" but code only excluded in_progress). Fixed: count `complete` only (set-count not in projection w/o a query change, D17); comment matches; ended_early fixtures added.
+- SHOULD-FIX (fixed): BH-F2/TS-F2 a set earning weight+rep PR counted as 2 (two pr_history rows) → deduped by set_log_id for count + Recent (one entry per PR-earning set) + test. Fidelity-F1 Overview was a 6-section dumping ground vs "calm glanceable" → restructured to 3 tight segments (Overview glance / Trends charts / History); nothing dropped. BH-F3 deep-detail back links → /progress?view=history (were bouncing to Overview w/ a lying "Back to PR timeline"); /history/workouts index → redirect. Maint-F3 deleted 3 orphans (TrendsSectionChips, HistoryHeaderLink, PRTimelineShowAllToggle); moved 6 re-homed sections into progress/_components.
+- Verified-correct: redirect topology (no loop, deep links resolve), server-first toggle (no unmount/refetch), streak core math DST/tz-safe.
+- FLAG for Marcus: middle segment renamed "By exercise" → "Trends" (now holds all charts); /demo mockup still shows old label (static artifact). allWorkoutsHref now dead (minor).

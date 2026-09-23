@@ -96,7 +96,7 @@ export default async function SessionDetailPage({
       <div className="mx-auto flex max-w-md flex-col gap-5">
         <header className="flex items-center gap-3">
           <HistoryBackLink
-            href="/history/workouts"
+            href="/progress?view=history"
             label="Back to all workouts"
           />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">

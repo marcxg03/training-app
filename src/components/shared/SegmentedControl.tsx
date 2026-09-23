@@ -29,7 +29,7 @@ function normalize(option: string | SegmentedOption): SegmentedOption {
 }
 
 /**
- * SegmentedControl — the pill toggle used on Progress (Overview / By exercise /
+ * SegmentedControl — the pill toggle used on Progress (Overview / Trends /
  * History) and Community (Discover / Feed). Extracted from /demo. Client
  * component: pass `onChange` for an interactive switcher; omit it for a
  * read-only display.
