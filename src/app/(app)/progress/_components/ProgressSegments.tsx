@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { SegmentedControl } from "@/components/shared";
+import { cn } from "@/lib/utils/cn";
 
 export type ProgressSegment = "Overview" | "Trends" | "History";
 
@@ -38,13 +39,28 @@ export function ProgressSegments({
         ariaLabel="Progress views"
       />
 
-      <div hidden={active !== "Overview"} className="flex flex-col gap-5">
+      <div
+        className={cn(
+          active === "Overview" ? "flex" : "hidden",
+          "flex-col gap-5",
+        )}
+      >
         {overview}
       </div>
-      <div hidden={active !== "Trends"} className="flex flex-col gap-5">
+      <div
+        className={cn(
+          active === "Trends" ? "flex" : "hidden",
+          "flex-col gap-5",
+        )}
+      >
         {trends}
       </div>
-      <div hidden={active !== "History"} className="flex flex-col gap-5">
+      <div
+        className={cn(
+          active === "History" ? "flex" : "hidden",
+          "flex-col gap-5",
+        )}
+      >
         {history}
       </div>
     </div>

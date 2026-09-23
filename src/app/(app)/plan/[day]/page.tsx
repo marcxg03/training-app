@@ -10,6 +10,7 @@ import {
   toSessionDetailExercises,
 } from "@/lib/blocks/bank";
 import { createClient } from "@/lib/supabase/server";
+import { isOwner } from "@/lib/auth/owner";
 
 type PlanDayPageProps = {
   params: Promise<{
@@ -242,6 +243,14 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
     notFound();
   }
 
+  // Gate the authoring link on ownership (D18) — a non-owner would 404 on the
+  // edit route, so hide the dead-end link. Owner AND desktop (md:) only.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const owner = user ? isOwner(user.id) : false;
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -255,13 +264,17 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
         <h1 className="text-sm font-semibold text-foreground">
           {dayPlan.dayLabel}
         </h1>
-        <Link
-          href={`/plan/${day}/edit`}
-          className="hidden items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent transition-colors hover:text-accent/80 md:inline-flex"
-        >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          Edit
-        </Link>
+        {owner ? (
+          <Link
+            href={`/plan/${day}/edit`}
+            className="hidden items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent transition-colors hover:text-accent/80 md:inline-flex"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Edit
+          </Link>
+        ) : (
+          <span className="hidden w-9 md:block" aria-hidden="true" />
+        )}
       </div>
 
       {dayPlan.isRestDay && dayPlan.sessions.length === 0 ? (

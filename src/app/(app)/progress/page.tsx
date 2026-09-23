@@ -242,7 +242,7 @@ export default async function ProgressPage({
   );
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           Progress

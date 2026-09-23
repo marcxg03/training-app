@@ -84,7 +84,7 @@ export default async function SettingsPage() {
   const owner = isOwner(user.id);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-6">
       <header className="space-y-1">
         <p className="eyebrow">Settings</p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">

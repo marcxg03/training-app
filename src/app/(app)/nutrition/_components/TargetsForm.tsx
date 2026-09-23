@@ -148,7 +148,7 @@ export function TargetsForm({
 
   return (
     <>
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto w-full max-w-md space-y-6">
         <header className="flex items-center justify-between gap-4 border-b border-border pb-3">
           <button
             type="button"

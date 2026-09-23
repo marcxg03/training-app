@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 
-import { MacroProgressBar } from "@/app/(app)/nutrition/_components/MacroProgressBar";
+import { MacroRangeBar } from "@/components/shared";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
 import { getMealsForDate, getNutritionTargets } from "@/lib/nutrition/queries";
 import { dayLabelOf } from "@/lib/analytics/projections";
@@ -52,7 +52,7 @@ export default async function MealDayPage({
   const isToday = date === today;
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5">
       <header className="flex items-center gap-3">
         <Link
           href="/nutrition/history"
@@ -72,9 +72,21 @@ export default async function MealDayPage({
       {/* meals.length guard: a directly-typed unlogged (even future) date
           must not render a zeroed "under target" scorecard. */}
       {bars.length > 0 && meals.length > 0 ? (
-        <section className="flex flex-col gap-5 rounded-[var(--radius)] border border-border bg-card p-[18px]">
+        <section className="flex flex-col gap-3 rounded-[var(--radius)] border border-border bg-card p-[18px]">
           {bars.map((bar) => (
-            <MacroProgressBar key={bar.key} bar={bar} />
+            <MacroRangeBar
+              key={bar.key}
+              label={bar.label}
+              value={`${range(bar.totalMin, bar.totalMax)} / ${range(
+                bar.min,
+                bar.max,
+              )}${bar.unit === "g" ? "g" : ""}`}
+              currentMin={bar.totalMin}
+              currentMax={bar.totalMax}
+              rangeMin={bar.min}
+              rangeMax={bar.max}
+              state={bar.status}
+            />
           ))}
         </section>
       ) : null}

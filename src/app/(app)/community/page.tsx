@@ -30,7 +30,7 @@ function SoonPill() {
 
 export default function CommunityPage() {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-8">
       <header className="space-y-1">
         <p className="eyebrow">Community</p>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
