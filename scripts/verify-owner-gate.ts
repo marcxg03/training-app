@@ -13,6 +13,15 @@
 //
 // isOwner reads process.env at CALL time, so the cases below mutate
 // OWNER_USER_IDS between assertions.
+//
+// S6 (D25): also structurally assert the `(owner)/` route group gates /admin.
+// The guard is a server component (`requireOwner()` in the group layout), so a
+// pure runtime test can't drive it without Supabase — instead we assert the
+// STRUCTURE that makes /admin owner-only: the admin page sits under the
+// `(owner)` group, and that group's layout awaits requireOwner().
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { isOwner } from "../src/lib/auth/owner";
 
 let failures = 0;
@@ -55,6 +64,42 @@ check("unset env ⇒ null not owner", isOwner(null), false);
 process.env.OWNER_USER_IDS = "solo-owner-id";
 check("single-id list matches", isOwner("solo-owner-id"), true);
 check("single-id list rejects others", isOwner("someone-else"), false);
+
+// --- S6 structural coverage: /admin is owner-gated by the (owner) group -----
+const repoRoot = join(__dirname, "..");
+const ownerLayoutRaw = readFileSync(
+  join(repoRoot, "src/app/(app)/(owner)/layout.tsx"),
+  "utf8",
+);
+// Strip comments so a commented-out guard (`// await requireOwner();` or a
+// block-commented call) does NOT satisfy the structural assertion below.
+const ownerLayout = ownerLayoutRaw
+  .replace(/\/\*[\s\S]*?\*\//g, "") // block comments
+  .replace(/\/\/[^\n]*/g, ""); // line comments
+const adminPageExists = (() => {
+  try {
+    readFileSync(join(repoRoot, "src/app/(app)/(owner)/admin/page.tsx"), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+check(
+  "(owner) group layout imports requireOwner",
+  /requireOwner/.test(ownerLayout),
+  true,
+);
+check(
+  "(owner) group layout awaits requireOwner() (structural gate)",
+  /await\s+requireOwner\s*\(/.test(ownerLayout),
+  true,
+);
+check(
+  "/admin lives under the (owner) group (so it inherits the gate)",
+  adminPageExists,
+  true,
+);
 
 if (failures > 0) {
   console.error(`\n${failures} owner-gate assertion(s) failed.`);
