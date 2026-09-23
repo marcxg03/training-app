@@ -14,12 +14,15 @@ export interface MacroRangeBarProps {
   /** Amount consumed so far (same unit as the range). Point-derived mode. */
   current?: number;
   /**
-   * Intake RANGE lower bound (range-derived mode). When both `currentMin` and
-   * `currentMax` are set (with `rangeMin`/`rangeMax`), the fill renders as a
-   * SPAN from `currentMin` to `currentMax` instead of a point at `current`.
+   * Intake RANGE lower bound. Accepted for backward compatibility but IGNORED
+   * for the fill: the intake bar is a left-anchored progress fill `0 →
+   * currentMax` (a zero-width span was invisible for exact meals, min===max).
    */
   currentMin?: number;
-  /** Intake RANGE upper bound (range-derived mode). See `currentMin`. */
+  /**
+   * Intake RANGE upper bound (range-derived mode). With `rangeMin`/`rangeMax`
+   * set, the fill runs left-anchored `0 → currentMax`.
+   */
   currentMax?: number;
   /** Target range lower bound. */
   rangeMin?: number;
@@ -61,12 +64,13 @@ function clampPct(n: number): number {
  * glance) and Nutrition (range-vs-range).
  *
  * Three modes:
- * - RANGE-DERIVED (Today's fuel glance): pass `currentMin` + `currentMax` +
- *   `rangeMin` + `rangeMax`. The fill is a SPAN from `currentMin` to
- *   `currentMax` (honest: it shows the real logged intake range), and the color
- *   comes from an explicitly-passed `state` (the authoritative overlap status).
- *   No midpoint lie — the span shows the range and the color shows the status.
- *   If no `state` is passed, the color falls back to the span midpoint's status.
+ * - RANGE-DERIVED (Today's fuel glance): pass `currentMax` (+ optionally
+ *   `currentMin`, ignored) + `rangeMin` + `rangeMax`. The fill is a LEFT-ANCHORED
+ *   progress fill `0 → currentMax` (always visible, including exact meals where
+ *   min===max), matching /demo's MacroBar. The color comes from an
+ *   explicitly-passed `state` (authoritative) or, absent that, from where
+ *   `currentMax` falls relative to the target band. Color and geometry never
+ *   contradict: the passed `state` stays authoritative for color.
  * - POINT-DERIVED: pass `current` + `rangeMin` + `rangeMax` and the bar computes
  *   the fill %, the band geometry, AND the state coherently from one source.
  * - EXPLICIT (escape hatch): pass `pct`/`state`/`bandStart`/`bandEnd` directly
@@ -90,35 +94,19 @@ export function MacroRangeBar({
   bandEnd,
   className,
 }: MacroRangeBarProps) {
-  const hasRange = currentMin != null && currentMax != null;
-
   const derived =
-    rangeMin != null && rangeMax != null && (hasRange || current != null)
+    rangeMin != null &&
+    rangeMax != null &&
+    (current != null || currentMax != null)
       ? (() => {
-          const max =
-            axisMax ??
-            Math.max(rangeMax * 1.25, current || 0, currentMax || 0, 1);
-          if (hasRange) {
-            // Range-derived: fill spans [currentMin, currentMax]; color from
-            // the midpoint only as a fallback when no explicit state is passed.
-            const mid = (currentMin! + currentMax!) / 2;
-            const derivedState: MacroRangeState =
-              mid < rangeMin ? "under" : mid > rangeMax ? "over" : "in";
-            return {
-              fillLeft: clampPct((currentMin! / max) * 100),
-              fillPct: clampPct(((currentMax! - currentMin!) / max) * 100),
-              band: {
-                start: clampPct((rangeMin / max) * 100),
-                end: clampPct((rangeMax / max) * 100),
-              },
-              state: derivedState,
-            };
-          }
+          // Left-anchored progress fill 0 → consumed (prefer the upper bound of
+          // a logged range). Exact meals (min===max) still render a visible bar.
+          const consumed = currentMax ?? current!;
+          const max = axisMax ?? Math.max(rangeMax * 1.25, consumed, 1);
           const derivedState: MacroRangeState =
-            current! < rangeMin ? "under" : current! > rangeMax ? "over" : "in";
+            consumed < rangeMin ? "under" : consumed > rangeMax ? "over" : "in";
           return {
-            fillLeft: 0,
-            fillPct: clampPct((current! / max) * 100),
+            fillPct: clampPct((consumed / max) * 100),
             band: {
               start: clampPct((rangeMin / max) * 100),
               end: clampPct((rangeMax / max) * 100),
@@ -129,7 +117,6 @@ export function MacroRangeBar({
       : null;
 
   const resolvedState: MacroRangeState = state ?? derived?.state ?? "in";
-  const fillLeft = derived ? derived.fillLeft : 0;
   const fillPct = derived ? derived.fillPct : clampPct(pct ?? 0);
   const band = derived
     ? derived.band
@@ -151,8 +138,11 @@ export function MacroRangeBar({
           />
         )}
         <div
-          className={cn("absolute inset-y-0", FILL_BY_STATE[resolvedState])}
-          style={{ left: `${fillLeft}%`, width: `${fillPct}%` }}
+          className={cn(
+            "absolute inset-y-0 left-0",
+            FILL_BY_STATE[resolvedState],
+          )}
+          style={{ width: `${fillPct}%` }}
         />
       </div>
     </div>

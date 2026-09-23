@@ -135,13 +135,25 @@ Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being m
   **Primitive seam updates:** MacroRangeBar +currentMin/currentMax (range fill, 3 modes). SessionRow → server-safe + `quiet`, onClick removed (moved to future SessionRowButton for S3).
 
 ## Slice S2 — Logger (FLAGSHIP, rebuilt + wired) ✅
+
 **Built:** logger recomposed to /demo LoggerScreen — top bar (End + sync pill), whole-workout block progress bar, "Block n/total · name", exercise pick (block+bank) + Swap, stacked set rows, BIG entry pad (weight/reps steppers + collapsible note + failure toggle + Log Wn), flexible actions (+Add working set / Complete block). Single-block focus (vs all-blocks scroll) per /demo. State machine UNCHANGED — recompose only. D16 flexible scheme + append-only + PR + offline sync + resume + end-early all preserved.
 **Verified:** verify-set-scheme + verify-logger GREEN (with new assertions), ralph-verify GREEN. Live logger drive deferred to Final e2e.
 **Roast (FULL council: Bug Hunter + Architect/Maintainer + Test-Skeptic):**
+
 - 🔴 SHIP-BLOCKER (fixed): BH-F1 single-block subtree was UNKEYED → React reused FailureProtocol/SetEntryForm instance across blocks → unsaved weight/reps leaked into the next block's pad → phantom set could log against the WRONG exercise. Fixed: `key={currentBlock.block_id}` (LoggerShell:438). Also fixed free-form auto-open + stale "Saving…".
 - MUST-ADD-TEST (added): TS-F1 last-block finish (findLastIncompleteBlock all-complete populated → -1) was untested (only empty-array). Added + green.
 - SHOULD-FIX (fixed): Arch-F1 two divergent row styles → SetLogRow restyled to match shared SetRow/demo (w-16 sans label, text-lg, ✓ on done, inline PR▲; kept Failure badge+notes; dropped dead `exercise` prop). Arch-F3 entry-pad drift → Notes gated behind "+ note", scale tokens. BH-F3/Arch-F2 → deleted orphaned BlockHeader, hoisted formatBlockType to workout-state.ts. TS-F2/F3 → extracted nextAddedSetIndex + getSchemeActions pure helpers + tests (guards offline set_index + D16 weak-day).
 - ACCEPTED BY DESIGN: BH-F2 single-block focus loses mid-workout scroll-back to earlier blocks — the /demo LoggerScreen Marcus approved IS single-block; summary shows all. Not changed.
 - Verified-correct by council: advanceToNextBlock reaches every block + last-block finishes (no advance-past-end); progress-bar derivation correct (no off-by-one, out-of-order-complete colors right); D16 gating intact (never auto-locks, weak-day preserved).
-**Note:** PRBadge.tsx now orphaned (was only used by SetLogRow) — left in place, harmless; delete later if desired.
-**Helpers added:** nextAddedSetIndex(block), getSchemeActions(block)→{showAdd,showComplete}, formatBlockType(blockType).
+  **Note:** PRBadge.tsx now orphaned (was only used by SetLogRow) — left in place, harmless; delete later if desired.
+  **Helpers added:** nextAddedSetIndex(block), getSchemeActions(block)→{showAdd,showComplete}, formatBlockType(blockType).
+
+## Slice S3 — Nutrition (rebuilt + wired, + manual log) ✅
+**Built:** `/nutrition` recomposed to /demo NutritionScreen — calorie headline (totalMin–max / target range + status badge), P/C/F MacroRangeBars, meal log (SessionRowButton tap→edit), 3-way log flow (Snap/Describe/Manual). Manual path reuses existing logMeal → auto-derives calories (P×4+C×4+F×9), no AI call. New client SessionRowButton (sibling to server SessionRow). Data layer reused unchanged.
+**Verified:** ralph-verify GREEN. Live-authed (log a real meal, real estimator) deferred to Final e2e.
+**Roast (Bug Hunter + Maintainer/fidelity):**
+- MUST-FIX (fixed): F1 MacroRangeBar range-mode rendered ZERO-WIDTH fill for exact-logged meals (min==max, the common case) → macro bars showed nothing on BOTH Today + Nutrition (regression from S1's range-fill). Fixed: left-anchored 0→currentMax progress fill (matches /demo), state authoritative. F2 meal row with a note LOST its P/C/F macros (`note ?? macros`) → now shows both.
+- SHOULD-FIX (fixed): focus-nudge stole focus mid-typing + iOS file-picker-in-timeout risk → guarded (no snap auto-click, describe/manual focus only if nothing focused); deleted genuinely-orphaned DayTypeFrameworkCard (implementer's "still used" was false); extracted shared SessionRowInner for SessionRow/SessionRowButton (had drifted: overflow-hidden mismatch).
+- Verified-correct: manual→logMeal→auto-derived calories estimator-free; Snap/Describe unchanged; delete reachable via sheet footer; no-targets fallback safe.
+- DEFERRED: consolidate MacroProgressBar (nutrition/history/[date]) → MacroRangeBar — FUTURE_WORK.
+**Seam:** MacroRangeBar fill = left-anchored 0→currentMax (fixes Today too). SessionRowButton (client) + SessionRowInner (shared presentational).

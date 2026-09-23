@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils/cn";
 
+import { SessionRowInner } from "./sessionRowInner";
+
 export type SessionRowIconVariant = "plain" | "badge" | "accent";
 
 export interface SessionRowProps {
@@ -56,36 +58,16 @@ export function SessionRow({
   quiet = false,
   className,
 }: SessionRowProps) {
-  const iconNode =
-    icon == null ? null : iconVariant === "plain" ? (
-      <span className={cn("shrink-0", iconClassName)}>{icon}</span>
-    ) : (
-      <span
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs",
-          iconVariant === "accent"
-            ? "bg-accent text-accent-foreground"
-            : "bg-input text-subtle",
-          iconClassName,
-        )}
-      >
-        {icon}
-      </span>
-    );
-
   const content = (
-    <>
-      {iconNode}
-      <div className="flex flex-1 flex-col text-left">
-        <span className={cn("text-sm", !quiet && "font-semibold")}>
-          {title}
-        </span>
-        {subtitle != null && (
-          <span className="text-[11px] text-muted-foreground">{subtitle}</span>
-        )}
-      </div>
-      {trailing != null && <div className="shrink-0">{trailing}</div>}
-    </>
+    <SessionRowInner
+      title={title}
+      subtitle={subtitle}
+      icon={icon}
+      iconVariant={iconVariant}
+      iconClassName={iconClassName}
+      trailing={trailing}
+      quiet={quiet}
+    />
   );
 
   const rowClasses = cn("flex w-full items-center gap-3 px-4 py-3", className);

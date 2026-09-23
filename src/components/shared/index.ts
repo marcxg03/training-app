@@ -26,3 +26,7 @@ export {
   type SessionRowProps,
   type SessionRowIconVariant,
 } from "./SessionRow";
+export {
+  SessionRowButton,
+  type SessionRowButtonProps,
+} from "./SessionRowButton";

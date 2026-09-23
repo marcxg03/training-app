@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, Sparkles } from "lucide-react";
+import { Camera, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -39,6 +39,16 @@ import type { MealEntry } from "@/lib/nutrition/projections";
 import { mealSchema, type MealFormValues } from "@/lib/nutrition/schemas";
 import { createClient } from "@/lib/supabase/client";
 
+/**
+ * Which of the 3-way log entry paths opened the sheet. On open the sheet nudges
+ * the right control: `describe` focuses the description, `manual` focuses the
+ * name so the user goes straight to entering P/C/F by hand (calories
+ * auto-derive — no AI step). `snap` does NOT auto-open the picker (iOS blocks
+ * non-gesture file pickers) — the visible Photo button is the affordance.
+ * Undefined = editing an existing meal (no auto-action).
+ */
+export type MealLogIntent = "snap" | "describe" | "manual";
+
 type LogMealSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +57,10 @@ type LogMealSheetProps = {
   meal?: MealEntry;
   /** Whether the Claude-vision photo estimator is configured (ANTHROPIC_API_KEY). */
   aiEnabled: boolean;
+  /** The entry path that opened this sheet (drives the on-open focus nudge). */
+  intent?: MealLogIntent;
+  /** When editing, a request to delete this meal (parent owns the confirm). */
+  onDelete?: () => void;
 };
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -109,6 +123,8 @@ export function LogMealSheet({
   date,
   meal,
   aiEnabled,
+  intent,
+  onDelete,
 }: LogMealSheetProps) {
   const router = useRouter();
   const isEdit = Boolean(meal);
@@ -145,6 +161,30 @@ export function LogMealSheet({
         : false,
     );
   }, [defaultValues, form, open, meal]);
+
+  // On-open nudge for the 3-way entry flow. A short delay lets the bottom sheet
+  // mount/animate before we move focus. `snap` does NOT auto-open the OS picker:
+  // iOS Safari blocks file pickers not opened from a direct user gesture, so the
+  // visible Photo button is the primary affordance — the user taps it. For
+  // `describe`/`manual` we only move focus if nothing in the sheet is focused
+  // yet, so we never yank focus out from under a mid-keystroke user.
+  useEffect(() => {
+    if (!open || !intent || intent === "snap") {
+      return;
+    }
+    const timer = setTimeout(() => {
+      const active = document.activeElement;
+      if (active != null && active !== document.body) {
+        return;
+      }
+      if (intent === "describe") {
+        form.setFocus("note");
+      } else {
+        form.setFocus("meal_type");
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [open, intent, form]);
 
   const watched = useWatch({ control: form.control });
   const calMin = macroCalories(
@@ -500,7 +540,18 @@ export function LogMealSheet({
                   </div>
                 ) : null}
 
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  {isEdit && onDelete ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onDelete}
+                      className="gap-2 border-danger/40 text-danger hover:bg-danger/10 hover:text-danger sm:mr-auto"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
