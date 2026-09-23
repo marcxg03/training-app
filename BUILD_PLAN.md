@@ -29,16 +29,19 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 ---
 
 ## SLICE S0 — Nav + IA scaffold + owner-gate + shared design primitives
+
 **Delivers:** the new 5-tab bottom nav live; removed tabs re-routed; an owner-gate helper; the reusable design primitives extracted from `/demo` so every later slice composes them.
 **Approach:**
+
 - Rewrite `src/components/layout/BottomTabBar.tsx` to the 5 tabs (Today · Plan · Nutrition · Progress · Community) with the `/demo` styling (active=accent, icon+label). Route `/community` to a placeholder page (S6 fills it). Keep `/settings` reachable via a gear (Today header or a nav overflow).
 - **Owner-gate:** add `src/lib/auth/owner.ts` — `isOwner(userId)` checking an env-listed owner id(s) (`OWNER_USER_IDS`, server-only) OR a `profiles.is_owner` flag; pick the simpler (env list) and document. Add a server guard used by `/library/**`, `/plan/**/edit`, and the new `/admin`: non-owners get `notFound()` / redirect to `/today`.
 - **Shared primitives** in `src/components/shared/` (or `ui/`): `FocalCard`, `MacroRangeBar`, `SetRow`, `SegmentedControl`, `StatCard`, `SessionRow` — lifted from `/demo`'s markup, tokenized, prop-driven. These replace the ad-hoc `/demo` copies and are what S1–S6 import.
-**DoD:** app builds and runs; bottom nav shows the 5 tabs and navigates; `/community` renders a placeholder; `/library` and `/plan/edit` return notFound for a non-owner test user and render for the owner; the 6 primitives exist with a `scripts/verify-owner-gate.ts` asserting `isOwner` (written failing first). `ralph-verify.sh` green.
-**Verify:** `verify-owner-gate.ts` (red→green); `ralph-verify.sh`; Playwright: nav renders 5 tabs (mobile), tapping each lands the right route; non-owner hitting `/library` is bounced.
-**Touches:** `src/components/layout/BottomTabBar.tsx`, `src/lib/auth/owner.ts` (new), `src/app/(app)/community/page.tsx` (new placeholder), guard wiring in `library`/`plan/edit` layouts or pages, `src/components/shared/*` (new), `scripts/verify-owner-gate.ts` (new). **Off-limits:** data-layer mutations, the wiring contract.
+  **DoD:** app builds and runs; bottom nav shows the 5 tabs and navigates; `/community` renders a placeholder; `/library` and `/plan/edit` return notFound for a non-owner test user and render for the owner; the 6 primitives exist with a `scripts/verify-owner-gate.ts` asserting `isOwner` (written failing first). `ralph-verify.sh` green.
+  **Verify:** `verify-owner-gate.ts` (red→green); `ralph-verify.sh`; Playwright: nav renders 5 tabs (mobile), tapping each lands the right route; non-owner hitting `/library` is bounced.
+  **Touches:** `src/components/layout/BottomTabBar.tsx`, `src/lib/auth/owner.ts` (new), `src/app/(app)/community/page.tsx` (new placeholder), guard wiring in `library`/`plan/edit` layouts or pages, `src/components/shared/*` (new), `scripts/verify-owner-gate.ts` (new). **Off-limits:** data-layer mutations, the wiring contract.
 
 ## SLICE S1 — Today (rebuilt + wired)
+
 **Delivers:** `/today` as the `/demo` Today screen — focal black Start card, "Also today", nutrition glance, week strip — wired to the real today projection.
 **Approach:** restyle `src/app/(app)/today/page.tsx` + its `today` components to compose `FocalCard`/`MacroRangeBar`/`SessionRow`. Keep the existing data source (`src/lib/methodology/today.ts`, nutrition summary). Start card → the primary lift session's Start Workout. Nutrition glance → real macro summary. Preserve rest-day empty state.
 **DoD:** Today renders real sessions with the focal Start card dominant; Start launches the logger; macro glance shows real day totals; rest day shows the calm empty state. Matches `/demo`. `ralph-verify.sh` green.
@@ -46,6 +49,7 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 **Touches:** `src/app/(app)/today/**`, `src/components/today/**`. **Off-limits:** logger internals (S2), nutrition mutations.
 
 ## SLICE S2 — Logger (rebuilt + wired) — FLAGSHIP
+
 **Delivers:** the `/demo` Logger — block progress bar, stacked logged sets with inline PR, big weight/reps entry pad, flexible scheme actions (+Add working set / Complete block), sync indicator — wired to the real logger (append-only set_logs, PR detection, offline queue).
 **Approach:** restyle `src/app/(app)/log/[workout_id]/page.tsx` + `src/components/log/*` (LoggerShell, FailureProtocol, SetEntryForm, SetLogRow, PRBadge, QueueIndicator, ExercisePicker) to compose the new primitives. Preserve ALL existing behavior: block+bank pick, adjustable/flexible set-scheme (D16 — soft target, manual complete, +add set), to_failure per-set toggle, PR moments, resume, end-early, sync. The entry pad = the big steppers; the scheme actions row = the existing add-set + complete logic.
 **DoD:** a real set logs and persists (reload); PR fires inline; +Add working set and Complete block both work per D16; offline queue indicator reflects real sync; block+bank swap works. Matches `/demo`. Append-only intact. `ralph-verify.sh` green.
@@ -53,13 +57,15 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 **Touches:** `src/app/(app)/log/**`, `src/components/log/**`. **Off-limits:** set_logs schema, weight_kg storage, PR-detection logic, mutation signatures (restyle only).
 
 ## SLICE S3 — Nutrition (rebuilt + wired, + manual log)
+
 **Delivers:** `/nutrition` as the `/demo` Nutrition screen — calorie headline vs range + P/C/F range bars, meal log with photo thumbnails, the 3-way log flow (Snap / Describe / **Log manually**) — wired to real nutrition data + the AI estimator.
-**Approach:** restyle `src/app/(app)/nutrition/page.tsx` + `_components` (DayTypeFrameworkCard, MacroProgressBar, MealsSection, LogMealSheet). The existing LogMealSheet already has photo + description → AI estimate; ADD an explicit **manual entry** path (enter P/C/F directly, calories auto-derive) as a first-class option alongside snap/describe. Photo thumbnails on logged meals if a photo exists (note: photo *persistence* is FUTURE_WORK #10 — thumbnail shows when available; don't build the storage in this slice).
+**Approach:** restyle `src/app/(app)/nutrition/page.tsx` + `_components` (DayTypeFrameworkCard, MacroProgressBar, MealsSection, LogMealSheet). The existing LogMealSheet already has photo + description → AI estimate; ADD an explicit **manual entry** path (enter P/C/F directly, calories auto-derive) as a first-class option alongside snap/describe. Photo thumbnails on logged meals if a photo exists (note: photo _persistence_ is FUTURE_WORK #10 — thumbnail shows when available; don't build the storage in this slice).
 **DoD:** nutrition renders real macros as range-vs-range with the calorie headline; meal log lists real meals; Snap/Describe/Manual all reach a working log; a manually entered meal derives calories. Matches `/demo`. `ralph-verify.sh` green.
 **Verify:** Playwright on live app: log a meal manually (P/C/F → calories), confirm it appears + macros update; screenshot desktop+mobile.
 **Touches:** `src/app/(app)/nutrition/**`, `src/lib/nutrition/*` (only if manual-entry needs a mutation path — additive). **Off-limits:** the estimate-macros API contract, append-only rules.
 
 ## SLICE S4 — Plan (rebuilt + wired, + selector/switch-load)
+
 **Delivers:** `/plan` as the `/demo` Plan screen — plan selector (switch/load among the user's plans + subscribed), the week as typed day cards, view-only with the desktop-authoring note — wired to real plan queries/mutations.
 **Approach:** restyle `src/app/(app)/plan/page.tsx` + `_components`. The selector lists the user's plans (existing multi-plan support) + sets active (existing activate mutation); "Load" a subscribed plan is stubbed to the same activate path (real subscription source = future). Day cards → real sessions, colored dot by session type; tap → day view. Hide plan/day EDIT affordances on mobile (owner-only, S0 gate) — show the "editing lives on desktop" note.
 **DoD:** plan renders the real active plan's week; switching active plan works and re-drives Today; day tap opens the day view; edit is not exposed on mobile. Matches `/demo`. `ralph-verify.sh` green.
@@ -67,6 +73,7 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 **Touches:** `src/app/(app)/plan/**` (view + controls; NOT the `/edit` internals beyond gating). **Off-limits:** plan mutation signatures, integrity guards.
 
 ## SLICE S5 — Progress (merge Trends + History → 3-view tab)
+
 **Delivers:** `/progress` as the `/demo` Progress screen — segmented Overview / By exercise / History — absorbing today's `/trends` + `/history` into one tab wired to the existing history + analytics + bodyweight libs.
 **Approach:** new `src/app/(app)/progress/page.tsx` composing: **Overview** (stat cards: workouts/PRs/streak + the per-exercise chart + recent timeline), **By exercise** (the current per-exercise progression/e1rm from `trends` + `history/exercises`), **History** (the current completed-workouts + PR-timeline from `history`). Reuse the existing data (`src/lib/history/*`, `src/lib/analytics/*`, `trends/_components/*`, `history/_components/*`) — re-home the components, don't rebuild the queries. Redirect old `/trends` and `/history` → `/progress` (preserve deep links to `/history/workouts/[id]` etc. or re-home them under `/progress`).
 **DoD:** Progress shows real stat row + a real per-exercise chart + real recent PRs/sessions; the three segments each render real data; old `/trends` `/history` routes redirect; deep-linked workout/exercise detail still resolves. Matches `/demo`. `ralph-verify.sh` green.
@@ -74,11 +81,13 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 **Touches:** `src/app/(app)/progress/**` (new), re-home `trends/_components/*` + `history/_components/*` + detail routes, redirects for old paths, `src/components/layout/BottomTabBar.tsx` (already points here from S0). **Off-limits:** the analytics/history query logic (re-home, don't rewrite).
 
 ## SLICE S6 — Community placeholder + /admin stub + Settings reskin + polish
+
 **Delivers:** the Community tab as a navigable "coming soon" placeholder in the `/demo` visual language (D21); an owner-only `/admin` stub route (the desktop admin-hub seam, links `spec/ADMIN_HUB_ANALYTICS.md` scope in a comment); Settings reskinned to the light/Satoshi system; a whole-app visual polish pass.
-**Approach:** `src/app/(app)/community/page.tsx` → the storefront/feed *shell* from `/demo` but clearly "coming soon" (no fake data pretending to be live; the featured card can preview Marcus's own Block II as the seed program, subscribe = disabled "soon"). `/admin` → owner-gated stub page naming the future scope (program CRUD + publish control + the 8-tile analytics). Reskin `src/app/(app)/settings/**` to the primitives. Sweep every tab for spacing/legibility consistency.
+**Approach:** `src/app/(app)/community/page.tsx` → the storefront/feed _shell_ from `/demo` but clearly "coming soon" (no fake data pretending to be live; the featured card can preview Marcus's own Block II as the seed program, subscribe = disabled "soon"). `/admin` → owner-gated stub page naming the future scope (program CRUD + publish control + the 8-tile analytics). Reskin `src/app/(app)/settings/**` to the primitives. Sweep every tab for spacing/legibility consistency.
 **DoD:** Community navigates + looks designed but is honestly a placeholder; `/admin` is owner-only and states its scope; Settings matches the system; no visual inconsistency across tabs. `ralph-verify.sh` green.
 **Verify:** Playwright: Community renders (mobile), `/admin` bounces non-owner + renders for owner, Settings screenshot; full-app screenshot sweep desktop+mobile.
 **Touches:** `src/app/(app)/community/**` (new), `src/app/(app)/admin/**` (new stub), `src/app/(app)/settings/**`. **Off-limits:** building the real community/subscription backend (next build).
 
 ## Final pass
+
 Whole-app e2e on the live authenticated app (test user, Block II seeded): open every tab, log a set, log a meal, switch a plan, view progress. Final `/roast-code` over the whole diff → 4F triage → ralph to convergence (bounded; escalate if non-converging). Close `build-log.md` with the `✅ BUILD COMPLETE` entry. Present integration options (recommend: PR for Marcus's review; do NOT auto-merge). Update the vault `overview.md`.

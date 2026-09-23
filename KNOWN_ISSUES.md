@@ -629,3 +629,7 @@ reading a DB that lacks the columns — deletes `warmup_sets` / `working_sets` /
 `undefined + undefined = NaN`, `isBlockComplete`'s failure branch compares
 `>= NaN` (always false), and failure blocks never auto-complete — the same
 lockout class as migration 023. Push the migration first, then regen.
+
+## Owner-gate is UI-only until the community/admin-hub build (D24)
+
+**Status:** deferred by design (not a regression, not a cross-user breach). The S0 owner-gate (`requireOwner()`) hides the authoring PAGES from non-owners, but library/plan **mutations** are client-side Supabase calls under per-user RLS (`auth.uid() = owner_user_id`) — so an authenticated non-owner can still write **their own** private library by invoking a mutation directly. RLS silos every user (nobody can reach Marcus's data), and no "follower" users exist this build (Community is a placeholder). The product rule "followers do not author" must be enforced at the **data boundary** in the future community/admin-hub build: move authoring mutations to server actions/route handlers that `await requireOwner()`, and/or add an owner-allowlist to the write RLS policies. See DECISIONS.md D24/D25.

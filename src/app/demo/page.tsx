@@ -73,7 +73,11 @@ function MacroBar({
   value: string;
 }) {
   const fill =
-    state === "in" ? "bg-success" : state === "under" ? "bg-warning" : "bg-danger";
+    state === "in"
+      ? "bg-success"
+      : state === "under"
+        ? "bg-warning"
+        : "bg-danger";
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between text-[11px]">
@@ -162,7 +166,9 @@ function TodayScreen() {
             <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
               Nutrition · lifting day
             </span>
-            <span className="text-[11px] font-medium text-accent">Log meal +</span>
+            <span className="text-[11px] font-medium text-accent">
+              Log meal +
+            </span>
           </div>
           <MacroBar label="Cals" pct={62} state="in" value="1980 / 2400" />
           <MacroBar label="Protein" pct={40} state="under" value="82 / 180g" />
@@ -370,7 +376,9 @@ function FuelScreen() {
             <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
               Monday · Nutrition
             </span>
-            <span className="text-xl font-bold tracking-tight">Lifting Day</span>
+            <span className="text-xl font-bold tracking-tight">
+              Lifting Day
+            </span>
           </div>
           <span className="rounded-full bg-input px-3 py-1 text-[11px] font-medium text-subtle">
             Maintain
@@ -397,7 +405,12 @@ function FuelScreen() {
             </span>
           </div>
           <div className="flex flex-col gap-3">
-            <MacroBar label="Protein" pct={40} state="under" value="82 / 180g" />
+            <MacroBar
+              label="Protein"
+              pct={40}
+              state="under"
+              value="82 / 180g"
+            />
             <MacroBar label="Carbs" pct={72} state="in" value="210 / 300g" />
             <MacroBar label="Fat" pct={58} state="in" value="52 / 80g" />
           </div>
@@ -406,7 +419,7 @@ function FuelScreen() {
         {/* meal log */}
         <div className="flex flex-col gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
-            Today's meals
+            Today&apos;s meals
           </span>
           <div className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
             {[
@@ -414,17 +427,24 @@ function FuelScreen() {
               ["Lunch", "Chicken bowl", "740", true],
               ["Snack", "Greek yogurt", "220", false],
             ].map(([meal, desc, cals, photo]) => (
-              <div key={meal as string} className="flex items-center gap-3 px-4 py-3">
+              <div
+                key={meal as string}
+                className="flex items-center gap-3 px-4 py-3"
+              >
                 <div
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs ${
-                    photo ? "bg-accent text-accent-foreground" : "bg-input text-faint"
+                    photo
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-input text-faint"
                   }`}
                 >
                   {photo ? "▣" : "◍"}
                 </div>
                 <div className="flex flex-1 flex-col">
                   <span className="text-sm font-semibold">{meal}</span>
-                  <span className="text-[11px] text-muted-foreground">{desc}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {desc}
+                  </span>
                 </div>
                 <span className="text-sm tabular-nums text-subtle">{cals}</span>
               </div>
@@ -446,8 +466,8 @@ function FuelScreen() {
             </button>
           </div>
           <p className="px-1 text-[11px] leading-relaxed text-faint">
-            Snap or describe → AI estimates macros (photo &amp; text saved with the
-            meal). Or enter P/C/F yourself — calories auto-derive.
+            Snap or describe → AI estimates macros (photo &amp; text saved with
+            the meal). Or enter P/C/F yourself — calories auto-derive.
           </p>
         </div>
       </div>
@@ -542,7 +562,9 @@ function PlanScreen() {
                   today ? "border-accent bg-card" : "border-border bg-card"
                 }`}
               >
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot[kind]}`} />
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot[kind]}`}
+                />
                 <div className="flex w-10 shrink-0 flex-col">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-faint">
                     {day}
@@ -550,7 +572,9 @@ function PlanScreen() {
                 </div>
                 <div className="flex flex-1 flex-col">
                   <span className="text-sm font-semibold">{name}</span>
-                  <span className="text-[11px] text-muted-foreground">{sub}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sub}
+                  </span>
                 </div>
                 {today && (
                   <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-foreground">
@@ -566,8 +590,8 @@ function PlanScreen() {
         {/* boundary note: switch/load here, build on desktop */}
         <div className="flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-[11px] text-muted-foreground">
           <span className="text-faint">✎</span>
-          Switch or load any plan here. Building &amp; editing lives on the desktop
-          app.
+          Switch or load any plan here. Building &amp; editing lives on the
+          desktop app.
         </div>
       </div>
       <BottomNav active="Plan" />
@@ -677,7 +701,9 @@ function ProgressScreen() {
                 </span>
                 <div className="flex flex-1 flex-col">
                   <span className="text-sm font-semibold">{name}</span>
-                  <span className="text-[11px] text-muted-foreground">{sub}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sub}
+                  </span>
                 </div>
                 <span className="text-[11px] uppercase tracking-wider text-faint">
                   {when}
@@ -794,7 +820,9 @@ function CommunityScreen() {
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-input" />
               <div className="flex flex-col">
-                <span className="text-[13px] font-semibold">Jordan · Block II</span>
+                <span className="text-[13px] font-semibold">
+                  Jordan · Block II
+                </span>
                 <span className="text-[10px] uppercase tracking-wider text-faint">
                   Day 9 · Upper
                 </span>

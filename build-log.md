@@ -107,3 +107,16 @@ Commits: `a8ed8eb` (slice) → `0bd9657` (verify-logger test migration) → this
 Built (D16): `working_sets` is a soft TARGET, not an auto-complete cap. `isBlockComplete` now manual-only (completedBlockIds) for ALL block types; FailureProtocol renders warm-up + target working slots, then "+ Add working set" (W3, W4…) + "Complete block"; `getSetLabel` continues W-numbering past target; `hasLoggedWorkingSet` helper. to_failure stays a per-set toggle.
 Verify (coordinator re-ran): verify-set-scheme + verify-logger + gate GREEN. Caught a regression the implementer's gate missed — verify-logger had 3 stale auto-complete assertions (ralph-verify doesn't run it); migrated them to the manual model (and the week-2 lockout is now structurally impossible).
 Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being met, trapping a weak-day user (soft upward only). FIXED: "Complete block" now shows once ≥1 working set is logged (`hasLoggedWorkingSet`, unit-tested) → soft target BOTH ways. Other 4 roast points CONVERGED (add-set index collision-safe, no stranded callers, signature safe, label off-by-one clean). Minor deferred: added-set default-failure-checkbox consistency; complete-while-add-form-open discards unsaved input.
+
+---
+
+# Mobile IA Rewire (redesign phase 2) — branch redesign/mobile-ia-wire
+
+## Slice S0 — Nav + IA scaffold + owner-gate + shared primitives ✅
+**Built:** 5-tab BottomTabBar (Today · Plan · Nutrition · Progress · Community; Library/Trends/History removed from nav; Fuel→Nutrition). Owner-gate: `src/lib/auth/owner.ts` (`isOwner`, env `OWNER_USER_IDS`, fail-closed) + `requireOwner.ts` server guard wired into `/library/**` (route-group layout), `/plan/edit`, `/plan/[day]/edit`. 6 shared primitives in `src/components/shared/` (FocalCard, MacroRangeBar, SetRow, SegmentedControl, StatCard, SessionRow) + barrel. Placeholders: `/community` (coming-soon), `/progress` (redirect→/history until S5). Pure `isTabActive` extracted to `src/lib/nav/tabs.ts`.
+**Verified:** `verify-owner-gate.ts` (13 assertions, red→green), `verify-tab-active.ts` (12 assertions), `ralph-verify.sh` GREEN (format/typecheck/lint/build). Live-auth nav/gate Playwright deferred to Final e2e (no test-user creds mid-slice).
+**Roast (Security + BugHunter/Maintainer + implied Scope):** 
+- MUST-FIX (implemented): BH-F2 nav filled stroke-only Lucide icons → removed `fill` (blob active state); BH-F1 MacroRangeBar's fill/color/band were 3 disjoint numbers w/ cosmetic 45/82 defaults → rewrote to DERIVE geometry+state from real `current`/`rangeMin`/`rangeMax` (no cosmetic band defaults); BH-F3 SessionRow had href but no onClick → made it a client component w/ `onClick` for in-place sheet taps.
+- DEFERRED (logged D24/D25 + KNOWN_ISSUES): SEC-F1/F2 owner-gate is UI-only; authoring mutations run client-side under per-user RLS so a non-owner can write their OWN silo (not a cross-user breach, not a regression, no followers this build) — data-boundary enforcement lands with the community/admin-hub build. SEC-F3 → adopt `(owner)/` route group at S6.
+- Solid (per Security): `requireOwner` uses `getUser()` (verified JWT, not spoofable session), fail-closes; library route-group coverage is structural.
+**Decisions added:** D24, D25.
