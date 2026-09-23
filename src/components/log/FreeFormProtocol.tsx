@@ -65,7 +65,6 @@ export function FreeFormProtocol({
           key={setLog.set_log_id}
           label={`Set ${setLog.set_index}`}
           setLog={setLog}
-          exercise={exercise}
         />
       ))}
 
@@ -83,28 +82,34 @@ export function FreeFormProtocol({
             setIsAddingSet(false);
           }}
         />
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setIsAddingSet(true)}
-          className="w-full gap-2 uppercase tracking-[0.06em]"
-        >
-          <Plus className="h-4 w-4" />
-          Add set
-        </Button>
-      )}
+      ) : null}
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
-      <Button
-        type="button"
-        onClick={handleComplete}
-        disabled={isCompleting}
-        className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
-      >
-        {isCompleting ? "Saving…" : "Done with this block"}
-      </Button>
+      {/* Flexible actions: add another set (dashed) alongside completing the
+          block (solid). While the entry pad is open, "Done" drops to its own
+          full-width row beneath it. Free-form blocks may complete with zero
+          logged sets, so "Done" is always available. */}
+      <div className="flex gap-2">
+        {!isAddingSet ? (
+          <button
+            type="button"
+            onClick={() => setIsAddingSet(true)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition hover:border-accent/50 hover:text-foreground"
+          >
+            <Plus className="h-4 w-4" />
+            Add set
+          </button>
+        ) : null}
+        <Button
+          type="button"
+          onClick={handleComplete}
+          disabled={isCompleting}
+          className="flex-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+        >
+          {isCompleting ? "Saving…" : "Done with this block ▸"}
+        </Button>
+      </div>
     </div>
   );
 }

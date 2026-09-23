@@ -196,6 +196,34 @@ check(
   -1,
 );
 
+// The REAL "workout finished" signal: a POPULATED blocks list whose ids are ALL
+// in completedBlockIds returns -1 → LoggerShell's advanceToNextBlock calls
+// completeSession (last-block finish → summary). This is the empty-array guard's
+// non-trivial sibling — the last block being completed must end the workout.
+check(
+  "all blocks complete (populated list, every id in completedBlockIds) returns -1 → finish",
+  findLastIncompleteBlock(
+    [
+      block({ block_id: "b1" }),
+      block({ block_id: "b2", display_order: 2 }),
+    ],
+    ["b1", "b2"],
+  ),
+  -1,
+);
+
+check(
+  "one of two blocks complete advances to b2 (index 1), does NOT finish",
+  findLastIncompleteBlock(
+    [
+      block({ block_id: "b1" }),
+      block({ block_id: "b2", display_order: 2 }),
+    ],
+    ["b1"],
+  ),
+  1,
+);
+
 // --- getSelectedExerciseIdForBlock ---
 
 check(

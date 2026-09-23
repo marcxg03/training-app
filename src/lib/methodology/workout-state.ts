@@ -218,3 +218,51 @@ export function findLastIncompleteBlock(
     (block) => !isBlockComplete(block, completedBlockIds),
   );
 }
+
+/** The set_index for the NEXT added working set on a 'failure' block (D16:
+ * working sets beyond the target). Extracted from FailureProtocol's inline
+ * `Math.max(maxLoggedIndex + 1, targetCount + 1)` so the offline set_index this
+ * writes is named and testable. Continues past both the highest logged index
+ * and the target slot count, so an added set never collides with a target slot
+ * or a prior added set. */
+export function nextAddedSetIndex(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets" | "setLogs">,
+) {
+  const targetCount = blockSetCount(block);
+  const maxLoggedIndex = block.setLogs.reduce(
+    (max, setLog) => Math.max(max, setLog.set_index),
+    0,
+  );
+
+  return Math.max(maxLoggedIndex + 1, targetCount + 1);
+}
+
+/** Which scheme actions a 'failure' block should offer (D16 soft-target rule),
+ * as pure predicates extracted from FailureProtocol's inline button gating:
+ * - `showAdd`  — the full target scheme is logged, so another working set (W3,
+ *   W4…) may be added. (The component still ANDs a local `!isAddingSet` UI
+ *   guard so the button hides while the pad is open.)
+ * - `showComplete` — at least one working set is logged, so a weak day (1 of 2)
+ *   can finish early. The target is soft both ways. */
+export function getSchemeActions(
+  block: Pick<LoggerBlock, "warmupSets" | "workingSets" | "setLogs">,
+): { showAdd: boolean; showComplete: boolean } {
+  const targetCount = blockSetCount(block);
+  const targetComplete = Array.from(
+    { length: targetCount },
+    (_, offset) => offset + 1,
+  ).every((setIndex) =>
+    block.setLogs.some((setLog) => setLog.set_index === setIndex),
+  );
+
+  return {
+    showAdd: targetComplete,
+    showComplete: hasLoggedWorkingSet(block),
+  };
+}
+
+/** The block-type badge label ("upper_body" → "UPPER-BODY"). Hoisted here as the
+ * single source (was triplicated across BlockList, BlockHeader, LoggerShell). */
+export function formatBlockType(blockType: string) {
+  return blockType.replace(/_/g, "-").toUpperCase();
+}

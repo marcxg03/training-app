@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
+import { formatBlockType } from "@/lib/methodology/workout-state";
 import { cn } from "@/lib/utils/cn";
 
 type BlockListProps = {
@@ -13,10 +14,6 @@ type BlockListProps = {
     bank: ReactNode;
   }>;
 };
-
-function formatBlockType(blockType: string) {
-  return blockType.replace(/_/g, "-").toUpperCase();
-}
 
 export function BlockList({ blocks }: BlockListProps) {
   const [openBlockId, setOpenBlockId] = useState<string | null>(

@@ -20,11 +20,13 @@
 // that log the full target count with an EMPTY completedBlockIds return true
 // where the new model requires false.
 import {
+  getSchemeActions,
   getSetLabel,
   getSetSchemeSteps,
   hasLoggedWorkingSet,
   isBlockComplete,
   isLastSchemeSet,
+  nextAddedSetIndex,
   type LoggerBlock,
   type LoggerSetLog,
 } from "../src/lib/methodology/workout-state";
@@ -304,6 +306,64 @@ check(
   "no sets logged at all → cannot complete",
   hasLoggedWorkingSet(block({ block_id: "b", warmupSets: 1, setLogs: [] })),
   false,
+);
+
+// --- nextAddedSetIndex: the set_index the offline queue writes for an ADDED
+// working set (D16). Extracted pure from FailureProtocol's inline
+// Math.max(maxLoggedIndex + 1, targetCount + 1). ---
+
+check(
+  "{1,2}: WU+W1+W2 logged (idx 1,2,3) → next added set is index 4",
+  nextAddedSetIndex(
+    block({
+      block_id: "b",
+      warmupSets: 1,
+      workingSets: 2,
+      setLogs: [setLog(1), setLog(2), setLog(3)],
+    }),
+  ),
+  4,
+);
+
+check(
+  "{0,2}: W1+W2 logged (idx 1,2) → next added set is index 3",
+  nextAddedSetIndex(
+    block({
+      block_id: "b",
+      warmupSets: 0,
+      workingSets: 2,
+      setLogs: [setLog(1), setLog(2)],
+    }),
+  ),
+  3,
+);
+
+// --- getSchemeActions: the Add/Complete button predicates (D16 soft target). ---
+
+check(
+  "{1,2} weak day [WU,W1] → showAdd:false (target not met), showComplete:true (≥1 working)",
+  getSchemeActions(
+    block({
+      block_id: "b",
+      warmupSets: 1,
+      workingSets: 2,
+      setLogs: [setLog(1), setLog(2)],
+    }),
+  ),
+  { showAdd: false, showComplete: true },
+);
+
+check(
+  "{1,2} target complete [WU,W1,W2] → showAdd:true, showComplete:true",
+  getSchemeActions(
+    block({
+      block_id: "b",
+      warmupSets: 1,
+      workingSets: 2,
+      setLogs: [setLog(1), setLog(2), setLog(3)],
+    }),
+  ),
+  { showAdd: true, showComplete: true },
 );
 
 if (failures > 0) {

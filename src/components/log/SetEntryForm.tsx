@@ -80,6 +80,7 @@ export function SetEntryForm({
   // separate exercises in the Library (e.g. "Weighted Pull Ups").
   const isBodyweight = exercise.is_bodyweight;
   const [notes, setNotes] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
   const [reps, setReps] = useState("");
   const [toFailure, setToFailure] = useState(defaultFailureChecked);
   const [weight, setWeight] = useState("");
@@ -251,7 +252,7 @@ export function SetEntryForm({
   }
 
   return (
-    <div className="space-y-4 rounded-[18px] border border-border bg-card p-[18px]">
+    <div className="space-y-4 rounded-2xl border border-accent bg-card p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-foreground">{label}</p>
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
@@ -294,7 +295,7 @@ export function SetEntryForm({
                 aria-label="Weight in pounds"
                 value={weight}
                 onChange={(event) => setWeight(event.target.value)}
-                className="w-full min-w-0 bg-transparent text-center font-mono text-[26px] font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-full min-w-0 bg-transparent text-center font-mono text-2xl font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 type="button"
@@ -343,7 +344,7 @@ export function SetEntryForm({
               aria-label="Reps"
               value={reps}
               onChange={(event) => setReps(event.target.value)}
-              className="w-full min-w-0 bg-transparent text-center font-mono text-[26px] font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full min-w-0 bg-transparent text-center font-mono text-2xl font-semibold tabular-nums text-foreground outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <button
               type="button"
@@ -388,16 +389,26 @@ export function SetEntryForm({
         </button>
       ) : null}
 
-      <label className="block space-y-2">
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
-          Notes
-        </span>
-        <textarea
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          className={textareaClassName}
-        />
-      </label>
+      {showNotes ? (
+        <label className="block space-y-2">
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-faint">
+            Notes
+          </span>
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className={textareaClassName}
+          />
+        </label>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowNotes(true)}
+          className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition hover:text-foreground"
+        >
+          + note
+        </button>
+      )}
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
@@ -408,7 +419,7 @@ export function SetEntryForm({
         className="w-full gap-2 text-[14px] font-bold uppercase tracking-[0.08em]"
       >
         <Check className="h-5 w-5" />
-        {isSaving ? "Saving…" : "Log Set"}
+        {isSaving ? "Saving…" : `Log ${label}`}
       </Button>
     </div>
   );

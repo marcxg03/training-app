@@ -124,10 +124,24 @@ Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being m
   **Decisions added:** D24, D25.
 
 ## Slice S1 — Today (rebuilt + wired) ✅
+
 **Built:** `/today` recomposed to the /demo TodayScreen — focal black Start card (FocalCard), "Also today" quiet list (SessionRow), nutrition glance (MacroRangeBar range-fill), numbered week strip. Data flow UNCHANGED (getTodaySessions, buildMacroBars, sumMealTotals reused); presentational rewire only. New: TodayFocalCard, TodayAlsoList, types.ts. Deleted orphaned TodaySessionCard/List.
 **Verified:** ralph-verify GREEN. Live-authed visual deferred to Final e2e.
 **Roast (Bug Hunter + design-fidelity, 2 focused reviewers):**
+
 - MUST-FIX (fixed): BH1 nutrition glance painted authoritative color but positioned fill from range MIDPOINT → could contradict (e.g. [0,400] renders center-green); fixed by adding RANGE fill (currentMin/currentMax span) to MacroRangeBar + TodayFuelCard feeds [totalMin,totalMax]+state. BH3 completed focal lift = dead card → now Links to detail ("✓ Completed — View session"). DF1 header title text-3xl out-sized the focal card → text-xl font-bold.
 - SHOULD-FIX (fixed): BH2 2nd lift lost Start affordance → "Also today" lift rows route to /log/[id] + show completion. DF2 rows too loud → quiet one-line (SessionRow `quiet` prop, detail as faint trailing). DF3 SessionRow needlessly client → reverted to server-safe; S3's in-place tap will be a separate SessionRowButton.
 - Verified-correct: start behavior preserved (actionHref=/log/[id]); null workoutId N/A (non-null PK); buildWeekDates correct across month/DST; tokens clean.
-**Primitive seam updates:** MacroRangeBar +currentMin/currentMax (range fill, 3 modes). SessionRow → server-safe + `quiet`, onClick removed (moved to future SessionRowButton for S3).
+  **Primitive seam updates:** MacroRangeBar +currentMin/currentMax (range fill, 3 modes). SessionRow → server-safe + `quiet`, onClick removed (moved to future SessionRowButton for S3).
+
+## Slice S2 — Logger (FLAGSHIP, rebuilt + wired) ✅
+**Built:** logger recomposed to /demo LoggerScreen — top bar (End + sync pill), whole-workout block progress bar, "Block n/total · name", exercise pick (block+bank) + Swap, stacked set rows, BIG entry pad (weight/reps steppers + collapsible note + failure toggle + Log Wn), flexible actions (+Add working set / Complete block). Single-block focus (vs all-blocks scroll) per /demo. State machine UNCHANGED — recompose only. D16 flexible scheme + append-only + PR + offline sync + resume + end-early all preserved.
+**Verified:** verify-set-scheme + verify-logger GREEN (with new assertions), ralph-verify GREEN. Live logger drive deferred to Final e2e.
+**Roast (FULL council: Bug Hunter + Architect/Maintainer + Test-Skeptic):**
+- 🔴 SHIP-BLOCKER (fixed): BH-F1 single-block subtree was UNKEYED → React reused FailureProtocol/SetEntryForm instance across blocks → unsaved weight/reps leaked into the next block's pad → phantom set could log against the WRONG exercise. Fixed: `key={currentBlock.block_id}` (LoggerShell:438). Also fixed free-form auto-open + stale "Saving…".
+- MUST-ADD-TEST (added): TS-F1 last-block finish (findLastIncompleteBlock all-complete populated → -1) was untested (only empty-array). Added + green.
+- SHOULD-FIX (fixed): Arch-F1 two divergent row styles → SetLogRow restyled to match shared SetRow/demo (w-16 sans label, text-lg, ✓ on done, inline PR▲; kept Failure badge+notes; dropped dead `exercise` prop). Arch-F3 entry-pad drift → Notes gated behind "+ note", scale tokens. BH-F3/Arch-F2 → deleted orphaned BlockHeader, hoisted formatBlockType to workout-state.ts. TS-F2/F3 → extracted nextAddedSetIndex + getSchemeActions pure helpers + tests (guards offline set_index + D16 weak-day).
+- ACCEPTED BY DESIGN: BH-F2 single-block focus loses mid-workout scroll-back to earlier blocks — the /demo LoggerScreen Marcus approved IS single-block; summary shows all. Not changed.
+- Verified-correct by council: advanceToNextBlock reaches every block + last-block finishes (no advance-past-end); progress-bar derivation correct (no off-by-one, out-of-order-complete colors right); D16 gating intact (never auto-locks, weak-day preserved).
+**Note:** PRBadge.tsx now orphaned (was only used by SetLogRow) — left in place, harmless; delete later if desired.
+**Helpers added:** nextAddedSetIndex(block), getSchemeActions(block)→{showAdd,showComplete}, formatBlockType(blockType).
