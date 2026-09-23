@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
 
 import { PlanEditForm } from "@/app/(app)/plan/_components/PlanEditForm";
+import { requireOwner } from "@/lib/auth/requireOwner";
 import { getPlanEditData } from "@/lib/plan/queries";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function PlanEditPage() {
+  // Plan editing is owner-only authoring (Slice S0 · D18/D22): a non-owner
+  // gets notFound() before any plan data is read.
+  await requireOwner();
+
   const supabase = await createClient();
   const {
     data: { user },

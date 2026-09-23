@@ -2,6 +2,7 @@ import { Trophy } from "lucide-react";
 
 import { formatWeight } from "@/lib/units";
 import type { PRTimelineRow as PRTimelineRowData } from "@/lib/history/projections";
+import { PR_TYPE_STYLE } from "@/lib/methodology/pr-colors";
 import { ExerciseLink } from "@/components/shared/ExerciseLink";
 import { WorkoutLink } from "@/components/shared/WorkoutLink";
 import { PRTypeBadge } from "@/app/(app)/history/_components/PRTypeBadge";
@@ -18,17 +19,12 @@ function formatPrValue(row: PRTimelineRowData): string {
   return `${formatWeight(row.weight_kg)} × ${row.reps}`;
 }
 
-const iconClasses: Record<PRTimelineRowData["pr_type"], string> = {
-  weight: "text-accent",
-  in_range_rep: "text-success",
-};
-
 export function PRTimelineRow({ row }: PRTimelineRowProps) {
   return (
     <li className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-card px-4 py-3.5">
       <Trophy
         aria-hidden
-        className={`h-[18px] w-[18px] shrink-0 ${iconClasses[row.pr_type]}`}
+        className={`h-[18px] w-[18px] shrink-0 ${PR_TYPE_STYLE[row.pr_type].text}`}
         fill="currentColor"
       />
       <div className="min-w-0 flex-1">

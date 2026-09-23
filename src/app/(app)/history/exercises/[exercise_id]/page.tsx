@@ -114,7 +114,10 @@ export default async function ExerciseProgressPage({
     return (
       <div className="mx-auto flex max-w-md flex-col gap-5">
         <header className="flex items-center gap-3">
-          <HistoryBackLink href="/history" label="Back to PR timeline" />
+          <HistoryBackLink
+            href="/progress?view=history"
+            label="Back to PR timeline"
+          />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
             Exercise
           </h1>
@@ -132,7 +135,10 @@ export default async function ExerciseProgressPage({
   return (
     <div className="mx-auto flex max-w-md flex-col gap-5">
       <header className="flex items-center gap-3">
-        <HistoryBackLink href="/history" label="Back to PR timeline" />
+        <HistoryBackLink
+          href="/progress?view=history"
+          label="Back to PR timeline"
+        />
         <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
           {progression.exercise_name}
         </h1>

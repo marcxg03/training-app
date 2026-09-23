@@ -9,6 +9,37 @@
 
 ---
 
+## 0. UPDATE — 2026-09-20 (post-interview with Marcus). READ FIRST; overrides §7 and §8.
+
+A scoping interview on 2026-09-20 locked four decisions that **override parts of this brief**. Where this section conflicts with §7 or §8 below, **this section wins**.
+
+1. **Aesthetic is decided: "Minimalist mono."** Not an open canvas. Near-monochrome, tiny type scale, dense-but-clean, one hairline accent, function-first / almost technical. The current dark-mono foundation (§6.1) is closer to the target than the old "open canvas" framing implied — evolve it toward a refined mono system, don't reinvent an identity. §7's *design goals* (gym-legible, fast entry, serious-not-influencer, calm hierarchy) still stand as the rubric.
+2. **Community model = Creator-Program ("Push On by Michael Smith" / Playbook style), NOT the coach→client CRM in §8.** Followers self-serve **subscribe and load Marcus's published plan**; a **community feed** for check-ins/support; subscription-monetized. This is 1-to-many self-serve, **not** per-client assignment/review/coach-notes. **§8 below is superseded** by §8-REVISED at the end of this section. (If Marcus later wants light per-client plan assignment as a *tier*, add it then — it was explicitly deprioritized in favor of the self-serve model.)
+3. **Set structure must be adjustable per plan.** The "failure block = fixed 3 sets (WU/W1/W2)" rule in §2 becomes a **configurable set-scheme per block/workout** (e.g. N warm-ups + M working sets, to-failure flag per scheme), so different plans prescribe different structures. This is a methodology + data-model change, not just a reskin — it touches `block_type` / the logger state machine and needs a migration. Coordinate with the wiring contract (§9): additive, don't break existing columns.
+4. **Cut the hard/soft validation rules.** The 48h-recovery / push-pull-balance / min-rest-day / compound-window / cardio-order guardrails are **removed or made fully optional (off by default)**. Simplify the plan/day editors accordingly.
+
+**Kept (confirmed):** block + bank fresh-choice model · the WU + working-sets protocol (now *adjustable* per #3) · full macro + nutrition tracking incl. the calorie/photo estimator.
+
+**Still pending from Marcus:** his by-hand **Sep–Dec training block** (arriving as screenshots) — the seed data that the new-block wiring slice depends on. Do not fabricate the block; wait for the screenshots.
+
+### §8-REVISED — Community: Creator-Program model (supersedes §8)
+> **Design-first; no backend yet.** Reuse the existing lifter screens (Today/Plan/Logger/Nutrition/History) for the follower's training experience.
+
+- **Roles:** **Creator** (Marcus — the app owner, authors plans) and **Follower** (a subscriber who loads a published plan and trains it). A follower sees their own training world scoped to the plan they loaded; there is **no per-follower assignment or review by the creator** in this phase.
+- **Creator side — design these:**
+  - **Publish a plan:** turn one of Marcus's plans (schedule + blocks + banks + nutrition framework) into a **public, loadable template** (snapshot; the `PlanTemplate` table in the data model already anticipates this). Set a title, description, cover, and price/free.
+  - **Creator profile / storefront:** a public page listing Marcus's published program(s) a follower can browse and subscribe to (the "Push On" landing).
+  - **Community feed (lightweight):** followers on the same program post **check-ins** (a completed-session share, a PR, a note); others react/support. Read-mostly, low-moderation. Design the feed + the "share this to the feed" moment off a workout summary.
+  - **Roster-lite (optional, view-only):** an at-a-glance list of who's on the program + aggregate activity — **no** individual client workspace, assignment, or coach-notes surface (that's the rejected CRM).
+- **Follower side — design these:**
+  - **Discover / subscribe:** browse Marcus's storefront → subscribe (free or paid) → **load the plan** into their own app.
+  - **Train it:** their Today/Plan/Logger/Nutrition/History, scoped to the loaded plan (Plan is read-mostly — it's Marcus's). Reuse existing patterns.
+  - **Community:** post check-ins to the program feed; see others'.
+- **Monetization:** subscription (free tier + paid, à la ~$15/mo). **OPEN DECISION for the build phase:** real payments (Stripe) vs. free-access-first this phase. Design the paywall/subscribe UI so either wires in; don't assume Stripe is built.
+- **Cross-cutting:** login must resolve **creator vs follower** shell; a follower only ever sees their own data + the public feed. Empty/first-run states for both.
+
+---
+
 ## 1. How to use this brief
 
 **What to produce:**
@@ -242,6 +273,8 @@ type, block type, PR type, session state, cardio format, bodyweight), **progress
 
 ## 7. Aesthetic direction (open canvas — design goals as the rubric)
 
+> ⚠️ **PARTIALLY SUPERSEDED by §0.1 (2026-09-20): aesthetic is decided = "Minimalist mono," not an open canvas.** The *design goals* below still hold as the rubric.
+
 Judge every visual choice against these goals:
 - **Gym-legible.** Glanceable at arm's length, high contrast, large tap targets — usable with
   sweaty hands, gloves, bad lighting, mid-set, one hand.
@@ -261,6 +294,8 @@ rationale and a tokenized system so it can be implemented consistently.
 ---
 
 ## 8. NEW — Client coaching feature (design from scratch)
+
+> 🛑 **SUPERSEDED by §8-REVISED in §0 (2026-09-20).** This section designs a coach→named-client CRM that Marcus **rejected**. Build the **Creator-Program** model in §8-REVISED instead. Kept below only as reference for reusable patterns (client-scoped screens reusing lifter flows).
 
 > **Important:** This feature has **no backend yet** — no tables, roles, or permissions exist.
 > This section is a **design-first** spec. Engineering will build the data layer in a later

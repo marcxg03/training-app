@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { DayEditForm } from "@/app/(app)/plan/[day]/_components/DayEditForm";
+import { requireOwner } from "@/lib/auth/requireOwner";
 import { getDayEditData } from "@/lib/plan/queries";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/lib/supabase/types";
@@ -22,6 +23,9 @@ type EditPlanDayPageProps = {
 export default async function EditPlanDayPage({
   params,
 }: EditPlanDayPageProps) {
+  // Day editing is owner-only authoring (Slice S0 · D18/D22).
+  await requireOwner();
+
   const { day } = await params;
 
   if (!(day in DAY_LABELS)) {

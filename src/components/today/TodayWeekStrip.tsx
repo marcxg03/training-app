@@ -11,39 +11,34 @@ type TodayWeekStripProps = {
   selectedDay: DayOfWeek;
   /** The real calendar day, marked so it stays distinguishable from selection. */
   actualDay: DayOfWeek;
+  /** Day-of-month number for each weekday in the current week (real dates). */
+  weekDates: Record<DayOfWeek, number>;
 };
 
 type WeekDay = {
   key: DayOfWeek;
   label: string;
-  /** Visual session-type hint for the dot (presentational only). */
-  tone: "lift" | "cardio" | "rest";
 };
 
-// Visual-only week rhythm. Dot colors hint session type; the active day is
-// resolved from the live schedule via selectedDay.
+// Calendar order Mon→Sun; the active day is resolved from the live schedule via
+// selectedDay and the real day is marked via actualDay.
 const weekDays: WeekDay[] = [
-  { key: "mon", label: "M", tone: "lift" },
-  { key: "tue", label: "T", tone: "lift" },
-  { key: "wed", label: "W", tone: "cardio" },
-  { key: "thu", label: "T", tone: "lift" },
-  { key: "fri", label: "F", tone: "rest" },
-  { key: "sat", label: "S", tone: "lift" },
-  { key: "sun", label: "S", tone: "rest" },
+  { key: "mon", label: "M" },
+  { key: "tue", label: "T" },
+  { key: "wed", label: "W" },
+  { key: "thu", label: "T" },
+  { key: "fri", label: "F" },
+  { key: "sat", label: "S" },
+  { key: "sun", label: "S" },
 ];
-
-const dotToneClass: Record<WeekDay["tone"], string> = {
-  lift: "bg-accent",
-  cardio: "bg-cardio",
-  rest: "bg-border",
-};
 
 export function TodayWeekStrip({
   selectedDay,
   actualDay,
+  weekDates,
 }: TodayWeekStripProps) {
   return (
-    <div className="flex justify-between">
+    <div className="flex items-center justify-between px-1">
       {weekDays.map((day) => {
         const isSelected = day.key === selectedDay;
         const isActualDay = day.key === actualDay;
@@ -57,32 +52,26 @@ export function TodayWeekStrip({
             href={href}
             aria-label={`View ${dayOfWeekLabel(day.key)}${isActualDay ? " (today)" : ""}`}
             aria-current={isSelected ? "page" : undefined}
-            className={cn(
-              "flex min-w-9 flex-col items-center gap-2 rounded-[10px] py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              isSelected ? "bg-accent/[0.12]" : "hover:bg-card-alt",
-            )}
+            className="flex flex-col items-center gap-1 rounded-[10px] px-1 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <span
-              className={cn(
-                "font-mono text-[10px] tabular-nums",
-                isSelected
-                  ? "font-bold text-accent"
-                  : "font-semibold text-faint",
-              )}
-            >
+            <span className="text-[10px] uppercase text-faint">
               {day.label}
             </span>
             <span
               className={cn(
-                "h-[7px] w-[7px] rounded-full",
-                dotToneClass[day.tone],
+                "flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums",
+                isSelected
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-input text-subtle",
                 // Ring keeps the real calendar day identifiable even when a
                 // different day is selected.
                 isActualDay && !isSelected
-                  ? "ring-2 ring-accent/70 ring-offset-1 ring-offset-background"
+                  ? "ring-2 ring-accent/60 ring-offset-1 ring-offset-background"
                   : "",
               )}
-            />
+            >
+              {weekDates[day.key]}
+            </span>
           </Link>
         );
       })}

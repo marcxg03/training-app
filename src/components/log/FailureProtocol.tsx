@@ -9,10 +9,12 @@ import type {
   LoggerSetLog,
 } from "@/lib/methodology/workout-state";
 import {
+  getSchemeActions,
   getSetLabel,
   getSetSchemeSteps,
-  hasLoggedWorkingSet,
+  nextAddedSetIndex,
 } from "@/lib/methodology/workout-state";
+import { SetRow } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
@@ -57,13 +59,9 @@ export function FailureProtocol({
   const nextTargetStep = targetSteps.find(
     (step) => !loggedSets.some((setLog) => setLog.set_index === step.setIndex),
   );
-  const targetComplete = !nextTargetStep;
 
-  const maxLoggedIndex = loggedSets.reduce(
-    (max, setLog) => Math.max(max, setLog.set_index),
-    0,
-  );
-  const nextAddedIndex = Math.max(maxLoggedIndex + 1, targetCount + 1);
+  const nextAddedIndex = nextAddedSetIndex(block);
+  const { showAdd, showComplete } = getSchemeActions(block);
 
   const [error, setError] = useState<string | null>(null);
   const [isAddingSet, setIsAddingSet] = useState(false);
@@ -102,19 +100,20 @@ export function FailureProtocol({
               key={step.setIndex}
               label={step.label}
               setLog={savedSet}
-              exercise={exercise}
             />
           );
         }
 
         if (!nextTargetStep || nextTargetStep.setIndex !== step.setIndex) {
+          // A future target slot — a dashed placeholder that unlocks once the
+          // prior set is saved (sequential unlock preserved).
           return (
-            <div
+            <SetRow
               key={step.setIndex}
-              className="rounded-xl border border-dashed border-border px-4 py-5 text-center font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-faint"
-            >
-              {step.label} unlocks after the prior set is saved
-            </div>
+              label={step.label}
+              value="—"
+              role="target"
+            />
           );
         }
 
@@ -141,55 +140,60 @@ export function FailureProtocol({
           key={setLog.set_log_id}
           label={getSetLabel(block, setLog.set_index)}
           setLog={setLog}
-          exercise={exercise}
         />
       ))}
 
       {/* Once every target slot is logged, offer another working set (W3, W4…).
-          The block NEVER auto-locks at the count. */}
-      {targetComplete &&
-        (isAddingSet ? (
-          <SetEntryForm
-            blockId={block.block_id}
-            completionId={completionId}
-            exercise={exercise}
-            label={getSetLabel(block, nextAddedIndex)}
-            workoutId={workoutId}
-            setIndex={nextAddedIndex}
-            showFailureCheckbox={block.toFailure}
-            defaultFailureChecked={block.toFailure}
-            userId={userId}
-            onSaved={(setLog) => {
-              onSetSaved(setLog);
-              setIsAddingSet(false);
-            }}
-          />
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsAddingSet(true)}
-            className="w-full gap-2 uppercase tracking-[0.06em]"
-          >
-            <Plus className="h-4 w-4" />
-            Add working set
-          </Button>
-        ))}
+          The block NEVER auto-locks at the count — while adding, the pad takes
+          the full width (not the side-by-side actions row). */}
+      {showAdd && isAddingSet ? (
+        <SetEntryForm
+          blockId={block.block_id}
+          completionId={completionId}
+          exercise={exercise}
+          label={getSetLabel(block, nextAddedIndex)}
+          workoutId={workoutId}
+          setIndex={nextAddedIndex}
+          showFailureCheckbox={block.toFailure}
+          defaultFailureChecked={block.toFailure}
+          userId={userId}
+          onSaved={(setLog) => {
+            onSetSaved(setLog);
+            setIsAddingSet(false);
+          }}
+        />
+      ) : null}
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
-      {/* "Complete block" is reachable as soon as ≥1 working set is logged, so a
-          weak day (1 of 2) can finish and advance — the target is soft BOTH ways,
-          not just upward. Never gated on the full target being met. */}
-      {hasLoggedWorkingSet(block) ? (
-        <Button
-          type="button"
-          onClick={handleComplete}
-          disabled={isCompleting}
-          className="w-full text-[13px] font-bold uppercase tracking-[0.08em]"
-        >
-          {isCompleting ? "Saving…" : "Complete block"}
-        </Button>
+      {/* Flexible scheme actions (D16): "+ Add working set" (dashed) appears only
+          once the target slots are all logged; "Complete block" (solid) appears
+          as soon as ≥1 working set is logged, so a weak day (1 of 2) can finish
+          and advance — the target is soft BOTH ways. Never gated on the full
+          target being met. */}
+      {(showAdd && !isAddingSet) || showComplete ? (
+        <div className="flex gap-2">
+          {showAdd && !isAddingSet ? (
+            <button
+              type="button"
+              onClick={() => setIsAddingSet(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition hover:border-accent/50 hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" />
+              Add working set
+            </button>
+          ) : null}
+          {showComplete ? (
+            <Button
+              type="button"
+              onClick={handleComplete}
+              disabled={isCompleting}
+              className="flex-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+            >
+              {isCompleting ? "Saving…" : "Complete block ▸"}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

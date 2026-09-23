@@ -107,3 +107,106 @@ Commits: `a8ed8eb` (slice) → `0bd9657` (verify-logger test migration) → this
 Built (D16): `working_sets` is a soft TARGET, not an auto-complete cap. `isBlockComplete` now manual-only (completedBlockIds) for ALL block types; FailureProtocol renders warm-up + target working slots, then "+ Add working set" (W3, W4…) + "Complete block"; `getSetLabel` continues W-numbering past target; `hasLoggedWorkingSet` helper. to_failure stays a per-set toggle.
 Verify (coordinator re-ran): verify-set-scheme + verify-logger + gate GREEN. Caught a regression the implementer's gate missed — verify-logger had 3 stale auto-complete assertions (ralph-verify doesn't run it); migrated them to the manual model (and the week-2 lockout is now structurally impossible).
 Roast: 🟡 1 must-fix — "Complete block" was gated on the FULL target being met, trapping a weak-day user (soft upward only). FIXED: "Complete block" now shows once ≥1 working set is logged (`hasLoggedWorkingSet`, unit-tested) → soft target BOTH ways. Other 4 roast points CONVERGED (add-set index collision-safe, no stranded callers, signature safe, label off-by-one clean). Minor deferred: added-set default-failure-checkbox consistency; complete-while-add-form-open discards unsaved input.
+
+---
+
+# Mobile IA Rewire (redesign phase 2) — branch redesign/mobile-ia-wire
+
+## Slice S0 — Nav + IA scaffold + owner-gate + shared primitives ✅
+
+**Built:** 5-tab BottomTabBar (Today · Plan · Nutrition · Progress · Community; Library/Trends/History removed from nav; Fuel→Nutrition). Owner-gate: `src/lib/auth/owner.ts` (`isOwner`, env `OWNER_USER_IDS`, fail-closed) + `requireOwner.ts` server guard wired into `/library/**` (route-group layout), `/plan/edit`, `/plan/[day]/edit`. 6 shared primitives in `src/components/shared/` (FocalCard, MacroRangeBar, SetRow, SegmentedControl, StatCard, SessionRow) + barrel. Placeholders: `/community` (coming-soon), `/progress` (redirect→/history until S5). Pure `isTabActive` extracted to `src/lib/nav/tabs.ts`.
+**Verified:** `verify-owner-gate.ts` (13 assertions, red→green), `verify-tab-active.ts` (12 assertions), `ralph-verify.sh` GREEN (format/typecheck/lint/build). Live-auth nav/gate Playwright deferred to Final e2e (no test-user creds mid-slice).
+**Roast (Security + BugHunter/Maintainer + implied Scope):**
+
+- MUST-FIX (implemented): BH-F2 nav filled stroke-only Lucide icons → removed `fill` (blob active state); BH-F1 MacroRangeBar's fill/color/band were 3 disjoint numbers w/ cosmetic 45/82 defaults → rewrote to DERIVE geometry+state from real `current`/`rangeMin`/`rangeMax` (no cosmetic band defaults); BH-F3 SessionRow had href but no onClick → made it a client component w/ `onClick` for in-place sheet taps.
+- DEFERRED (logged D24/D25 + KNOWN_ISSUES): SEC-F1/F2 owner-gate is UI-only; authoring mutations run client-side under per-user RLS so a non-owner can write their OWN silo (not a cross-user breach, not a regression, no followers this build) — data-boundary enforcement lands with the community/admin-hub build. SEC-F3 → adopt `(owner)/` route group at S6.
+- Solid (per Security): `requireOwner` uses `getUser()` (verified JWT, not spoofable session), fail-closes; library route-group coverage is structural.
+  **Decisions added:** D24, D25.
+
+## Slice S1 — Today (rebuilt + wired) ✅
+
+**Built:** `/today` recomposed to the /demo TodayScreen — focal black Start card (FocalCard), "Also today" quiet list (SessionRow), nutrition glance (MacroRangeBar range-fill), numbered week strip. Data flow UNCHANGED (getTodaySessions, buildMacroBars, sumMealTotals reused); presentational rewire only. New: TodayFocalCard, TodayAlsoList, types.ts. Deleted orphaned TodaySessionCard/List.
+**Verified:** ralph-verify GREEN. Live-authed visual deferred to Final e2e.
+**Roast (Bug Hunter + design-fidelity, 2 focused reviewers):**
+
+- MUST-FIX (fixed): BH1 nutrition glance painted authoritative color but positioned fill from range MIDPOINT → could contradict (e.g. [0,400] renders center-green); fixed by adding RANGE fill (currentMin/currentMax span) to MacroRangeBar + TodayFuelCard feeds [totalMin,totalMax]+state. BH3 completed focal lift = dead card → now Links to detail ("✓ Completed — View session"). DF1 header title text-3xl out-sized the focal card → text-xl font-bold.
+- SHOULD-FIX (fixed): BH2 2nd lift lost Start affordance → "Also today" lift rows route to /log/[id] + show completion. DF2 rows too loud → quiet one-line (SessionRow `quiet` prop, detail as faint trailing). DF3 SessionRow needlessly client → reverted to server-safe; S3's in-place tap will be a separate SessionRowButton.
+- Verified-correct: start behavior preserved (actionHref=/log/[id]); null workoutId N/A (non-null PK); buildWeekDates correct across month/DST; tokens clean.
+  **Primitive seam updates:** MacroRangeBar +currentMin/currentMax (range fill, 3 modes). SessionRow → server-safe + `quiet`, onClick removed (moved to future SessionRowButton for S3).
+
+## Slice S2 — Logger (FLAGSHIP, rebuilt + wired) ✅
+
+**Built:** logger recomposed to /demo LoggerScreen — top bar (End + sync pill), whole-workout block progress bar, "Block n/total · name", exercise pick (block+bank) + Swap, stacked set rows, BIG entry pad (weight/reps steppers + collapsible note + failure toggle + Log Wn), flexible actions (+Add working set / Complete block). Single-block focus (vs all-blocks scroll) per /demo. State machine UNCHANGED — recompose only. D16 flexible scheme + append-only + PR + offline sync + resume + end-early all preserved.
+**Verified:** verify-set-scheme + verify-logger GREEN (with new assertions), ralph-verify GREEN. Live logger drive deferred to Final e2e.
+**Roast (FULL council: Bug Hunter + Architect/Maintainer + Test-Skeptic):**
+
+- 🔴 SHIP-BLOCKER (fixed): BH-F1 single-block subtree was UNKEYED → React reused FailureProtocol/SetEntryForm instance across blocks → unsaved weight/reps leaked into the next block's pad → phantom set could log against the WRONG exercise. Fixed: `key={currentBlock.block_id}` (LoggerShell:438). Also fixed free-form auto-open + stale "Saving…".
+- MUST-ADD-TEST (added): TS-F1 last-block finish (findLastIncompleteBlock all-complete populated → -1) was untested (only empty-array). Added + green.
+- SHOULD-FIX (fixed): Arch-F1 two divergent row styles → SetLogRow restyled to match shared SetRow/demo (w-16 sans label, text-lg, ✓ on done, inline PR▲; kept Failure badge+notes; dropped dead `exercise` prop). Arch-F3 entry-pad drift → Notes gated behind "+ note", scale tokens. BH-F3/Arch-F2 → deleted orphaned BlockHeader, hoisted formatBlockType to workout-state.ts. TS-F2/F3 → extracted nextAddedSetIndex + getSchemeActions pure helpers + tests (guards offline set_index + D16 weak-day).
+- ACCEPTED BY DESIGN: BH-F2 single-block focus loses mid-workout scroll-back to earlier blocks — the /demo LoggerScreen Marcus approved IS single-block; summary shows all. Not changed.
+- Verified-correct by council: advanceToNextBlock reaches every block + last-block finishes (no advance-past-end); progress-bar derivation correct (no off-by-one, out-of-order-complete colors right); D16 gating intact (never auto-locks, weak-day preserved).
+  **Note:** PRBadge.tsx now orphaned (was only used by SetLogRow) — left in place, harmless; delete later if desired.
+  **Helpers added:** nextAddedSetIndex(block), getSchemeActions(block)→{showAdd,showComplete}, formatBlockType(blockType).
+
+## Slice S3 — Nutrition (rebuilt + wired, + manual log) ✅
+
+**Built:** `/nutrition` recomposed to /demo NutritionScreen — calorie headline (totalMin–max / target range + status badge), P/C/F MacroRangeBars, meal log (SessionRowButton tap→edit), 3-way log flow (Snap/Describe/Manual). Manual path reuses existing logMeal → auto-derives calories (P×4+C×4+F×9), no AI call. New client SessionRowButton (sibling to server SessionRow). Data layer reused unchanged.
+**Verified:** ralph-verify GREEN. Live-authed (log a real meal, real estimator) deferred to Final e2e.
+**Roast (Bug Hunter + Maintainer/fidelity):**
+
+- MUST-FIX (fixed): F1 MacroRangeBar range-mode rendered ZERO-WIDTH fill for exact-logged meals (min==max, the common case) → macro bars showed nothing on BOTH Today + Nutrition (regression from S1's range-fill). Fixed: left-anchored 0→currentMax progress fill (matches /demo), state authoritative. F2 meal row with a note LOST its P/C/F macros (`note ?? macros`) → now shows both.
+- SHOULD-FIX (fixed): focus-nudge stole focus mid-typing + iOS file-picker-in-timeout risk → guarded (no snap auto-click, describe/manual focus only if nothing focused); deleted genuinely-orphaned DayTypeFrameworkCard (implementer's "still used" was false); extracted shared SessionRowInner for SessionRow/SessionRowButton (had drifted: overflow-hidden mismatch).
+- Verified-correct: manual→logMeal→auto-derived calories estimator-free; Snap/Describe unchanged; delete reachable via sheet footer; no-targets fallback safe.
+- DEFERRED: consolidate MacroProgressBar (nutrition/history/[date]) → MacroRangeBar — FUTURE_WORK.
+  **Seam:** MacroRangeBar fill = left-anchored 0→currentMax (fixes Today too). SessionRowButton (client) + SessionRowInner (shared presentational).
+
+## Slice S4 — Plan (rebuilt + wired, + selector) ✅
+
+**Built:** `/plan` recomposed to /demo PlanScreen — plan selector (PlanSelector client, reuses existing activatePlan mutation → router.refresh, re-drives Today via is_active), week as 7 typed day cards (plan-dots.ts: lift=accent, cond=cardio-teal, rest=border, priority-ordered), view-only + dashed desktop-authoring note. No authoring affordances surfaced on mobile. Subscribed plans omitted (D21 — no backend; not fabricated). New: PlanSelector, plan-dots.ts (+ verify-plan-dots.ts).
+**Verified:** verify-plan-dots GREEN, ralph-verify GREEN. Live switch→Today deferred to Final e2e.
+**Roast (Bug Hunter + Maintainer/fidelity, 1 combined):**
+
+- MUST-FIX (fixed): F1 D18 defeated via day route — `/plan/[day]` still showed an Edit pencil, and since Marcus IS owner the gate passed on mobile → authoring reachable. Fixed: day-detail Edit made desktop-only (`hidden md:inline-flex`); route stays owner-gated for deep links.
+- SHOULD-FIX (fixed): F3 scheduleless "Open day" cards linked to a route that notFound()s → now non-navigable (Link only when openable = isRestDay || sessions>0).
+- DEFERRED (logged KNOWN_ISSUES + FUTURE_WORK #14): F2 activatePlan non-atomic (2 writes, no txn) → partial failure leaves zero active plans; pre-existing, rare, self-healing on retry; proper fix = transactional RPC.
+- Verified-correct: plan-dots pure/priority-ordered; PlanSelector guards double-submit, no-op same-plan, surfaces errors; activatePlan flips old active off on happy path. "sport"/warning dot unreachable = acceptable (no schema value; basketball=cardio).
+  **Note:** PlanControls.tsx orphaned — kept for the future desktop hub (D18).
+
+## Slice S5 — Progress (merge Trends + History → 3-segment tab) ✅
+**Built:** `/progress` replaces the S0 redirect placeholder — SegmentedControl (Overview · Trends · History), server-first (all segments server-rendered, hidden-toggled, no refetch). Overview = 3 StatCards (workouts/PRs/streak) + featured e1rm chart + Recent timeline (PRs ▲ / sessions ✓ via SessionRow). Trends = full E1rmSection + WeeklyVolume + Bodyweight + NutritionTrend. History = PR timeline + all-workouts. Old /trends + /history → redirect("/progress"); deep-link detail routes preserved. New: overview.ts (deriveOverviewStats + buildRecentTimeline pure helpers), verify-progress-overview.ts, ProgressSegments/RecentTimeline/ProgressShowAllToggle.
+**Verified:** verify-progress-overview + verify-tab-active + ralph-verify GREEN. Live-authed visual deferred to Final e2e.
+**Roast (FULL council: Bug Hunter + Maintainer/fidelity + Test-Skeptic):**
+- MUST-FIX (fixed): BH-F1 isCounted counted ended_early (abandoned) sessions → streak + workouts-this-month over-counted (comment said "genuinely-completed" but code only excluded in_progress). Fixed: count `complete` only (set-count not in projection w/o a query change, D17); comment matches; ended_early fixtures added.
+- SHOULD-FIX (fixed): BH-F2/TS-F2 a set earning weight+rep PR counted as 2 (two pr_history rows) → deduped by set_log_id for count + Recent (one entry per PR-earning set) + test. Fidelity-F1 Overview was a 6-section dumping ground vs "calm glanceable" → restructured to 3 tight segments (Overview glance / Trends charts / History); nothing dropped. BH-F3 deep-detail back links → /progress?view=history (were bouncing to Overview w/ a lying "Back to PR timeline"); /history/workouts index → redirect. Maint-F3 deleted 3 orphans (TrendsSectionChips, HistoryHeaderLink, PRTimelineShowAllToggle); moved 6 re-homed sections into progress/_components.
+- Verified-correct: redirect topology (no loop, deep links resolve), server-first toggle (no unmount/refetch), streak core math DST/tz-safe.
+- FLAG for Marcus: middle segment renamed "By exercise" → "Trends" (now holds all charts); /demo mockup still shows old label (static artifact). allWorkoutsHref now dead (minor).
+
+## Slice S6 — Community placeholder + /admin stub + Settings reskin ✅
+**Built:** Community = honest coming-soon placeholder (storefront/feed shell in light/Satoshi; disabled Subscribe + "Soon" pills; Marcus's real Block II previewed w/ "Free during beta"; coaching-inquiry "Soon" row; feed marked Example; NO fabricated live counts). New `(owner)/` route group (D25 partial) with `layout.tsx` → requireOwner() gating `/admin` structurally; `/admin` = scope stub (program CRUD + publish/archive + the 8-tile analytics, refs spec/ADMIN_HUB_ANALYTICS.md). Settings reskinned to primitives, kept functional (goal/targets/profile/sign-out), owner-only section (Admin hub + Exercise library) gated by isOwner. Added build-log.md + CHANGELOG.md to .prettierignore.
+**Verified:** verify-owner-gate (16 assertions, +3 structural), verify-tab-active, ralph-verify GREEN.
+**Roast (Security + Bug Hunter + Maintainer, 1 combined):** fundamentally sound — no security hole, no regression, no honesty violation. Fixes: F1 Community blanket aria-hidden hid informative roadmap from screen readers → scoped to decorative skeletons only; F2 owner-gate test matched requireOwner via regex over source (a commented-out guard still passed — false confidence) → strip comments first (proven to fail on `// await requireOwner()`); F3 /admin "desktop surface" copy softened for mobile.
+- Verified-correct: (owner) layout guard uses getUser() (verified JWT), fail-closes, dynamic-rendered (no static bypass), /admin stays at /admin; Settings keeps all real settings for every user + only ADDS owner section; Community honest.
+**D25:** partially adopted — /admin under (owner) group; /plan/edit stays per-page-guarded + desktop-hidden (URL-move risk). Remainder deferred.
+
+## Final pass — whole-app e2e + integration roast + fixes ✅
+**Live authed e2e (throwaway user, scoped — Marcus's data untouched):** seeded a confirmed user + injected SSR cookies (no email) + seeded 108 set_logs/80 meals/targets. Drove all tabs desktop+mobile. RESULT: auth ✓, Today ✓ (focal card dominant, visible macro fills), Nutrition ✓ (calorie headline + visible P/C/F fills + 3 log buttons), Plan ✓ (selector + typed dots, no mobile Edit), Community ✓ (placeholder), Settings ✓, Logger ✓ — **logged a real set (135lb×8 → weight_kg 61.235, PR detected, persisted with completion_id, W1 pad unlocked, SYNCED); full write path works, zero console errors, all routes 200**. Test user cleaned up (0 residual rows).
+**Live bug found + FIXED:** 🔴 Progress Overview/Trends/History segments didn't switch — `hidden` attribute on a `.flex` element (Tailwind `.flex` beats Preflight `[hidden]{display:none}`) → all 3 rendered stacked. Fixed: conditional class `active===seg ? "flex" : "hidden"` (inactive has no competing flex → display:none wins).
+**Integration roast (cross-slice, whole diff main..HEAD): no must-fix.** 4 should-fixes, all FIXED:
+- Nutrition drill-downs (history/[date], history list, targets) still used pre-redesign MacroProgressBar → reskinned to MacroRangeBar + the mobile shell; **MacroProgressBar DELETED** (resolves FUTURE_WORK #13).
+- Community + Settings skipped the `max-w-md` mobile column → wrapped (progress got `w-full` too).
+- plan/[day] Edit pencil hidden only by breakpoint (non-owner saw a dead-end 404 link) → gated on `isOwner` + desktop.
+- Deleted 3 orphans: PRBadge, PlanControls, allWorkoutsHref.
+**Verified:** all 7 verify scripts + ralph-verify GREEN.
+
+# ✅ BUILD COMPLETE — Mobile IA Rewire (redesign phase 2)
+All 7 slices (S0–S6) + final pass shipped on `redesign/mobile-ia-wire`. The /demo designs are the live 5-tab mobile app (Today · Plan · Nutrition · Progress · Community), wired end-to-end to the existing Supabase backend, verified on the live authenticated app via a throwaway user (auth + all tabs + the full logger write path). 12 roast rounds across the build; 1 ship-blocker (S2 unkeyed subtree → wrong-exercise set write) + 1 live bug (Progress segments) caught pre-merge. Authoring is owner-only/desktop (open seam: `(owner)/admin` stub); Community is a navigable placeholder. Deferred + logged: owner-only DATA-layer enforcement (D24), activatePlan atomicity (KNOWN_ISSUES), the admin hub + full Community (next build, analytics spec at spec/ADMIN_HUB_ANALYTICS.md). Run: `pnpm dev -p 3111`. NOT merged to main — pending Marcus's review.
+
+## Validation round 1 — Marcus's real-use feedback (Tier 1 fixes) ✅
+Marcus validated the mobile MVP on the preview and returned feedback. Tier 1 (quick fixes) applied:
+- **Nutrition: one "Log meal" button.** The 3 entry buttons (Snap/Describe/Manual) collapsed to a single primary button — the sheet already holds all three input paths (Photo · Description+AI · "Or enter macros yourself"). Removed the dead `intent` plumbing + on-open focus nudge.
+- **Goal mode BUG — root cause: a dead control.** The Cut/Maintain/Lean-bulk segments on the Targets screen were `<span>` elements styled identically to the real control elsewhere — no onClick, no mutation. The only working setter was on the less-discoverable Settings→Profile. Fixed: real `<button aria-pressed>` + a genuinely-missing `updateGoalMode()` setter in settings/mutations.ts, saved with the screen's Save button, persists across reload, drives dayTypeFramework. Secondary bug fixed: ProfileForm rendered updateProfile's partial-save WARNING through the red danger `submitError` path, so a successful goal-mode save looked like a failure.
+- **PR colors: weight = blue (#2563EB), rep = violet (#7C3AED).** Tokens `--pr-weight`/`--pr-rep` in globals.css + tailwind. One `src/lib/methodology/pr-colors.ts` map keyed by pr_type_enum (weight | in_range_rep) drives every PR surface: logger inline pill, PRTypeBadge, Progress PR timeline, Recent feed, WorkoutSummary, workout detail. Labels unified to "Weight PR"/"Rep PR". The future per-exercise PR graph reads its legend from this map.
+- **Photo control: camera-first + library option (Marcus's call).** Two hidden inputs — the primary Photo button carries `capture="environment"` (straight to rear camera), plus a "Choose an existing photo" affordance without `capture` for the library picker.
+**Verified:** 13 verify scripts (2 new: verify-goal-mode, verify-pr-colors) + ralph-verify GREEN. Pushed to PR #3 for live re-validation.
+**Decisions locked this round:** body-tracking logs AND displays in Progress (not Settings); PR colors blue/violet; compound list for e1RM = Bench, Incline, OHP, Back Squat, Deadlift variants, Rows, Weighted Dips, Weighted Pull-up, Lat Pulldown; exercise catalog = clean-license (yuhonas/free-exercise-db, public domain, carries mechanic/force tags) with media as a PLUGGABLE field so Marcus can sub in his own filmed clips per exercise later.
+**Dataset finding:** hasaneyldrm/exercises-dataset has real per-exercise GIFs but the media is © Gym Visual (data is MIT) — not redistributable, which conflicts with the paid-community roadmap. Hence the clean-license choice.

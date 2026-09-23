@@ -50,6 +50,7 @@ export function ProfileForm({
 }: ProfileFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitWarning, setSubmitWarning] = useState<string | null>(null);
   const [recOpen, setRecOpen] = useState(false);
   const originalGoalMode = profile?.goal_mode ?? "maintain";
   const [recommendMode, setRecommendMode] =
@@ -78,6 +79,7 @@ export function ProfileForm({
 
   const handleSubmit = async (values: ProfileFormValues) => {
     setSubmitError(null);
+    setSubmitWarning(null);
     const supabase = createClient();
     const result = await updateProfile(supabase, userId, values);
 
@@ -89,8 +91,10 @@ export function ProfileForm({
     if (result.warning) {
       // Partial save (timezone column missing pre-migration): stay on the
       // page and show it — navigating away would hide that the timezone
-      // choice was NOT persisted.
-      setSubmitError(result.warning);
+      // choice was NOT persisted. Shown as a WARNING, not an error: everything
+      // else (goal mode included) really did save, and styling this red made a
+      // successful goal-mode change read as a failed one.
+      setSubmitWarning(result.warning);
       form.reset({ ...values, timezone: defaultValues.timezone });
       return;
     }
@@ -272,6 +276,12 @@ export function ProfileForm({
             {submitError ? (
               <div className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
                 {submitError}
+              </div>
+            ) : null}
+
+            {submitWarning ? (
+              <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground">
+                {submitWarning}
               </div>
             ) : null}
 

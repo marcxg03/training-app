@@ -7,6 +7,7 @@ import type {
   CompletedSessionGroup,
   CompletedSessionSet,
 } from "@/lib/history/projections";
+import { PR_TYPE_STYLE } from "@/lib/methodology/pr-colors";
 import { kgToLbs } from "@/lib/units";
 
 type SessionDetailPageProps = {
@@ -54,12 +55,11 @@ function SetSequence({ group }: { group: CompletedSessionGroup }): JSX.Element {
           {set.is_to_failure ? <span className="text-warning"> F</span> : null}
           {set.is_pr ? (
             <span
-              className={
-                set.pr_type === "in_range_rep" ? "text-success" : "text-accent"
-              }
+              className={PR_TYPE_STYLE[set.pr_type ?? "weight"].text}
+              title={PR_TYPE_STYLE[set.pr_type ?? "weight"].label}
             >
               {" "}
-              PR
+              {set.pr_type === "in_range_rep" ? "REP PR" : "PR"}
             </span>
           ) : null}
         </span>
@@ -96,7 +96,7 @@ export default async function SessionDetailPage({
       <div className="mx-auto flex max-w-md flex-col gap-5">
         <header className="flex items-center gap-3">
           <HistoryBackLink
-            href="/history/workouts"
+            href="/progress?view=history"
             label="Back to all workouts"
           />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">

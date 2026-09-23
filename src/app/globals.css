@@ -27,6 +27,10 @@
     --warning: 234 179 8; /* #EAB308 bright yellow — under target, syncing */
     --danger: 220 38 38; /* #DC2626 over target, destructive */
     --cardio: 20 184 166; /* #14B8A6 bright teal — cardio (matches success/danger tone) */
+    /* PR types are two distinct achievements and must read as two colors at a
+       glance (also the legend for the future per-exercise PR graph). */
+    --pr-weight: 37 99 235; /* #2563EB blue — weight PR (heavier than before) */
+    --pr-rep: 124 58 237; /* #7C3AED violet — in-range rep PR (more reps in band) */
     --radius: 0.5rem; /* 8px — tighter, technical feel */
   }
 

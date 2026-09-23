@@ -1,20 +1,42 @@
 import Link from "next/link";
-import { History, SlidersHorizontal } from "lucide-react";
+import { History } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { DayTypeFrameworkCard } from "@/app/(app)/nutrition/_components/DayTypeFrameworkCard";
-import { MacroProgressBar } from "@/app/(app)/nutrition/_components/MacroProgressBar";
 import { MealsSection } from "@/app/(app)/nutrition/_components/MealsSection";
-import { dayTypeFramework } from "@/lib/methodology/nutrition";
+import { MacroRangeBar } from "@/components/shared";
+import type { GoalMode } from "@/lib/methodology/nutrition";
 import {
   getGoalMode,
   getMealsForDate,
   getNutritionTargets,
   getTodayDayType,
 } from "@/lib/nutrition/queries";
+import { dayTypeFramework } from "@/lib/methodology/nutrition";
+import type { MacroBar } from "@/lib/nutrition/projections";
 import { buildMacroBars, sumMealTotals } from "@/lib/nutrition/summary";
 import { getAppToday } from "@/lib/time/server";
 import { createClient } from "@/lib/supabase/server";
+
+const GOAL_MODE_LABEL: Record<GoalMode, string> = {
+  cut: "Cut",
+  maintain: "Maintain",
+  lean_bulk: "Lean bulk",
+};
+
+const CAL_STATUS_META: Record<
+  MacroBar["status"],
+  { label: string; className: string }
+> = {
+  in: { label: "In range", className: "bg-success/15 text-success" },
+  under: { label: "Under", className: "bg-warning/15 text-warning" },
+  over: { label: "Over", className: "bg-danger/15 text-danger" },
+};
+
+const fmt = (value: number) => value.toLocaleString("en-US");
+
+/** Collapse an exact [min, max] range to a single readout ("1,980" or "1,900–2,050"). */
+const rangeLabel = (min: number, max: number) =>
+  min === max ? fmt(min) : `${fmt(min)}–${fmt(max)}`;
 
 export default async function NutritionPage() {
   const supabase = await createClient();
@@ -36,71 +58,100 @@ export default async function NutritionPage() {
 
   const totals = sumMealTotals(meals);
   const framework = dayTypeFramework(dayType, goalMode);
-
-  const dateEyebrow = new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  })
-    .format(new Date(`${today}T00:00:00`))
-    .replace(",", " ·");
-
   const bars = buildMacroBars(targets, totals);
+  const calBar = bars.find((bar) => bar.key === "calories") ?? null;
+  const macroBars = bars.filter((bar) => bar.key !== "calories");
+
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+  }).format(new Date(`${today}T00:00:00`));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+      {/* header — day + day-type + goal-mode pill */}
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="eyebrow tracking-[0.16em]">{dateEyebrow}</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-            Fuel
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
+            {weekday} · Nutrition
+          </p>
+          <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground">
+            {framework.title}
           </h1>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/nutrition/history"
             aria-label="Meal log history"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
           >
-            <History className="h-5 w-5" />
+            <History className="h-4 w-4" />
           </Link>
           <Link
             href="/nutrition/targets"
             aria-label={
               targets ? "Edit nutrition targets" : "Set nutrition targets"
             }
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card-alt text-subtle transition-colors hover:border-accent/50 hover:text-foreground"
+            className="rounded-full bg-input px-3 py-1 text-[11px] font-medium text-subtle transition-colors hover:text-foreground"
           >
-            <SlidersHorizontal className="h-5 w-5" />
+            {GOAL_MODE_LABEL[goalMode]}
           </Link>
         </div>
       </header>
 
-      <DayTypeFrameworkCard framework={framework} />
-
-      <section className="space-y-3">
-        <h2 className="eyebrow tracking-[0.16em]">Macros · range vs target</h2>
-        {targets ? (
-          <div className="flex flex-col gap-5 rounded-[var(--radius)] border border-border bg-card p-[18px]">
-            {bars.map((bar) => (
-              <MacroProgressBar key={bar.key} bar={bar} />
+      {/* calories headline — the one number that matters, then P/C/F bars */}
+      {calBar ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-faint">
+                Calories
+              </span>
+              <span className="text-3xl font-bold tabular-nums">
+                {rangeLabel(calBar.totalMin, calBar.totalMax)}
+                <span className="text-base font-medium text-faint">
+                  {" "}
+                  / {rangeLabel(calBar.min, calBar.max)}
+                </span>
+              </span>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${CAL_STATUS_META[calBar.status].className}`}
+            >
+              {CAL_STATUS_META[calBar.status].label}
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {macroBars.map((bar) => (
+              <MacroRangeBar
+                key={bar.key}
+                label={bar.label}
+                value={`${rangeLabel(bar.totalMin, bar.totalMax)} / ${rangeLabel(
+                  bar.min,
+                  bar.max,
+                )}${bar.unit === "g" ? "g" : ""}`}
+                currentMin={bar.totalMin}
+                currentMax={bar.totalMax}
+                rangeMin={bar.min}
+                rangeMax={bar.max}
+                state={bar.status}
+              />
             ))}
           </div>
-        ) : (
-          <div className="rounded-[var(--radius)] border border-border bg-card p-5">
-            <p className="text-sm text-muted-foreground">
-              Set your daily calorie and macro ranges to track progress against
-              them.
-            </p>
-            <Link
-              href="/nutrition/targets"
-              className="mt-3 inline-flex text-sm font-medium text-accent transition-colors hover:text-accent/80"
-            >
-              Set targets
-            </Link>
-          </div>
-        )}
-      </section>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm text-muted-foreground">
+            Set your daily calorie and macro ranges to track intake against
+            them.
+          </p>
+          <Link
+            href="/nutrition/targets"
+            className="mt-3 inline-flex text-sm font-medium text-accent transition-colors hover:text-accent/80"
+          >
+            Set targets +
+          </Link>
+        </div>
+      )}
 
       <MealsSection
         meals={meals}

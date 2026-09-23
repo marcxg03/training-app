@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,8 +61,9 @@ export function EndWorkoutDialog({
         <button
           type="button"
           disabled={disabled}
-          className="inline-flex items-center rounded-[10px] border border-danger/40 bg-danger/[0.08] px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-danger transition hover:bg-danger/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-[10px] px-1 py-1 text-[13px] text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
+          <X className="h-4 w-4" />
           End
         </button>
       </DialogTrigger>

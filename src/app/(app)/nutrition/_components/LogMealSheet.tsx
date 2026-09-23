@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Camera, Sparkles } from "lucide-react";
+import { Camera, ImageIcon, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -39,6 +39,13 @@ import type { MealEntry } from "@/lib/nutrition/projections";
 import { mealSchema, type MealFormValues } from "@/lib/nutrition/schemas";
 import { createClient } from "@/lib/supabase/client";
 
+/**
+ * The single meal-entry surface. All three input paths live in here — photo,
+ * description + AI estimate, and manual P/C/F — and the user picks whichever
+ * one they want once the sheet is open. Nutrition therefore shows ONE "Log
+ * meal" button rather than three pre-committing entry buttons (Marcus,
+ * 2026-09-23); there is deliberately no `intent` nudge or auto-focus.
+ */
 type LogMealSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +54,8 @@ type LogMealSheetProps = {
   meal?: MealEntry;
   /** Whether the Claude-vision photo estimator is configured (ANTHROPIC_API_KEY). */
   aiEnabled: boolean;
+  /** When editing, a request to delete this meal (parent owns the confirm). */
+  onDelete?: () => void;
 };
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -109,6 +118,7 @@ export function LogMealSheet({
   date,
   meal,
   aiEnabled,
+  onDelete,
 }: LogMealSheetProps) {
   const router = useRouter();
   const isEdit = Boolean(meal);
@@ -119,6 +129,7 @@ export function LogMealSheet({
   );
   const [rangeMode, setRangeMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
 
@@ -304,8 +315,9 @@ export function LogMealSheet({
           <SheetHeader>
             <SheetTitle>{isEdit ? "Edit meal" : "Log meal"}</SheetTitle>
             <SheetDescription>
-              Enter grams of protein, carbs, and fat — calories are derived
-              automatically. Toggle ranges to log an estimate.
+              {aiEnabled
+                ? "Three ways, your pick: add a photo, describe it and let AI estimate, or enter protein, carbs, and fat yourself. Calories always derive automatically."
+                : "Enter grams of protein, carbs, and fat — calories are derived automatically. Toggle ranges to log an estimate."}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
@@ -360,11 +372,23 @@ export function LogMealSheet({
 
                 {aiEnabled ? (
                   <div className="space-y-1.5">
+                    {/* Two inputs so the primary control is camera-first
+                        (Marcus's call) while an existing photo is still
+                        reachable: `capture="environment"` jumps straight to
+                        the rear camera on iOS/Android; the library input omits
+                        `capture` so the OS shows the photo picker. */}
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      className="hidden"
+                      onChange={handlePhoto}
+                    />
+                    <input
+                      ref={libraryInputRef}
+                      type="file"
+                      accept="image/*"
                       className="hidden"
                       onChange={handlePhoto}
                     />
@@ -388,6 +412,15 @@ export function LogMealSheet({
                         Description
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      disabled={estimating}
+                      onClick={() => libraryInputRef.current?.click()}
+                      className="flex min-h-11 w-full items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-subtle disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                      Choose an existing photo
+                    </button>
                     <p className="text-xs text-muted-foreground">
                       {estimating
                         ? "Estimating…"
@@ -397,6 +430,13 @@ export function LogMealSheet({
                       <p className="text-sm text-danger">{estimateError}</p>
                     ) : null}
                   </div>
+                ) : null}
+
+                {/* The third path: entering P/C/F by hand. Labelled so it reads
+                    as a real option next to the two AI controls above, not as
+                    the leftover fields they happen to fill. */}
+                {aiEnabled ? (
+                  <p className="eyebrow pt-1">Or enter macros yourself</p>
                 ) : null}
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -500,7 +540,18 @@ export function LogMealSheet({
                   </div>
                 ) : null}
 
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  {isEdit && onDelete ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onDelete}
+                      className="gap-2 border-danger/40 text-danger hover:bg-danger/10 hover:text-danger sm:mr-auto"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"

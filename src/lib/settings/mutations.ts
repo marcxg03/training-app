@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
+import type { GoalMode } from "@/lib/methodology/nutrition";
 import type { ProfileFormValues } from "@/lib/settings/schemas";
 import type { Database } from "@/lib/supabase/types";
 
@@ -62,6 +63,33 @@ export async function updateProfile(
       };
     }
 
+    return { ok: false, error: translateMutationError(error) };
+  }
+
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Sets goal mode on its own, for surfaces that expose the goal-mode control
+ * without editing the whole profile (the nutrition Targets screen).
+ *
+ * Deliberately an UPDATE, not the upsert `updateProfile` uses: the profile row
+ * is guaranteed to exist by the time any app screen renders (the (app) layout
+ * redirects to /auth/callback when it doesn't), and touching only this one
+ * column means the write can't clobber a sibling field or trip the
+ * pre-migration-022 timezone path.
+ */
+export async function updateGoalMode(
+  supabase: BrowserClient,
+  userId: string,
+  goalMode: GoalMode,
+): Promise<MutationResult<void>> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ goal_mode: goalMode })
+    .eq("user_id", userId);
+
+  if (error) {
     return { ok: false, error: translateMutationError(error) };
   }
 

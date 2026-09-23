@@ -1,79 +1,93 @@
-# BUILD_PLAN — Block II / Adjustable-Sets redesign
+# BUILD_PLAN — Mobile IA Rewire (redesign phase 2)
 
-**Branch:** `redesign/block-ii-adjustable-sets` (worktree `../training-app-redesign`). Base: `main` @ edf2446. Do NOT merge to main without Marcus's explicit ok.
+**Branch:** `redesign/mobile-ia-wire`. Base: `main`. Do NOT merge to main without Marcus's explicit ok.
 
-**Spec source:** `spec/REDESIGN_BRIEF.md` §0 (2026-09-20 update) + `spec/BLOCK_II_SEED.md`. Ledger: `DECISIONS.md` (D1–D9). Log: `build-log.md`.
+**Prior build (SHIPPED, on main):** Block II adjustable-sets + cut-validation + seed + light/Satoshi reskin (PR #2 @ 2254b3e). Its record is `build-log.md`; its decisions D1–D16 stay in `DECISIONS.md`.
 
-**Stack:** Next.js 15 + TS strict + Supabase + Tailwind/shadcn PWA. Server-first data flow; pure methodology modules; append-only set_logs/pr_history (wiring contract §9 — do not break).
+**This build:** turn the approved `/demo` phone-frame designs into the real mobile app, wired end-to-end to the EXISTING Supabase backend, verified on the live authenticated app. The backend + data layers already exist (`src/lib/{plan,nutrition,library,history,analytics,methodology,sync}`); this is IA restructure + reskin-to-`/demo` + wiring, NOT new backend.
 
-**Test convention (repo idiom, NOT a new framework):** there is no vitest/jest. Test-first = write a bespoke `scripts/verify-<x>.ts` (run with `pnpm exec tsx`) that asserts the pure logic and fails first; for UI, a headed Playwright script in `e2e/*.mjs` following the existing pattern. The de-facto build gate is `scripts/ralph-verify.sh` (format → typecheck → lint → build) — every slice must pass it.
+**Design source of truth:** `src/app/demo/page.tsx` (the 6 screens: Today, Logger, Nutrition, Plan, Progress, Community). Spec: `spec/DESIGN_SESSION_BRIEF.md` + `spec/REDESIGN_BRIEF.md`. Ledger: `DECISIONS.md` (D17–D23 govern this build). Admin-hub analytics input (future): `spec/ADMIN_HUB_ANALYTICS.md`.
 
----
+**Stack / conventions:** Next.js 15 + TS strict + Supabase + Tailwind/shadcn PWA. Server-first (pages fetch → thin client components); pure methodology modules; **wiring contract (REDESIGN_BRIEF §9): set_logs/pr_history append-only, weight_kg storage, no renamed columns/enums/mutation signatures.**
 
-## Slice order & dependencies
-
-`B1 (scheme model) → B2 (cut validation) → B3 (seed Block II)`. B1 before B3 (B3 seeds schemes). B2 before B3 (Block II has no rest day → must not be hard-blocked).
+**Test convention (repo idiom — no vitest/jest):** test-first = a bespoke `scripts/verify-<x>.ts` (`pnpm exec tsx`) for pure logic, or a headed Playwright drive in `e2e/*.mjs` for UI, written to fail first. The build gate every slice must pass is `scripts/ralph-verify.sh` (format → typecheck → lint → build). UI slices verify on the live app via a throwaway test user (`e2e/_setup` / `seed-auth.mjs` patterns), screenshotting desktop + mobile.
 
 ---
 
-## SLICE B1 — Adjustable set-scheme per block
+## New IA (D19)
 
-**Delivers:** each block carries its own set-scheme instead of the hardcoded WU+W1+W2 / auto-complete-after-3. A "failure" block can be `2 working sets`, `2 × failure`, `1 WU + 2 working`, etc.
-
-**Approach (additive, back-compat):**
-
-- **Migration** `025_block_set_scheme.sql`: add to `blocks` — `warmup_sets int NOT NULL DEFAULT 1`, `working_sets int NOT NULL DEFAULT 2`, `to_failure bool NOT NULL DEFAULT false` (with a CHECK that they're ≥0 / working_sets ≥1 for lifting). Defaults reproduce today's behavior (1+2 = 3 total). Cardio/recovery blocks (block_type NULL) unaffected.
-- Regenerate/extend `src/lib/supabase/types.ts` for the new columns.
-- `src/lib/methodology/workout-state.ts`: extend `LoggerBlock` with `warmupSets`, `workingSets`, `toFailure` (or a `scheme` object). Replace `isBlockComplete`'s hardcoded `>= 3` with `>= (warmupSets + workingSets)` for scheme-driven blocks. Keep the `mobility`/`corrective` explicit-complete path.
-- `src/components/log/FailureProtocol.tsx`: build `failureSteps` dynamically from the block scheme (N warm-ups labelled WU/WU2…, then working sets W1..Wm; the _last_ working set carries the failure checkbox only if `toFailure`). Remove the hardcoded 3-step array.
-- `src/components/log/LoggerShell.tsx`: derive set-role labels from scheme, not the hardcoded `["WU","W1","W2"]`.
-- Thread the scheme through the block projection that builds `LoggerBlock` (find the query that assembles logger blocks — likely `src/lib/methodology/*` or `src/lib/log/*`; the implementer must locate and report it as a seam).
-
-**Definition of done:** a block with `{warmup_sets:0, working_sets:2, to_failure:true}` shows exactly 2 set slots, the 2nd carrying the failure checkbox, and auto-completes after 2 sets; a legacy block with defaults still shows WU/W1/W2 and completes after 3. `ralph-verify.sh` green. A `scripts/verify-set-scheme.ts` asserts `isBlockComplete` against ≥3 scheme configs (written failing first).
-
-**Verify:** run `scripts/verify-set-scheme.ts` (red→green); `scripts/ralph-verify.sh`; headed Playwright drive of the logger for a 2-working-set block + a legacy 3-set block (screenshot desktop+mobile), confirming set counts + auto-complete + persistence on reload.
-
-**Touches:** `supabase/migrations/025_block_set_scheme.sql` (new), `src/lib/supabase/types.ts`, `src/lib/methodology/workout-state.ts`, `src/components/log/FailureProtocol.tsx`, `src/components/log/LoggerShell.tsx`, the logger-block projection query (locate), `scripts/verify-set-scheme.ts` (new). **Off-limits:** set_logs schema (append-only), weight_kg storage, mutation signatures, nutrition/library/PR modules.
+Mobile bottom nav (5): **Today · Plan · Nutrition · Progress · Community**. Settings = gear (not a tab). Removed as tabs: **Library** (→ owner-only), **Trends** + **History** (→ merged into Progress). Authoring (Library builder, plan/day edit) = **owner-only** routes, the open seam for the desktop admin hub (D18).
 
 ---
 
-## SLICE B2 — Simplify: cut the validation guardrails
+## Slice order
 
-**Delivers:** the plan/day editor no longer hard-blocks on methodology rules; guardrails are removed or off-by-default. Unblocks seeding a no-rest-day plan.
+`S0 (nav + IA scaffold + owner-gate + shared primitives) → S1 Today → S2 Logger → S3 Nutrition → S4 Plan → S5 Progress → S6 Community placeholder + /admin stub + Settings reskin + polish → Final (e2e + roast)`
 
+S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship — most care. S5 (Progress) is the riskiest (merges 3 surfaces).
+
+---
+
+## SLICE S0 — Nav + IA scaffold + owner-gate + shared design primitives
+
+**Delivers:** the new 5-tab bottom nav live; removed tabs re-routed; an owner-gate helper; the reusable design primitives extracted from `/demo` so every later slice composes them.
 **Approach:**
 
-- `src/lib/methodology/plan-schedule.ts`: make `weekRestDayError` non-blocking — either remove it or downgrade the min-rest-day rule to a soft warning (so `validateSchedule` returns `hardErrors: []` by default). Keep the soft cardio-order warning as an _informational_ warning (Marcus can ignore; it never blocked). Preserve the `ScheduleValidation`/`validateSchedule` signatures so `DayEditForm` keeps compiling.
-- `src/app/(app)/plan/[day]/_components/DayEditForm.tsx`: with no hard errors, `blocked` is always false; keep the soft-warning "Save anyway" affordance but ensure a clean save path. Simplify copy.
-- Seed methodology rules `supabase/seed/lib/methodology-rules.ts`: downgrade the HARD violations (48h recovery, push/pull balance, min-rest-day, missing-muscle) to soft warnings (they already don't block runtime, but Block II should seed without scary "hardViolations" output). Keep them as informational warnings in the seed summary.
-- Preserve the _unrelated_ guards in `plan/mutations.ts` (no-remove-logged-session, blocks-frozen lock) — those are data-integrity, NOT methodology guardrails. Do not touch them.
+- Rewrite `src/components/layout/BottomTabBar.tsx` to the 5 tabs (Today · Plan · Nutrition · Progress · Community) with the `/demo` styling (active=accent, icon+label). Route `/community` to a placeholder page (S6 fills it). Keep `/settings` reachable via a gear (Today header or a nav overflow).
+- **Owner-gate:** add `src/lib/auth/owner.ts` — `isOwner(userId)` checking an env-listed owner id(s) (`OWNER_USER_IDS`, server-only) OR a `profiles.is_owner` flag; pick the simpler (env list) and document. Add a server guard used by `/library/**`, `/plan/**/edit`, and the new `/admin`: non-owners get `notFound()` / redirect to `/today`.
+- **Shared primitives** in `src/components/shared/` (or `ui/`): `FocalCard`, `MacroRangeBar`, `SetRow`, `SegmentedControl`, `StatCard`, `SessionRow` — lifted from `/demo`'s markup, tokenized, prop-driven. These replace the ad-hoc `/demo` copies and are what S1–S6 import.
+  **DoD:** app builds and runs; bottom nav shows the 5 tabs and navigates; `/community` renders a placeholder; `/library` and `/plan/edit` return notFound for a non-owner test user and render for the owner; the 6 primitives exist with a `scripts/verify-owner-gate.ts` asserting `isOwner` (written failing first). `ralph-verify.sh` green.
+  **Verify:** `verify-owner-gate.ts` (red→green); `ralph-verify.sh`; Playwright: nav renders 5 tabs (mobile), tapping each lands the right route; non-owner hitting `/library` is bounced.
+  **Touches:** `src/components/layout/BottomTabBar.tsx`, `src/lib/auth/owner.ts` (new), `src/app/(app)/community/page.tsx` (new placeholder), guard wiring in `library`/`plan/edit` layouts or pages, `src/components/shared/*` (new), `scripts/verify-owner-gate.ts` (new). **Off-limits:** data-layer mutations, the wiring contract.
 
-**Definition of done:** a 7-day plan with zero rest days saves in the editor with no hard block, and seeds without any `hardViolations`. `ralph-verify.sh` green. `scripts/verify-schedule-validation.ts` asserts `validateSchedule({isRestDay, workouts, otherDaysHaveRest:false}).hardErrors` is empty for the no-rest case (written failing first against current behavior).
+## SLICE S1 — Today (rebuilt + wired)
 
-**Verify:** `scripts/verify-schedule-validation.ts` (red→green); `ralph-verify.sh`; headed Playwright: open a day editor, remove the last rest day, confirm Save is not blocked.
+**Delivers:** `/today` as the `/demo` Today screen — focal black Start card, "Also today", nutrition glance, week strip — wired to the real today projection.
+**Approach:** restyle `src/app/(app)/today/page.tsx` + its `today` components to compose `FocalCard`/`MacroRangeBar`/`SessionRow`. Keep the existing data source (`src/lib/methodology/today.ts`, nutrition summary). Start card → the primary lift session's Start Workout. Nutrition glance → real macro summary. Preserve rest-day empty state.
+**DoD:** Today renders real sessions with the focal Start card dominant; Start launches the logger; macro glance shows real day totals; rest day shows the calm empty state. Matches `/demo`. `ralph-verify.sh` green.
+**Verify:** Playwright on the live app (test user with Block II): screenshot desktop+mobile, confirm focal card + Start nav + macro values; rest-day case.
+**Touches:** `src/app/(app)/today/**`, `src/components/today/**`. **Off-limits:** logger internals (S2), nutrition mutations.
 
-**Touches:** `src/lib/methodology/plan-schedule.ts`, `src/app/(app)/plan/[day]/_components/DayEditForm.tsx`, `supabase/seed/lib/methodology-rules.ts`, `scripts/verify-schedule-validation.ts` (new). **Off-limits:** `plan/mutations.ts` integrity guards, logger, nutrition.
+## SLICE S2 — Logger (rebuilt + wired) — FLAGSHIP
 
----
+**Delivers:** the `/demo` Logger — block progress bar, stacked logged sets with inline PR, big weight/reps entry pad, flexible scheme actions (+Add working set / Complete block), sync indicator — wired to the real logger (append-only set_logs, PR detection, offline queue).
+**Approach:** restyle `src/app/(app)/log/[workout_id]/page.tsx` + `src/components/log/*` (LoggerShell, FailureProtocol, SetEntryForm, SetLogRow, PRBadge, QueueIndicator, ExercisePicker) to compose the new primitives. Preserve ALL existing behavior: block+bank pick, adjustable/flexible set-scheme (D16 — soft target, manual complete, +add set), to_failure per-set toggle, PR moments, resume, end-early, sync. The entry pad = the big steppers; the scheme actions row = the existing add-set + complete logic.
+**DoD:** a real set logs and persists (reload); PR fires inline; +Add working set and Complete block both work per D16; offline queue indicator reflects real sync; block+bank swap works. Matches `/demo`. Append-only intact. `ralph-verify.sh` green.
+**Verify:** headed Playwright drive on the live app: log WU + 2 working sets on a scheme block, add a 3rd, complete; log a legacy block; confirm persistence + PR + sync; screenshot desktop+mobile. (This is the flagship — exercise it hard.)
+**Touches:** `src/app/(app)/log/**`, `src/components/log/**`. **Off-limits:** set_logs schema, weight_kg storage, PR-detection logic, mutation signatures (restyle only).
 
-## SLICE B3 — Seed Block II as the active plan
+## SLICE S3 — Nutrition (rebuilt + wired, + manual log)
 
-**Delivers:** Marcus's Block II (from `spec/BLOCK_II_SEED.md`) is the active plan, with per-block schemes, banks, and the 7-day split.
+**Delivers:** `/nutrition` as the `/demo` Nutrition screen — calorie headline vs range + P/C/F range bars, meal log with photo thumbnails, the 3-way log flow (Snap / Describe / **Log manually**) — wired to real nutrition data + the AI estimator.
+**Approach:** restyle `src/app/(app)/nutrition/page.tsx` + `_components` (DayTypeFrameworkCard, MacroProgressBar, MealsSection, LogMealSheet). The existing LogMealSheet already has photo + description → AI estimate; ADD an explicit **manual entry** path (enter P/C/F directly, calories auto-derive) as a first-class option alongside snap/describe. Photo thumbnails on logged meals if a photo exists (note: photo _persistence_ is FUTURE_WORK #10 — thumbnail shows when available; don't build the storage in this slice).
+**DoD:** nutrition renders real macros as range-vs-range with the calorie headline; meal log lists real meals; Snap/Describe/Manual all reach a working log; a manually entered meal derives calories. Matches `/demo`. `ralph-verify.sh` green.
+**Verify:** Playwright on live app: log a meal manually (P/C/F → calories), confirm it appears + macros update; screenshot desktop+mobile.
+**Touches:** `src/app/(app)/nutrition/**`, `src/lib/nutrition/*` (only if manual-entry needs a mutation path — additive). **Off-limits:** the estimate-macros API contract, append-only rules.
 
-**Approach:**
+## SLICE S4 — Plan (rebuilt + wired, + selector/switch-load)
 
-- Author `supabase/seed/wiki/current-plan.md` in the exact format `parsePlanFromWiki` expects (study the parser in `supabase/seed/lib/methodology-rules.ts` + the existing `supabase/seed/wiki/current-plan.md` for the grammar). Represent Block II: 7 days, the lifting blocks with banks, cardio/recovery activities, the 2-working-set schemes (Thu dips = to_failure). If the parser can't express per-block scheme, extend `TrainingPlanSpec`/the parser + `syncGlobalBlocks` to write the new B1 scheme columns.
-- Update `syncGlobalBlocks` (and parser types) so schemes seed into the `blocks` columns from B1.
-- Keep idempotency (the sync diffing) intact.
+**Delivers:** `/plan` as the `/demo` Plan screen — plan selector (switch/load among the user's plans + subscribed), the week as typed day cards, view-only with the desktop-authoring note — wired to real plan queries/mutations.
+**Approach:** restyle `src/app/(app)/plan/page.tsx` + `_components`. The selector lists the user's plans (existing multi-plan support) + sets active (existing activate mutation); "Load" a subscribed plan is stubbed to the same activate path (real subscription source = future). Day cards → real sessions, colored dot by session type; tap → day view. Hide plan/day EDIT affordances on mobile (owner-only, S0 gate) — show the "editing lives on desktop" note.
+**DoD:** plan renders the real active plan's week; switching active plan works and re-drives Today; day tap opens the day view; edit is not exposed on mobile. Matches `/demo`. `ralph-verify.sh` green.
+**Verify:** Playwright: switch active plan, confirm Today reflects it; open a day; confirm no edit button as non-owner; screenshot desktop+mobile.
+**Touches:** `src/app/(app)/plan/**` (view + controls; NOT the `/edit` internals beyond gating). **Off-limits:** plan mutation signatures, integrity guards.
 
-**Definition of done:** `npm run seed` against a test user produces the Block II plan — 7 days, correct blocks/banks, schemes seeded (Thu dips to_failure, others 2 working sets), no hardViolations. The app's Plan tab renders Block II; the logger shows the right set counts per block.
+## SLICE S5 — Progress (merge Trends + History → 3-view tab)
 
-**Verify:** run the seed against a throwaway user (follow `e2e/_setup` patterns); an `e2e/verify-block-ii.mjs` that loads the plan and asserts day count, a spot-check of Monday Upper's 3 rounds + Thursday dips scheme. `ralph-verify.sh` green. Screenshot the Plan tab.
+**Delivers:** `/progress` as the `/demo` Progress screen — segmented Overview / By exercise / History — absorbing today's `/trends` + `/history` into one tab wired to the existing history + analytics + bodyweight libs.
+**Approach:** new `src/app/(app)/progress/page.tsx` composing: **Overview** (stat cards: workouts/PRs/streak + the per-exercise chart + recent timeline), **By exercise** (the current per-exercise progression/e1rm from `trends` + `history/exercises`), **History** (the current completed-workouts + PR-timeline from `history`). Reuse the existing data (`src/lib/history/*`, `src/lib/analytics/*`, `trends/_components/*`, `history/_components/*`) — re-home the components, don't rebuild the queries. Redirect old `/trends` and `/history` → `/progress` (preserve deep links to `/history/workouts/[id]` etc. or re-home them under `/progress`).
+**DoD:** Progress shows real stat row + a real per-exercise chart + real recent PRs/sessions; the three segments each render real data; old `/trends` `/history` routes redirect; deep-linked workout/exercise detail still resolves. Matches `/demo`. `ralph-verify.sh` green.
+**Verify:** Playwright: land Progress, switch all 3 segments with a data-having test user, open a workout detail + an exercise chart; confirm redirects; screenshot desktop+mobile.
+**Touches:** `src/app/(app)/progress/**` (new), re-home `trends/_components/*` + `history/_components/*` + detail routes, redirects for old paths, `src/components/layout/BottomTabBar.tsx` (already points here from S0). **Off-limits:** the analytics/history query logic (re-home, don't rewrite).
 
-**Touches:** `supabase/seed/wiki/current-plan.md`, `supabase/seed/lib/methodology-rules.ts` (parser + types if needed), `supabase/seed/seed-from-wiki.ts` (`syncGlobalBlocks` scheme write), `e2e/verify-block-ii.mjs` (new). **Off-limits:** runtime app logic beyond what B1 established.
+## SLICE S6 — Community placeholder + /admin stub + Settings reskin + polish
 
----
+**Delivers:** the Community tab as a navigable "coming soon" placeholder in the `/demo` visual language (D21); an owner-only `/admin` stub route (the desktop admin-hub seam, links `spec/ADMIN_HUB_ANALYTICS.md` scope in a comment); Settings reskinned to the light/Satoshi system; a whole-app visual polish pass.
+**Approach:** `src/app/(app)/community/page.tsx` → the storefront/feed _shell_ from `/demo` but clearly "coming soon" (no fake data pretending to be live; the featured card can preview Marcus's own Block II as the seed program, subscribe = disabled "soon"). `/admin` → owner-gated stub page naming the future scope (program CRUD + publish control + the 8-tile analytics). Reskin `src/app/(app)/settings/**` to the primitives. Sweep every tab for spacing/legibility consistency.
+**DoD:** Community navigates + looks designed but is honestly a placeholder; `/admin` is owner-only and states its scope; Settings matches the system; no visual inconsistency across tabs. `ralph-verify.sh` green.
+**Verify:** Playwright: Community renders (mobile), `/admin` bounces non-owner + renders for owner, Settings screenshot; full-app screenshot sweep desktop+mobile.
+**Touches:** `src/app/(app)/community/**` (new), `src/app/(app)/admin/**` (new stub), `src/app/(app)/settings/**`. **Off-limits:** building the real community/subscription backend (next build).
 
 ## Final pass
 
-Whole-build verify (seed → open app → drive logger end-to-end on a Block II session), final `/roast-code` over the full diff, triage + ralph to convergence, then present integration options (recommend: PR for Marcus's review, do NOT auto-merge to main).
+Whole-app e2e on the live authenticated app (test user, Block II seeded): open every tab, log a set, log a meal, switch a plan, view progress. Final `/roast-code` over the whole diff → 4F triage → ralph to convergence (bounded; escalate if non-converging). Close `build-log.md` with the `✅ BUILD COMPLETE` entry. Present integration options (recommend: PR for Marcus's review; do NOT auto-merge). Update the vault `overview.md`.

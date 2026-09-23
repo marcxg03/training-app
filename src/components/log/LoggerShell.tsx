@@ -12,8 +12,8 @@ import type {
 } from "@/lib/methodology/workout-state";
 import {
   findLastIncompleteBlock,
+  formatBlockType,
   getSelectedExerciseIdForBlock,
-  getSetLabel,
   isBlockComplete,
 } from "@/lib/methodology/workout-state";
 import { createClient } from "@/lib/supabase/client";
@@ -22,7 +22,6 @@ import { drainQueue } from "@/lib/sync/drain";
 import { enqueue } from "@/lib/sync/queue";
 import { setupDrainTriggers } from "@/lib/sync/triggers";
 import { cn } from "@/lib/utils/cn";
-import { BlockHeader } from "@/components/log/BlockHeader";
 import { EndWorkoutDialog } from "@/components/log/EndWorkoutDialog";
 import { ExercisePicker } from "@/components/log/ExercisePicker";
 import { FailureProtocol } from "@/components/log/FailureProtocol";
@@ -33,8 +32,6 @@ import {
   type WorkoutSummaryProps,
 } from "@/components/log/WorkoutSummary";
 import { AddExerciseSheet } from "@/components/log/AddExerciseSheet";
-import { SetLogRow } from "@/components/log/SetLogRow";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 type LoggerShellProps = {
   blocks: LoggerBlock[];
@@ -361,7 +358,7 @@ export function LoggerShell({
 
   if (completedSummary) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4">
+      <div className="mx-auto w-full max-w-md space-y-4">
         <div className="flex items-center justify-end">
           <QueueIndicator userId={userId} />
         </div>
@@ -371,173 +368,138 @@ export function LoggerShell({
     );
   }
 
+  const selectedExerciseId = currentBlock
+    ? (selectedExerciseByBlockId[currentBlock.block_id] ??
+      getSelectedExerciseIdForBlock(currentBlock))
+    : null;
+  const selectedExercise = currentBlock
+    ? getBlockExercise(currentBlock, selectedExerciseId)
+    : null;
+  const rightLabel = currentBlock
+    ? (selectedExercise?.name ?? formatBlockType(currentBlock.block_type))
+    : "";
+
+  // The whole-workout progress: each block is a segment — done (accent), the
+  // current block (accent/40), or upcoming (input). Derived entirely from real
+  // state (completedBlockIds + currentBlockIndex), never a hardcoded count.
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="eyebrow">In session</p>
-          <h1 className="mt-1 text-[19px] font-semibold tracking-tight text-foreground">
-            {session.workout_name}
-          </h1>
+    <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+      {/* Top bar: end-early + live sync indicator, block progress, block label */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <EndWorkoutDialog
+            onConfirm={() =>
+              completeSession(true, completedBlockIdsRef.current)
+            }
+          />
+          <QueueIndicator userId={userId} />
         </div>
-        <QueueIndicator userId={userId} />
+
+        <div className="flex items-center gap-1.5">
+          {blocksState.map((block, index) => {
+            const isComplete = isBlockComplete(block, completedBlockIds);
+            const isCurrent = index === currentBlockIndex;
+            return (
+              <span
+                key={block.block_id}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full",
+                  isComplete
+                    ? "bg-accent"
+                    : isCurrent
+                      ? "bg-accent/40"
+                      : "bg-input",
+                )}
+              />
+            );
+          })}
+        </div>
+
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.15em] text-faint">
+            Block {currentBlockIndex + 1} / {blocksState.length}
+            {currentBlock ? ` · ${currentBlock.block_name}` : ""}
+          </span>
+          <span className="shrink-0 truncate text-[11px] tabular-nums text-faint">
+            {rightLabel}
+          </span>
+        </div>
       </div>
 
       {actionError ? (
         <p className="text-sm text-danger">{actionError}</p>
       ) : null}
 
-      {blocksState.map((block, index) => {
-        const isCurrent = currentBlock?.block_id === block.block_id;
-        const isComplete = isBlockComplete(block, completedBlockIds);
-        const selectedExerciseId =
-          selectedExerciseByBlockId[block.block_id] ??
-          getSelectedExerciseIdForBlock(block);
-        const selectedExercise = getBlockExercise(block, selectedExerciseId);
+      {/* Single-block focus: only the current block is painted — you advance
+          forward through the workout (completed/upcoming blocks live in the
+          progress bar above). Every state transition is driven by the same
+          handlers as before; only the presentation is recomposed. */}
+      {currentBlock ? (
+        <div key={currentBlock.block_id} className="flex flex-col gap-4">
+          <ExercisePicker
+            exercises={currentBlock.exercises}
+            selectedExerciseId={selectedExerciseId}
+            onSelect={(exercise) =>
+              setSelectedExerciseByBlockId((current) => ({
+                ...current,
+                [currentBlock.block_id]: exercise.exercise_id,
+              }))
+            }
+          />
 
-        return (
-          <Card
-            key={block.block_id}
-            className={cn(
-              "bg-card",
-              index > currentBlockIndex && !isComplete ? "opacity-70" : "",
-            )}
-          >
-            <CardHeader className="space-y-4">
-              <BlockHeader
-                blockIndex={index + 1}
-                blockName={block.block_name}
-                blockType={block.block_type}
-                totalBlocks={blocksState.length}
-                endSessionAction={
-                  isCurrent ? (
-                    <EndWorkoutDialog
-                      onConfirm={() =>
-                        completeSession(true, completedBlockIdsRef.current)
-                      }
-                    />
-                  ) : null
-                }
-              />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isCurrent ? (
-                <>
-                  <ExercisePicker
-                    exercises={block.exercises}
-                    selectedExerciseId={selectedExerciseId}
-                    onSelect={(exercise) =>
-                      setSelectedExerciseByBlockId((current) => ({
-                        ...current,
-                        [block.block_id]: exercise.exercise_id,
-                      }))
-                    }
-                  />
-
-                  {/* Only while the block is still free: once a set is logged
-                      the block's exercise is fixed for the session, since every
-                      set in a block records against the one selected. */}
-                  {block.setLogs.length === 0 ? (
-                    <AddExerciseSheet
-                      catalog={exerciseCatalog}
-                      existingExerciseIds={block.exercises.map(
-                        (exercise) => exercise.exercise_id,
-                      )}
-                      userId={userId}
-                      onAdd={(exercise) =>
-                        handleExerciseAdded(block.block_id, exercise)
-                      }
-                    />
-                  ) : null}
-
-                  {selectedExercise ? (
-                    block.block_type === "failure" ? (
-                      <FailureProtocol
-                        block={block}
-                        completionId={workoutCompletion.completion_id}
-                        exercise={selectedExercise}
-                        workoutId={session.workout_id}
-                        userId={userId}
-                        onSetSaved={(setLog) =>
-                          handleSetSaved(
-                            block.block_id,
-                            selectedExercise,
-                            setLog,
-                          )
-                        }
-                        onComplete={() =>
-                          handleFreeFormComplete(block.block_id)
-                        }
-                      />
-                    ) : (
-                      <FreeFormProtocol
-                        block={block}
-                        completionId={workoutCompletion.completion_id}
-                        exercise={selectedExercise}
-                        workoutId={session.workout_id}
-                        userId={userId}
-                        onSetSaved={(setLog) =>
-                          handleSetSaved(
-                            block.block_id,
-                            selectedExercise,
-                            setLog,
-                          )
-                        }
-                        onComplete={() =>
-                          handleFreeFormComplete(block.block_id)
-                        }
-                      />
-                    )
-                  ) : null}
-                </>
-              ) : selectedExercise ? (
-                <>
-                  <div className="rounded-xl border border-border bg-card px-4 py-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      {selectedExercise.name}
-                    </p>
-                  </div>
-                  {block.setLogs.length > 0 ? (
-                    <div className="space-y-3">
-                      {block.setLogs
-                        .slice()
-                        .sort((left, right) => left.set_index - right.set_index)
-                        .map((setLog) => (
-                          <SetLogRow
-                            key={setLog.set_log_id}
-                            label={
-                              block.block_type === "failure"
-                                ? getSetLabel(block, setLog.set_index)
-                                : `Set ${setLog.set_index}`
-                            }
-                            setLog={setLog}
-                            exercise={selectedExercise}
-                          />
-                        ))}
-                    </div>
-                  ) : isComplete ? (
-                    <p className="text-sm text-muted-foreground">
-                      Completed without logged sets.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No sets logged yet.
-                    </p>
-                  )}
-                </>
-              ) : isComplete ? (
-                <p className="text-sm text-muted-foreground">
-                  Completed without a selected exercise.
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Up next after the current block.
-                </p>
+          {/* Only while the block is still free: once a set is logged the
+              block's exercise is fixed for the session, since every set in a
+              block records against the one selected. */}
+          {currentBlock.setLogs.length === 0 ? (
+            <AddExerciseSheet
+              catalog={exerciseCatalog}
+              existingExerciseIds={currentBlock.exercises.map(
+                (exercise) => exercise.exercise_id,
               )}
-            </CardContent>
-          </Card>
-        );
-      })}
+              userId={userId}
+              onAdd={(exercise) =>
+                handleExerciseAdded(currentBlock.block_id, exercise)
+              }
+            />
+          ) : null}
+
+          {selectedExercise ? (
+            currentBlock.block_type === "failure" ? (
+              <FailureProtocol
+                block={currentBlock}
+                completionId={workoutCompletion.completion_id}
+                exercise={selectedExercise}
+                workoutId={session.workout_id}
+                userId={userId}
+                onSetSaved={(setLog) =>
+                  handleSetSaved(
+                    currentBlock.block_id,
+                    selectedExercise,
+                    setLog,
+                  )
+                }
+                onComplete={() => handleFreeFormComplete(currentBlock.block_id)}
+              />
+            ) : (
+              <FreeFormProtocol
+                block={currentBlock}
+                completionId={workoutCompletion.completion_id}
+                exercise={selectedExercise}
+                workoutId={session.workout_id}
+                userId={userId}
+                onSetSaved={(setLog) =>
+                  handleSetSaved(
+                    currentBlock.block_id,
+                    selectedExercise,
+                    setLog,
+                  )
+                }
+                onComplete={() => handleFreeFormComplete(currentBlock.block_id)}
+              />
+            )
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
