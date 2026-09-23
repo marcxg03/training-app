@@ -630,6 +630,29 @@ reading a DB that lacks the columns — deletes `warmup_sets` / `working_sets` /
 `>= NaN` (always false), and failure blocks never auto-complete — the same
 lockout class as migration 023. Push the migration first, then regen.
 
+## Slice T2-A — Exercise catalog + media
+
+### 🔴 High — types.ts hand-edited AGAIN for migration 026; push 026 before any `supabase gen types` regen (D14 pattern)
+
+`src/lib/supabase/types.ts` now also carries hand-written `media_path` /
+`media_type` / `source_slug` on the `exercises` Row/Insert/Update (migration
+`026_exercise_media.sql`), for the same reason as 025: no live DB in the
+worktree. Same rule, same failure mode — **`supabase db push` migration 026
+BEFORE any `supabase gen types` regen**, or the regen silently deletes the three
+fields and `scripts/enrich-exercises.ts` stops typechecking (and any media UI
+built on top reads `undefined`). The columns are all NULLABLE and additive, so
+the migration itself is safe to apply to the populated production table.
+
+### 🟡 Medium — `is_compound` is stale DATA until `scripts/classify-compounds.ts --apply` runs (D28)
+
+Migration 002 gave `exercises.is_compound` a `DEFAULT false` and nothing ever
+backfilled it, so **every** exercise row reads as isolation. `buildE1rmSpotlights`
+and (after this slice) the per-exercise detail page both gate e1RM on the flag,
+which means the Strength/e1RM surfaces render EMPTY until the classification
+script is run against Marcus's user with `--apply`. Dry-run first. Until then
+the gate is "correct but starved" — no wrong e1RM is shown, but no right one is
+either.
+
 ## Owner-gate is UI-only until the community/admin-hub build (D24)
 
 **Status:** deferred by design (not a regression, not a cross-user breach). The S0 owner-gate (`requireOwner()`) hides the authoring PAGES from non-owners, but library/plan **mutations** are client-side Supabase calls under per-user RLS (`auth.uid() = owner_user_id`) — so an authenticated non-owner can still write **their own** private library by invoking a mutation directly. RLS silos every user (nobody can reach Marcus's data), and no "follower" users exist this build (Community is a placeholder). The product rule "followers do not author" must be enforced at the **data boundary** in the future community/admin-hub build: move authoring mutations to server actions/route handlers that `await requireOwner()`, and/or add an owner-allowlist to the write RLS policies. See DECISIONS.md D24/D25.

@@ -781,7 +781,9 @@ export async function getExerciseProgression(
   ] = await Promise.all([
     supabase
       .from("exercises")
-      .select("exercise_id, name, is_bodyweight")
+      // is_compound is selected ONLY here (not in the shared mapExerciseRows
+      // call sites) because only the detail page needs the D28 e1RM gate.
+      .select("exercise_id, name, is_bodyweight, is_compound")
       .eq("exercise_id", exerciseId)
       .maybeSingle(),
     fetchAllSetLogsForExercise(supabase, exerciseId),
@@ -874,6 +876,10 @@ export async function getExerciseProgression(
     exercise_id: exercise.exercise_id,
     exercise_name: exercise.name,
     is_bodyweight: exercise.is_bodyweight,
+    // Read off the raw row rather than mapExerciseRows: that mapper is shared
+    // with two other selects that do NOT fetch is_compound, and adding the
+    // field there would make them throw on a missing key.
+    is_compound: getBoolean(exerciseData, "is_compound"),
     best_weight_pr: pickBestWeightPr(prs),
     best_in_range_pr: pickBestInRangePr(prs),
     prs,

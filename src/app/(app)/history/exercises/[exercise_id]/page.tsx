@@ -73,8 +73,18 @@ function StatCard({
 // Chart the best estimated 1RM per day (Epley) — a rep PR at the same weight
 // now shows as progress, unlike raw top-set weight. Computed from ALL sets
 // (recent_sets), not top_sets: the heaviest set of a day is not always its
-// best e1RM set. Bodyweight exercises have no external load, so their
-// progression axis is best reps per day instead.
+// best e1RM set.
+//
+// e1RM is gated TWICE (D28), and this page is the second gate:
+//   - is_bodyweight — no external load, so Epley has nothing to scale.
+//   - !is_compound  — an Epley estimate off a lateral raise or a triceps
+//     pushdown is noise dressed up as a number. `buildE1rmSpotlights` already
+//     dropped these from the Trends spotlights; before this slice the detail
+//     page still charted "Estimated 1RM" for EVERY loaded exercise, so an
+//     isolation the spotlights deliberately hid still showed an e1RM curve one
+//     tap away.
+// Both non-e1RM cases fall back to best-reps-per-day, which is the honest
+// progression axis when load is not the thing being estimated.
 function buildChartConfig(
   progression: ExerciseProgression,
   timeZone: string,
@@ -83,6 +93,7 @@ function buildChartConfig(
   heading: string;
   unitLabel: string;
   ariaLabel: string;
+  note: string | null;
 } {
   if (progression.is_bodyweight) {
     return {
@@ -90,6 +101,17 @@ function buildChartConfig(
       heading: "Best reps · progression",
       unitLabel: "REPS · OLDEST → NEWEST",
       ariaLabel: "Best reps progression",
+      note: null,
+    };
+  }
+
+  if (!progression.is_compound) {
+    return {
+      points: buildBestRepsByDay(progression.recent_sets, timeZone),
+      heading: "Best reps · progression",
+      unitLabel: "REPS · OLDEST → NEWEST",
+      ariaLabel: "Best reps progression",
+      note: "Estimated 1RM is a compound-lift stat. Mark this exercise as compound in the Library if it belongs on that list.",
     };
   }
 
@@ -100,6 +122,7 @@ function buildChartConfig(
     heading: "Estimated 1RM · progression",
     unitLabel: "LBS E1RM · OLDEST → NEWEST",
     ariaLabel: "Estimated one-rep-max progression",
+    note: null,
   };
 }
 
@@ -164,6 +187,11 @@ export default async function ExerciseProgressPage({
           unitLabel={chart.unitLabel}
           ariaLabel={chart.ariaLabel}
         />
+        {chart.note ? (
+          <p className="text-xs leading-5 text-muted-foreground">
+            {chart.note}
+          </p>
+        ) : null}
       </section>
 
       <section className="flex flex-col gap-2.5">
