@@ -200,7 +200,7 @@ async function getExerciseCatalog(): Promise<LoggerExercise[]> {
   const { data, error } = await supabase
     .from("exercises")
     .select(
-      "exercise_id, name, notes, prescribed_min, prescribed_max, muscle_groups, is_bodyweight",
+      "exercise_id, name, notes, prescribed_min, prescribed_max, muscle_groups, is_bodyweight, media_path, media_type",
     )
     .order("name");
 

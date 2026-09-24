@@ -20,8 +20,8 @@ function isoDaysAgo(days: number): string {
   return date.toISOString();
 }
 
-// One shared window fetch for every set_logs-based analytics view (e1RM now,
-// weekly volume next slice) — superset of columns, fetched once per render.
+// One shared window fetch for every set_logs-based analytics view (weekly
+// volume today) — superset of columns, fetched once per render.
 // Fetches one extra day so local-timezone day bucketing never loses the
 // window's first day; the pure layer trims by dayKey.
 export async function getSetLogWindow(
@@ -44,7 +44,7 @@ export async function getSetLogWindow(
     const { data, error } = await supabase
       .from("set_logs")
       .select(
-        "exercise_id, weight_kg, reps, logged_at, exercises(name, is_bodyweight, is_compound, muscle_groups)",
+        "exercise_id, weight_kg, reps, logged_at, exercises(name, is_bodyweight, muscle_groups)",
       )
       .gte("logged_at", since)
       // set_log_id tiebreaker: equal logged_at values have no stable order

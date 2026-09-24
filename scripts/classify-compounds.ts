@@ -1,9 +1,13 @@
 // Backfill `exercises.is_compound` from Marcus's LOCKED D28 list (Slice T2-A).
 //
-// THE PROBLEM THIS FIXES: `is_compound` has existed since migration 002 and
-// `buildE1rmSpotlights` has always excluded non-compound lifts — but nothing
-// ever wrote the column, so every row sits on its `false` DEFAULT. The code
-// gate is right; the DATA is wrong, which is why estimated-1RM reads wrong.
+// THE PROBLEM THIS FIXES: `is_compound` has existed since migration 002, but
+// nothing ever wrote the column — every row sits on its `false` DEFAULT, so
+// the flag carries no information.
+//
+// SCOPE NOTE (T2-B): the flag no longer gates any chart (estimated-1RM, the
+// thing it was introduced for, was deleted). It survives as Library metadata
+// and as an input to the planned workout builder, and is still worth being
+// correct.
 //
 // The classification itself lives in src/lib/methodology/compound-classification.ts
 // (pure, unit-tested by scripts/verify-compound-classification.ts). This script
@@ -167,8 +171,8 @@ async function main(): Promise<void> {
     `  compound after run     ${proposals.filter((p) => p.proposed).length}`,
   );
 
-  // Bodyweight compounds (pull-ups, dips) are classified compound but stay out
-  // of the e1RM surfaces — that gate is is_bodyweight, and it is independent.
+  // Bodyweight compounds (pull-ups, dips) are classified compound AND carry
+  // is_bodyweight — two independent flags, both true, on the same row.
   const bodyweightCompounds = proposals.filter(
     (p) => p.proposed && p.is_bodyweight,
   );
@@ -176,7 +180,7 @@ async function main(): Promise<void> {
   if (bodyweightCompounds.length > 0) {
     console.log("");
     console.log(
-      `  note: ${bodyweightCompounds.length} compound(s) are flagged bodyweight and stay out of e1RM`,
+      `  note: ${bodyweightCompounds.length} compound(s) are also flagged bodyweight`,
     );
     console.log(
       `        (${bodyweightCompounds.map((p) => p.name).join(", ")})`,

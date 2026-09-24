@@ -1,5 +1,6 @@
 "use client";
 
+import { ExerciseImage } from "@/components/shared/ExerciseImage";
 import type { LoggerExercise } from "@/lib/methodology/workout-state";
 import { getPrimaryMuscleGroupLabel } from "@/lib/methodology/muscle-groups";
 import { cn } from "@/lib/utils/cn";
@@ -70,6 +71,15 @@ export function ExercisePicker({
                     <span className="h-2.5 w-2.5 rounded-full bg-accent" />
                   ) : null}
                 </span>
+                {/* Mid-workout recognition aid. Renders nothing when the
+                    exercise has no vendored media (most of the library), and
+                    the flex gap collapses — no gap, no broken frame. */}
+                <ExerciseImage
+                  mediaPath={exercise.media_path}
+                  mediaType={exercise.media_type}
+                  name={exercise.name}
+                  size="thumb"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-semibold text-foreground">
                     {exercise.name}

@@ -1,26 +1,30 @@
 // Compound vs isolation classification, by exercise NAME (D28).
 //
-// Why a name matcher: `exercises.is_compound` has existed since migration 002
-// and `buildE1rmSpotlights` already excludes non-compound + bodyweight lifts —
-// the code gate is correct. What is wrong is the DATA: every row sits on the
-// column's `false` DEFAULT, so estimated-1RM reads wrong to the user. This
-// module is the single place that decides which names are compounds, so the
-// backfill (scripts/classify-compounds.ts), the catalog enrichment
-// (scripts/enrich-exercises.ts) and the future desktop builder all agree, and
-// so the decision is unit-testable without a database
+// Why a name matcher: `exercises.is_compound` has existed since migration 002,
+// but every row sat on the column's `false` DEFAULT — the flag carried no
+// information. This module is the single place that decides which names are
+// compounds, so the backfill (scripts/classify-compounds.ts), the catalog
+// enrichment (scripts/enrich-exercises.ts) and the future desktop builder all
+// agree, and so the decision is unit-testable without a database
 // (scripts/verify-compound-classification.ts).
 //
-// D28 (locked by Marcus 2026-09-23) — these get estimated-1RM + the weight-PR
-// trend: Bench Press · Incline Press · Overhead/Shoulder Press · Back Squat ·
-// Deadlift (RDL/Sumo/conventional) · Barbell/DB/Chest-Supported Row ·
-// Weighted Dips · Weighted Pull-up/Chin · Lat Pulldown. Everything else
-// (lateral raise, rear delt, biceps, triceps, chest fly, face pull, calf
-// raise, walking lunges, single-arm cables, core) is isolation.
+// SCOPE NOTE (T2-B): is_compound no longer gates any chart. It was introduced
+// to keep estimated-1RM off isolation lifts, and e1RM has since been deleted
+// outright — the PR graph charts real logged events for every exercise alike.
+// The flag stays as editable Library metadata and as an input to the planned
+// workout builder; do not re-attach display logic to it without a decision.
+//
+// D28 (locked by Marcus 2026-09-23) — the compound list: Bench Press ·
+// Incline Press · Overhead/Shoulder Press · Back Squat · Deadlift
+// (RDL/Sumo/conventional) · Barbell/DB/Chest-Supported Row · Weighted Dips ·
+// Weighted Pull-up/Chin · Lat Pulldown. Everything else (lateral raise, rear
+// delt, biceps, triceps, chest fly, face pull, calf raise, walking lunges,
+// single-arm cables, core) is isolation.
 //
 // The rule order matters: ISOLATION patterns are evaluated FIRST, so an
 // isolation whose name merely contains a compound word ("Pallof Press",
 // "Decline Bench Curl", "Straight Arm Pulldown", "Upright Row", "Triceps Dip")
-// can never leak an e1RM chart. Anything that matches no compound pattern is
+// can never be mislabelled. Anything that matches no compound pattern is
 // isolation — "everything else = false" is the D28 default, not an oversight.
 //
 // This is pure string logic: no React, no Supabase, no I/O.
@@ -101,7 +105,7 @@ const ISOLATION_RULES: Rule[] = [
   { label: "isolation: russian twist", pattern: /\brussian twists?\b/ },
   { label: "isolation: ab wheel", pattern: /\bab wheel\b/ },
   { label: "isolation: dragon flag", pattern: /\bdragon\b/ },
-  // Mobility / prehab / ATG circuit — never an e1RM surface
+  // Mobility / prehab / ATG circuit — never a loaded compound
   { label: "isolation: ATG circuit", pattern: /\batg\b/ },
   { label: "isolation: dead hang", pattern: /\bdead hangs?\b/ },
   { label: "isolation: jefferson curl", pattern: /\bjefferson\b/ },
@@ -127,7 +131,7 @@ const COMPOUND_RULES: Rule[] = [
   { label: "compound: machine press", pattern: /\bmachine press\b/ },
   // Loaded squat-pattern machine.
   { label: "compound: hack squat", pattern: /\bhack squats?\b/ },
-  // Bodyweight compound pull+press (is_bodyweight gates e1RM separately).
+  // Bodyweight compound pull+press (is_bodyweight is tracked separately).
   { label: "compound: muscle-up", pattern: /\bmuscle ?ups?\b/ },
   { label: "compound: decline press", pattern: /\bdecline\b.*\bpress\b/ },
   { label: "compound: smith press", pattern: /\bsmith press\b/ },

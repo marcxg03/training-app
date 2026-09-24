@@ -9,6 +9,10 @@ export type LoggerExercise = Pick<
   | "prescribed_max"
   | "muscle_groups"
   | "is_bodyweight"
+  // Mid-workout the picker shows the movement, not just its name (T2-B).
+  // NULL for most of the library — every render site must degrade.
+  | "media_path"
+  | "media_type"
 >;
 
 export type LoggerSetLog = Pick<

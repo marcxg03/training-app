@@ -6,8 +6,9 @@
 // The contract: the two PR types must never render the same color again.
 // weight -> --pr-weight (#2563EB blue), in_range_rep -> --pr-rep (#7C3AED violet).
 // Both are tokens (bg-pr-*/text-pr-*), never raw hex, so the theme stays the
-// single source of truth. This map is also the legend for the future
-// per-exercise PR graph, so drift here would silently mis-label that chart.
+// single source of truth. This map is ALSO the legend and series palette for
+// the per-exercise PR graph (PRHistoryChart, T2-B), so drift here would
+// silently mis-label that chart.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -61,15 +62,39 @@ check("rep text uses the pr-rep token", PR_TYPE_STYLE.in_range_rep.text, "text-p
 // --- the two types are distinguishable on EVERY field -----------------------
 // This is the actual bug guard: a copy/paste that leaves both types sharing a
 // color or label fails here rather than shipping an indistinguishable UI.
-const fields: (keyof PRTypeStyle)[] = [
+/** Keys of PRTypeStyle whose value is a class string (not a geometry number). */
+type PRTypeStyleClassField = {
+  [K in keyof PRTypeStyle]: PRTypeStyle[K] extends string ? K : never;
+}[keyof PRTypeStyle];
+
+const fields: PRTypeStyleClassField[] = [
   "pill",
   "text",
   "surface",
   "shortLabel",
   "label",
   "inlineLabel",
+  // T2-B chart fields — a copy/paste that leaves both PR series drawn in the
+  // same color (or both axes labelled the same unit) fails here.
+  "chartStroke",
+  "chartDot",
+  "swatch",
+  "axisLabel",
 ];
-for (const field of fields) {
+
+// Geometry fields that must ALSO differ: when one set earns both PR types at
+// the same instant the two marks land on the identical coordinate, and only
+// the size difference keeps both visible. (chartDotHalo is deliberately the
+// SAME on both — they halo to one card background — and the halo WIDTHS are
+// free to match or not, so neither is in this list; the halo invariants that
+// do matter are asserted per-series below.)
+const distinctFields: (keyof PRTypeStyle)[] = [
+  ...fields,
+  "chartDotRadius",
+  "chartDotRadiusLatest",
+];
+
+for (const field of distinctFields) {
   check(
     `weight and rep differ on "${field}"`,
     PR_TYPE_STYLE.weight[field] !== PR_TYPE_STYLE.in_range_rep[field],
@@ -89,6 +114,43 @@ for (const [prType, style] of Object.entries(PR_TYPE_STYLE) as [
       false,
     );
   }
+}
+
+// --- coincident marks stay readable ----------------------------------------
+// The exact geometry the T2-B drive's check 7 asserts in a real browser, held
+// here as a unit invariant: with both marks on one coordinate, the smaller
+// dot plus its halo must leave a visible ring of the larger dot's fill.
+// (halo is centered on the edge, so it eats radius/2 outward.)
+for (const pair of [
+  ["chartDotRadius", "steady points"],
+  ["chartDotRadiusLatest", "newest points"],
+] as const) {
+  const [field, label] = pair;
+  const weight = PR_TYPE_STYLE.weight[field];
+  const rep = PR_TYPE_STYLE.in_range_rep[field];
+  const outer = Math.max(weight, rep);
+  const innerStyle = weight < rep ? PR_TYPE_STYLE.weight : PR_TYPE_STYLE.in_range_rep;
+  const visibleRing = outer - (Math.min(weight, rep) + innerStyle.chartDotHaloWidth / 2);
+
+  check(
+    `coincident ${label}: the outer mark still shows a >=1px ring (got ${visibleRing.toFixed(2)})`,
+    visibleRing >= 1,
+    true,
+  );
+}
+
+for (const prType of dbPrTypes) {
+  const style = PR_TYPE_STYLE[prType];
+  check(
+    `${prType} dots carry a contrasting halo so one mark on another reads as two`,
+    style.chartDotHalo === "stroke-card" && style.chartDotHaloWidth > 0,
+    true,
+  );
+  check(
+    `${prType} newest point is emphasized (latest radius > steady radius)`,
+    style.chartDotRadiusLatest > style.chartDotRadius,
+    true,
+  );
 }
 
 // --- the tokens the classes reference actually exist ------------------------
@@ -115,6 +177,20 @@ check(
   tailwindConfig.includes('"pr-rep": "rgb(var(--pr-rep) / <alpha-value>)"'),
   true,
 );
+
+// --- the chart fields are real Tailwind utilities over the SAME tokens ------
+// `stroke-pr-weight` / `fill-pr-rep` only exist because the colors live in the
+// tailwind theme; a hand-written class name that does not derive from the
+// token would render as nothing (SVG default black) with no error.
+for (const prType of dbPrTypes) {
+  const style = PR_TYPE_STYLE[prType];
+  const token = prType === "weight" ? "pr-weight" : "pr-rep";
+  check(`${prType}.chartStroke is stroke-${token}`, style.chartStroke, `stroke-${token}`);
+  check(`${prType}.chartDot is fill-${token}`, style.chartDot, `fill-${token}`);
+  check(`${prType}.swatch is bg-${token}`, style.swatch, `bg-${token}`);
+}
+check("weight series is measured in LBS", PR_TYPE_STYLE.weight.axisLabel, "LBS");
+check("rep series is measured in REPS", PR_TYPE_STYLE.in_range_rep.axisLabel, "REPS");
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed.`);

@@ -65,92 +65,14 @@ export type WeeklyVolumePoint = {
   tonnageKg: number;
 };
 
-// Epley estimated 1RM. Accuracy degrades past ~12 reps, so the rep term is
-// capped there — a 20-rep set shouldn't claim a higher e1RM than a hard 12.
-export const E1RM_REP_CAP = 12;
-
-export function epleyE1rmKg(weightKg: number, reps: number): number {
-  if (weightKg <= 0 || reps <= 0) {
-    return 0;
-  }
-
-  const effectiveReps = Math.min(reps, E1RM_REP_CAP);
-
-  return weightKg * (1 + effectiveReps / 30);
-}
-
-export type E1rmSetInput = {
-  logged_at: string;
-  weight_kg: number | null;
-  reps: number;
-};
-
-// Best e1RM per calendar day, chronological. Sets without a real external
-// load (bodyweight logs store 0/null) are skipped — Epley needs a weight.
-export function buildBestE1rmByDay(
-  sets: E1rmSetInput[],
-  timeZone: string,
-): TrendPoint[] {
-  const bestByDay = new Map<string, number>();
-
-  for (const set of sets) {
-    if (set.weight_kg === null || set.weight_kg <= 0) {
-      continue;
-    }
-
-    const e1rm = epleyE1rmKg(set.weight_kg, set.reps);
-    const key = dayKeyOf(set.logged_at, timeZone);
-    const existing = bestByDay.get(key) ?? 0;
-
-    if (e1rm > existing) {
-      bestByDay.set(key, e1rm);
-    }
-  }
-
-  return [...bestByDay.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dayKey, value]) => ({
-      dayKey,
-      label: dayLabelOf(dayKey),
-      value,
-    }));
-}
-
-// Best reps-per-day for bodyweight exercises (their progression axis is reps,
-// not load).
-export function buildBestRepsByDay(
-  sets: E1rmSetInput[],
-  timeZone: string,
-): TrendPoint[] {
-  const bestByDay = new Map<string, number>();
-
-  for (const set of sets) {
-    if (set.reps <= 0) {
-      continue;
-    }
-
-    const key = dayKeyOf(set.logged_at, timeZone);
-    const existing = bestByDay.get(key) ?? 0;
-
-    if (set.reps > existing) {
-      bestByDay.set(key, set.reps);
-    }
-  }
-
-  return [...bestByDay.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dayKey, value]) => ({
-      dayKey,
-      label: dayLabelOf(dayKey),
-      value,
-    }));
-}
-
-// --- e1RM spotlights (Trends page) ------------------------------------------
-
 // Raw row shape shared with queries.ts — exercises embedded via the
 // many-to-one FK, so PostgREST returns a single object (or null when RLS
 // hides the exercise).
+//
+// `is_compound` is deliberately NOT selected here any more (T2-B): it used to
+// gate the estimated-1RM spotlights, and with e1RM deleted nothing in the
+// analytics layer reads it. The column itself stays — it is editable metadata
+// in the Library and input for the future workout builder.
 export type AnalyticsSetRow = {
   exercise_id: string;
   weight_kg: number | null;
@@ -159,92 +81,9 @@ export type AnalyticsSetRow = {
   exercises: {
     name: string;
     is_bodyweight: boolean;
-    is_compound: boolean;
     muscle_groups: string[];
   } | null;
 };
-
-export type E1rmSpotlight = {
-  exercise_id: string;
-  exercise_name: string;
-  points: TrendPoint[]; // best e1RM per day, kg, chronological
-};
-
-// Top COMPOUND lifts by set count since rankCutoffKey (a local dayKey),
-// each with its best-e1RM-per-day series over the full window. Bodyweight
-// and isolation (non-compound) exercises are excluded — e1RM is a compound-
-// lift stat; the flag is editable per exercise in the Library. Rank ties
-// break by
-// exercise name for determinism; exercises whose window yields no chartable
-// points are dropped BEFORE the limit is applied so they can't burn a slot.
-export function buildE1rmSpotlights(
-  rows: AnalyticsSetRow[],
-  options: {
-    rankCutoffKey: string;
-    windowStartKey: string;
-    limit: number;
-    timeZone: string;
-  },
-): E1rmSpotlight[] {
-  const timeZone = options.timeZone;
-  const byExercise = new Map<
-    string,
-    { name: string; recentSetCount: number; sets: AnalyticsSetRow[] }
-  >();
-
-  for (const row of rows) {
-    if (
-      !row.exercises ||
-      row.exercises.is_bodyweight ||
-      !row.exercises.is_compound
-    ) {
-      continue;
-    }
-
-    if (row.weight_kg === null || row.weight_kg <= 0) {
-      continue;
-    }
-
-    const dayKey = dayKeyOf(row.logged_at, timeZone);
-
-    if (dayKey < options.windowStartKey) {
-      continue;
-    }
-
-    let entry = byExercise.get(row.exercise_id);
-
-    if (!entry) {
-      entry = { name: row.exercises.name, recentSetCount: 0, sets: [] };
-      byExercise.set(row.exercise_id, entry);
-    }
-
-    entry.sets.push(row);
-
-    if (dayKey >= options.rankCutoffKey) {
-      entry.recentSetCount += 1;
-    }
-  }
-
-  return [...byExercise.entries()]
-    .map(([exerciseId, entry]) => ({
-      exercise_id: exerciseId,
-      exercise_name: entry.name,
-      recentSetCount: entry.recentSetCount,
-      points: buildBestE1rmByDay(entry.sets, timeZone),
-    }))
-    .filter((spotlight) => spotlight.points.length > 0)
-    .sort(
-      (a, b) =>
-        b.recentSetCount - a.recentSetCount ||
-        a.exercise_name.localeCompare(b.exercise_name),
-    )
-    .slice(0, options.limit)
-    .map(({ exercise_id, exercise_name, points }) => ({
-      exercise_id,
-      exercise_name,
-      points,
-    }));
-}
 
 // --- weekly volume by muscle group (Trends page) -----------------------------
 

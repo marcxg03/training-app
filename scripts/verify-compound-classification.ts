@@ -3,14 +3,15 @@
 //   pnpm exec tsx scripts/verify-compound-classification.ts
 // Exits non-zero on any failure. No test framework needed (repo idiom).
 //
-// WHY THIS EXISTS (D28): `exercises.is_compound` already gates e1RM in
-// `buildE1rmSpotlights`, but every row sits on the `false` DEFAULT — the code
-// gate is right and the DATA is wrong. `scripts/classify-compounds.ts` fixes
-// the data; this file pins the matcher it uses so the classification can be
-// re-run, reviewed, and reused by the future desktop builder without
-// re-litigating what counts as a compound.
+// WHY THIS EXISTS (D28): `exercises.is_compound` has existed since migration
+// 002 but every row sat on the `false` DEFAULT — the DATA was wrong.
+// `scripts/classify-compounds.ts` fixes the data; this file pins the matcher
+// it uses so the classification can be re-run, reviewed, and reused by the
+// future desktop builder without re-litigating what counts as a compound.
+// (T2-B: the flag no longer gates any chart — estimated-1RM was deleted — but
+// it stays as Library metadata and builder input.)
 //
-// D28 (locked by Marcus 2026-09-23) — gets estimated-1RM + the weight-PR trend:
+// D28 (locked by Marcus 2026-09-23) — the compound list:
 //   Bench Press · Incline Press · Overhead/Shoulder Press · Back Squat ·
 //   Deadlift (RDL/Sumo/conventional) · Barbell/DB/Chest-Supported Row ·
 //   Weighted Dips · Weighted Pull-up/Chin · Lat Pulldown
@@ -182,7 +183,7 @@ for (const name of ISOLATION_CASES) {
 // --- traps: isolation patterns must beat compound substrings ------------
 // "Pallof Press" contains "press"; "Decline Bench Curl" contains "bench";
 // "Straight Arm Pulldown" contains "pulldown"; "Upright Row" contains "row".
-// The deny list is evaluated FIRST so none of these can leak an e1RM chart.
+// The deny list is evaluated FIRST so none of these can be mislabelled.
 check("trap: Pallof Press is not a press", isCompoundExerciseName("Pallof Press"), false); // prettier-ignore
 check("trap: Decline Bench Curl is not a bench press", isCompoundExerciseName("Decline Bench Curl"), false); // prettier-ignore
 check("trap: Straight Arm Pulldown is not a lat pulldown", isCompoundExerciseName("Straight Arm Pulldown"), false); // prettier-ignore

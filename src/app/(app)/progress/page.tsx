@@ -2,17 +2,17 @@ import type { JSX } from "react";
 
 import { AllWorkoutsRow } from "@/app/(app)/progress/_components/AllWorkoutsRow";
 import { BodyweightSection } from "@/app/(app)/progress/_components/BodyweightSection";
-import { E1rmSection } from "@/app/(app)/progress/_components/E1rmSection";
 import { NutritionTrendSection } from "@/app/(app)/progress/_components/NutritionTrendSection";
+import { PRHistorySection } from "@/app/(app)/progress/_components/PRHistorySection";
 import { PRTimelineRow } from "@/app/(app)/progress/_components/PRTimelineRow";
 import { WeeklyVolumeSection } from "@/app/(app)/progress/_components/WeeklyVolumeSection";
 import { ProgressSegments } from "@/app/(app)/progress/_components/ProgressSegments";
 import { ProgressShowAllToggle } from "@/app/(app)/progress/_components/ProgressShowAllToggle";
 import { RecentTimeline } from "@/app/(app)/progress/_components/RecentTimeline";
 import { StatCard } from "@/components/shared";
+import { buildPRSpotlights } from "@/lib/analytics/pr-history";
 import {
   buildBodyweightTrend,
-  buildE1rmSpotlights,
   buildNutritionBands,
   buildWeeklyVolumeByGroup,
 } from "@/lib/analytics/projections";
@@ -28,15 +28,11 @@ import {
   buildRecentTimeline,
   deriveOverviewStats,
 } from "@/lib/progress/overview";
-import {
-  addDaysToDayKey,
-  dayKeyDaysAgo as dayKeyDaysAgoTz,
-} from "@/lib/time/appDay";
+import { addDaysToDayKey } from "@/lib/time/appDay";
 import { getAppTimezone, getAppToday } from "@/lib/time/server";
 
 const TRENDS_WINDOW_DAYS = 90;
-const E1RM_RANK_WINDOW_DAYS = 30;
-const E1RM_SPOTLIGHT_LIMIT = 4;
+const PR_SPOTLIGHT_LIMIT = 4;
 const VOLUME_WEEKS = 8;
 const NUTRITION_WINDOW_DAYS = 30;
 const BODYWEIGHT_WINDOW_DAYS = 90;
@@ -99,15 +95,9 @@ export default async function ProgressPage({
   const today = await getAppToday();
   const now = new Date();
 
-  // --- Shared analytics window (fetch set_logs ONCE; feed both strength +
-  //     load, exactly as the old /trends page derived them). ---
+  // --- Shared analytics window (fetch set_logs ONCE; feed the load views,
+  //     exactly as the old /trends page derived them). ---
   const setRows = await getSetLogWindow(TRENDS_WINDOW_DAYS);
-  const spotlights = buildE1rmSpotlights(setRows, {
-    windowStartKey: dayKeyDaysAgoTz(TRENDS_WINDOW_DAYS, timeZone, now),
-    rankCutoffKey: dayKeyDaysAgoTz(E1RM_RANK_WINDOW_DAYS, timeZone, now),
-    limit: E1RM_SPOTLIGHT_LIMIT,
-    timeZone,
-  });
   const volumeGroups = buildWeeklyVolumeByGroup(setRows, {
     weeks: VOLUME_WEEKS,
     timeZone,
@@ -128,6 +118,14 @@ export default async function ProgressPage({
     ]);
   const nutritionSeries = buildNutritionBands(meals, { partialDayKey: today });
 
+  // PR spotlights reuse the timeline this page ALREADY fetched — one query,
+  // two surfaces. Estimated 1RM used to live in this slot; it was a derived
+  // guess, and these are the real logged events (T2-B).
+  const spotlights = buildPRSpotlights(prTimeline, {
+    limit: PR_SPOTLIGHT_LIMIT,
+    timeZone,
+  });
+
   // --- Overview derivations (pure, from the fetched projections). ---
   const stats = deriveOverviewStats(allWorkouts, prTimeline, {
     todayKey: today,
@@ -143,7 +141,7 @@ export default async function ProgressPage({
     : "No PRs in the last 90 days. Tap All time to see your full history.";
 
   // ---------------- Segment: OVERVIEW ----------------
-  // A tight glance: the three stats, the ONE featured e1RM spotlight, and the
+  // A tight glance: the three stats, the ONE featured PR graph, and the
   // Recent feed. Every analytical chart lives in the Trends segment below —
   // nothing else belongs here.
   const overview = (
@@ -166,24 +164,24 @@ export default async function ProgressPage({
         />
       </div>
 
-      {/* Featured per-exercise chart (top e1RM spotlight). The full list + all
+      {/* Featured per-exercise chart (the most-PR'd lift). The full list + all
           other analytical charts live in the Trends segment. */}
-      <E1rmSection spotlights={spotlights.slice(0, 1)} />
+      <PRHistorySection spotlights={spotlights.slice(0, 1)} />
 
       <RecentTimeline items={recent} todayKey={today} timeZone={timeZone} />
     </>
   );
 
   // ---------------- Segment: TRENDS ----------------
-  // All the analytical charts: the full per-exercise e1RM progression plus the
+  // All the analytical charts: the full per-exercise PR history plus the
   // re-homed weekly-volume, bodyweight, and nutrition trends.
   const trends = (
     <>
       <p className="text-sm leading-6 text-muted-foreground">
-        Estimated 1RM progression per exercise. Tap any to open its full history
-        and recent sets.
+        Weight and rep PRs per exercise, over time. Tap any to open its full
+        history and recent sets.
       </p>
-      <E1rmSection spotlights={spotlights} />
+      <PRHistorySection spotlights={spotlights} />
       <WeeklyVolumeSection groups={volumeGroups} />
       <BodyweightSection
         points={
