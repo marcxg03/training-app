@@ -91,3 +91,22 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 ## Final pass
 
 Whole-app e2e on the live authenticated app (test user, Block II seeded): open every tab, log a set, log a meal, switch a plan, view progress. Final `/roast-code` over the whole diff → 4F triage → ralph to convergence (bounded; escalate if non-converging). Close `build-log.md` with the `✅ BUILD COMPLETE` entry. Present integration options (recommend: PR for Marcus's review; do NOT auto-merge). Update the vault `overview.md`.
+
+---
+
+## SLICE T2-F — Swap exercise media to CC-BY-SA vector line figures (NEXT)
+
+**Delivers:** the stock photos vendored in T2-A are replaced by clean vector line figures, animated as a 3-frame loop, with the attribution CC-BY-SA requires.
+
+**Source (D35):** `bryllim/workout-guide` — 302 exercises, 3 transparent 512×512 SVG frames each (npm `@bryllim/workout-guide`; code MIT, **artwork CC-BY-SA-4.0**).
+
+**Approach:**
+- Fetch/cache the catalog; name-match Marcus's 83 exercises (REUSE the hardened matcher from `scripts/enrich-exercises.ts` — singular stemming + IDF weighting + head-noun gate; it already caught false positives like `Seated Cable Row → Cable Seated Crunch`). Print unmatched for review; keep the ≥0.65 threshold lesson from T2-A.
+- Vendor the 3 SVG frames per matched exercise into `public/exercises/` (same-origin, CSP-clean). Check for and strip nothing — see the license rule.
+- Media model: `media_type` gains `'svg-sequence'` (or store the frame basename + count). Keep `media_path` pluggable per D27 so Marcus's own filmed clips can still replace any single exercise later.
+- Render: extend `src/components/shared/ExerciseImage.tsx` to cycle the 3 frames on a slow loop (CSS animation or a tiny client component; prefers-reduced-motion must fall back to a single static frame). Must still degrade to nothing when an exercise has no media.
+- **Attribution (REQUIRED by CC-BY-SA):** a visible credit — e.g. on the exercise detail near the figure and/or a credits line in Settings — naming the source + license with a link. Do NOT modify the SVG artwork.
+- Remove the now-unused photo JPGs from `public/exercises/` for exercises that get an SVG (keep any exercise whose only media is a photo until it has a replacement, or clear it — Marcus's call in the dry-run).
+
+**DoD:** matched exercises show an animated line figure in the logger picker + exercise detail; unmatched degrade cleanly; attribution visible; artwork unmodified; reduced-motion respected.
+**Verify:** test-first pure helpers (frame-path building, match scoring reuse); **mandatory browser drive `e2e/drive-t2f.mjs`** (D32) — figure animates, reduced-motion shows a static frame, null media degrades, attribution renders, no horizontal overflow at 390px; plus a t2d/t2e regression run. 17+ verify scripts + ralph-verify GREEN.
