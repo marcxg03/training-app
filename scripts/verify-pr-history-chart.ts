@@ -391,6 +391,24 @@ check(
   2,
 );
 check("spotlights: no PRs -> no spotlights", buildPRSpotlights([], { limit: 4, timeZone: TZ }).length, 0);
+// T2-E: the Trends surface renders ONE exercise at a time behind a selector, so
+// the limit is now a MENU length (12) rather than a page length (4). A limit
+// wider than the data must return everything that has PR history and invent
+// nothing — an empty option would be a chart-less choice.
+check(
+  "spotlights: a limit wider than the data returns every exercise with PR history",
+  buildPRSpotlights(spotlightRows, { limit: 12, timeZone: TZ }).map(
+    (s) => s.exercise_id,
+  ),
+  ["ex-a", "ex-b", "ex-c", "ex-d"],
+);
+check(
+  "spotlights: every offered option carries a non-empty chart model",
+  buildPRSpotlights(spotlightRows, { limit: 12, timeZone: TZ }).every(
+    (s) => !s.model.isEmpty,
+  ),
+  true,
+);
 
 // --- render smoke: no NaN, no hardcoded hex, two titled charts --------------
 function smoke(name: string, element: React.ReactElement, expectEmpty: boolean) {

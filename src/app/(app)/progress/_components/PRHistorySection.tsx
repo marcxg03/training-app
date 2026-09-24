@@ -1,48 +1,20 @@
 import type { JSX } from "react";
-import Link from "next/link";
 
-import { PRHistoryChart } from "@/components/shared/PRHistoryChart";
+import { PRSpotlightCard } from "@/app/(app)/progress/_components/PRSpotlightCard";
 import type { PRSpotlight } from "@/lib/analytics/pr-history";
 
-// Replaces the deleted E1rmSection (T2-B). Same slot, honest data: a PR graph
-// pair (weight + reps, T2-D) per featured exercise instead of an Epley
-// estimate. Links into the exercise's full history.
-function SpotlightCard({ spotlight }: { spotlight: PRSpotlight }): JSX.Element {
-  const weightPoints = spotlight.model.weight.points;
-  const repPoints = spotlight.model.rep.points;
-  const latestWeight = weightPoints[weightPoints.length - 1];
-  const latestRep = repPoints[repPoints.length - 1];
-  const headline = [
-    latestWeight ? `${latestWeight.value} lbs` : null,
-    latestRep ? `${latestRep.value} reps` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(" · ");
-
-  return (
-    <Link
-      href={`/history/exercises/${spotlight.exercise_id}`}
-      className="block rounded-[var(--radius)] transition-opacity hover:opacity-90"
-    >
-      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <p className="truncate text-sm font-medium text-foreground">
-          {spotlight.exercise_name}
-        </p>
-        <p className="shrink-0 font-mono text-[13px] font-semibold tabular-nums text-foreground">
-          {headline}
-          <span className="ml-2 text-[10px] font-normal uppercase text-faint">
-            {spotlight.pr_count} PR{spotlight.pr_count === 1 ? "" : "s"}
-          </span>
-        </p>
-      </div>
-      <PRHistoryChart
-        model={spotlight.model}
-        ariaLabel={`${spotlight.exercise_name} personal-record history`}
-      />
-    </Link>
-  );
-}
-
+// The OVERVIEW featured slot: one exercise's PR pair, no controls (T2-E).
+// Replaced the deleted E1rmSection (T2-B) — same slot, honest data.
+//
+// Overview is the glance, so it gets the single most-PR'd lift and nothing to
+// operate. The selectable, browse-any-exercise version of this lives in
+// PRHistoryBrowser and belongs to the Trends segment. Do not add a control
+// here: Marcus's complaint in T2-E was an endless scroll of charts on Trends,
+// and the fix was to give ONE surface the browsing job, not both.
+//
+// `spotlights` stays an array so the caller keeps deciding what is featured
+// (today: `spotlights.slice(0, 1)`), and the empty state still has a home when
+// nothing has been logged yet.
 export function PRHistorySection({
   spotlights,
 }: {
@@ -54,7 +26,10 @@ export function PRHistorySection({
       {spotlights.length > 0 ? (
         <div className="flex flex-col gap-4">
           {spotlights.map((spotlight) => (
-            <SpotlightCard key={spotlight.exercise_id} spotlight={spotlight} />
+            <PRSpotlightCard
+              key={spotlight.exercise_id}
+              spotlight={spotlight}
+            />
           ))}
         </div>
       ) : (

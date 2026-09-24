@@ -1,4 +1,8 @@
 import {
+  isTypeOnlyNote,
+  mergeExerciseNotes,
+} from "../../../src/lib/methodology/exercise-notes";
+import {
   getHighLevelMuscleGroups,
   getPrimaryMuscleGroupLabel,
 } from "../../../src/lib/methodology/muscle-groups";
@@ -188,7 +192,19 @@ function extractExerciseNotesMap(trainingLogMd: string) {
         continue;
       }
 
-      notesByExercise.set(toCanonicalExerciseName(rawName), rawNotes);
+      // A Notes cell holding nothing but "Compound" / "Isolation" is the plan's
+      // TYPE column leaking into a free-text field (T2-E). That classification
+      // belongs to `exercises.is_compound`, which the seed already writes — as a
+      // note it is pure noise, and it is what the logger's exercise picker
+      // prints under the exercise name. Dropped HERE, at the point of reading,
+      // so no downstream merge can resurrect it.
+      //
+      // Only NOTHING-BUT-a-type-word is dropped: "Compound — PR" and
+      // "Isolation (ATG day)" are real notes and survive untouched.
+      notesByExercise.set(
+        toCanonicalExerciseName(rawName),
+        isTypeOnlyNote(rawNotes) ? "" : rawNotes,
+      );
     }
   }
 
@@ -1036,12 +1052,15 @@ export function parseLiftingBlocksGlobal(days: ParsedDaySpec[]): ParsedBlock[] {
             continue;
           }
 
-          existingExercise.notes =
-            existingExercise.notes || exercise.notes
-              ? [existingExercise.notes, exercise.notes]
-                  .filter(Boolean)
-                  .join("\n")
-              : "";
+          // The same exercise appears in Round 1, Round 2 and Round 3 of a
+          // session, and this join used to run whether or not the two notes were
+          // identical — which is how a one-word note came out the far end as
+          // "Compound\nCompound\nCompound" (T2-E). mergeExerciseNotes keeps
+          // genuinely different lines and drops repeats.
+          existingExercise.notes = mergeExerciseNotes(
+            existingExercise.notes,
+            exercise.notes,
+          );
           existingExercise.prescribedMin = Math.min(
             existingExercise.prescribedMin,
             exercise.prescribedMin,

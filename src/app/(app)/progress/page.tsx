@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import { AllWorkoutsRow } from "@/app/(app)/progress/_components/AllWorkoutsRow";
 import { BodyweightSection } from "@/app/(app)/progress/_components/BodyweightSection";
 import { NutritionTrendSection } from "@/app/(app)/progress/_components/NutritionTrendSection";
+import { PRHistoryBrowser } from "@/app/(app)/progress/_components/PRHistoryBrowser";
 import { PRHistorySection } from "@/app/(app)/progress/_components/PRHistorySection";
 import { ProgressPhotosSection } from "@/app/(app)/progress/_components/ProgressPhotosSection";
 import { PRTimelineRow } from "@/app/(app)/progress/_components/PRTimelineRow";
@@ -34,7 +35,13 @@ import { addDaysToDayKey } from "@/lib/time/appDay";
 import { getAppTimezone, getAppToday } from "@/lib/time/server";
 
 const TRENDS_WINDOW_DAYS = 90;
-const PR_SPOTLIGHT_LIMIT = 4;
+// How many exercises the Trends PR-history SELECTOR offers (T2-E). It used to
+// be 4 because all four rendered at once — four cards × two charts = eight
+// canvases of endless scroll, which is the thing Marcus asked to be rid of.
+// Now exactly one renders at a time, so the number is a menu length rather
+// than a page length: deep enough to cover a training block's real lifts,
+// short enough that the picker stays a glance.
+const PR_SPOTLIGHT_LIMIT = 12;
 const VOLUME_WEEKS = 8;
 const NUTRITION_WINDOW_DAYS = 30;
 const BODYWEIGHT_WINDOW_DAYS = 90;
@@ -170,8 +177,9 @@ export default async function ProgressPage({
         />
       </div>
 
-      {/* Featured per-exercise chart (the most-PR'd lift). The full list + all
-          other analytical charts live in the Trends segment. */}
+      {/* Featured per-exercise chart (the most-PR'd lift), no control — Overview
+          is the glance. Any OTHER exercise, and every other analytical chart,
+          lives one tap away in the Trends segment's selector. */}
       <PRHistorySection spotlights={spotlights.slice(0, 1)} />
 
       <RecentTimeline items={recent} todayKey={today} timeZone={timeZone} />
@@ -207,13 +215,14 @@ export default async function ProgressPage({
 
       <NutritionTrendSection series={nutritionSeries} targets={targets} />
 
-      <div className="flex flex-col gap-2.5">
-        <p className="text-sm leading-6 text-muted-foreground">
-          Weight and rep PRs per exercise, over time — each on its own chart.
-          Tap any to open its full history and recent sets.
-        </p>
-        <PRHistorySection spotlights={spotlights} />
-      </div>
+      {/* ONE exercise at a time, behind a selector (T2-E, Marcus: "a selector
+          to select which exercise to surface and only surface one — so you can
+          select which exercise and see trends"). The server builds every
+          selectable exercise's model above; the client component only chooses
+          which is on screen. The section's own explainer moved INSIDE it in
+          T2-E — sitting above the heading it read as a caption for the Fuel
+          chart it followed. */}
+      <PRHistoryBrowser spotlights={spotlights} />
 
       <WeeklyVolumeSection groups={volumeGroups} />
     </>

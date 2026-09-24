@@ -164,9 +164,24 @@ report footer.
 - **`seed-analytics-data.mjs` creates no PRs and no completions** — it is a chart
   fixture. `seed-pr-history.mjs` adds both; `getPRTimeline` discards any PR whose
   `achieved_at` falls outside a `workout_completions` window.
+- **Never run `pnpm build` (or `scripts/ralph-verify.sh`, which runs it) while a
+  dev server is up on :3111.** `next build` writes the same `.next/` the dev
+  server is serving out of: the running server keeps its file handles, the drive
+  starts returning 500s, and the app comes back **unstyled** because the CSS
+  chunk it was serving no longer exists. Order a slice as **drive → stop the dev
+  server → gates → restart the dev server**, or run the gates first and start the
+  server afterwards. `ralph-verify.sh --quick` skips the build and is safe with a
+  server up.
 - **`MODULE_NOT_FOUND ./1234.js` in the dev-server log = a stale `.next`.** Stop
   the server, `rm -rf .next`, start it again. It presents as a blanket 500 on
-  pages that compile fine.
+  pages that compile fine. (Most often it is the previous gotcha's aftermath.)
+- **`expectVisible` resolves `.first()`, and Progress renders all three segments
+  at once.** A heading that legitimately appears in more than one segment
+  ("Strength · PR history" is in Overview AND Trends) will match the hidden
+  Overview copy first and time out against an element that is _correctly_
+  invisible. Narrow it: `h2:text-is("…"):visible` — or assert through a
+  `getClientRects()` probe, which is what the order/chart checks already do.
+  (Cost the T2-E drive its first run.)
 - Text matching is **not** affected by `text-transform: uppercase` (the
   `.eyebrow` class), but `visibleText()` / `expectNoText()` read `innerText`,
   which **is**. Compare case-insensitively (the default).
