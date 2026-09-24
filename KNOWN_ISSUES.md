@@ -660,3 +660,66 @@ either.
 ## activatePlan is non-atomic — a partial failure can leave ZERO active plans (S4 roast F2)
 
 **Status:** deferred (pre-existing, rare, self-healing on retry). `src/lib/plan/plan-mutations.ts` `activatePlan` runs two writes — UPDATE is_active=false on all other plans, then UPDATE is_active=true on the target — with no transaction. If the second write fails, the DB has no active plan → Today (`.eq(is_active,true).maybeSingle()`) returns null and the app looks empty. Recovery is one tap (re-tap Load re-runs deactivate-all + activate; the selector surfaces the error + guards double-submit). Proper fix: a transactional Supabase RPC that flips both in one statement (or `SELECT ... FOR UPDATE`). Not fixed in S4 (presentational slice; a prod migration should be a deliberate backend change). See FUTURE_WORK.
+
+## Slice T2-C — Body area (bodyweight + progress photos)
+
+### 🔴 Blocking-until-pushed — Migration 027 is written but NOT applied, so the photo half has never run
+
+`supabase/migrations/027_progress_photos.sql` (the `progress_photos`
+table, its RLS policies, the private `progress-photos` Storage bucket,
+and the three `storage.objects` policies) is committed but not pushed —
+the slice was explicitly not permitted to touch the live project, and a
+local Supabase stack needs Docker, which is not installed on this
+machine (no docker / colima / podman / orbstack, no local postgres).
+
+Consequence: **upload, signed-URL rendering, client-side compression,
+and delete have never executed against a real database or Storage.**
+Their pure logic is pinned by `scripts/verify-progress-photos.ts`, and
+`e2e/drive-t2c.mjs` contains the real browser checks — but it probes for
+the table + bucket and records them as SKIP rather than faking a pass.
+
+Resolve by: `supabase db push`, then re-run `node e2e/drive-t2c.mjs`
+unchanged. The probe flips and checks 5–7 execute for real. Do not
+consider the photo feature verified before that run is green.
+
+### 🟡 Medium — `src/lib/supabase/types.ts` is hand-edited for 027
+
+Same stopgap as migrations 026 / D14: there is no live DB in this
+worktree, so the `progress_photos` table is typed by hand. A
+`supabase gen types` regen against a database that has not received 027
+will delete the block again. Push 027 BEFORE any regen.
+
+### 🟢 Low — The absent-table diagnostic trips Next's dev-overlay issue counter
+
+`getProgressPhotos` logs `console.error("progress_photos missing — apply
+migration 027")` on every Progress render when the table is absent —
+deliberate, and the same contract `getBodyweightTrend` uses for 021. In
+`next dev` this registers on the red "1 Issue" overlay badge, which
+looks alarming in screenshots. It disappears once 027 is pushed. Left as
+an error (not a warn) so the same message is visible in Vercel logs if
+a deploy ever lands ahead of its migration.
+
+### 🟢 Low — No CSP today, but signed Storage URLs would need one if that changes
+
+D27 says "the CSP blocks external hosts", but there is in fact no CSP
+configured anywhere in the repo (no `next.config.mjs` headers, no
+`vercel.json`, no meta tag) — which is why the progress-photo
+thumbnails, served from the Supabase Storage host, load fine. If a CSP
+is ever added, `img-src` must include the project's Storage origin or
+every thumbnail silently renders as a zero-width image. The drive's
+`naturalWidth > 0` assertion (check 5) is what would catch it.
+
+### 🟢 Low — HEIC is refused, not converted
+
+Accepted upload types are jpeg/png/webp only, enforced client-side and
+again by the bucket's `allowed_mime_types`. Chrome cannot decode HEIC at
+all (so neither the canvas downscale nor the `<img>` would work), and
+iOS already transcodes camera captures to JPEG for web uploads. A user
+who manages to pick a HEIC from a desktop file picker gets "Use a JPEG,
+PNG, or WebP photo." rather than a conversion.
+
+### 🟢 Low — The photo timeline loads at most 60 photos, with no paging
+
+`PROGRESS_PHOTO_LIMIT = 60`. The Body area is a glance surface and
+signing N URLs is one round-trip whose cost grows with N. Paging is
+FUTURE_WORK if Marcus ever fills it.

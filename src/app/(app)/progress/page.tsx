@@ -4,6 +4,7 @@ import { AllWorkoutsRow } from "@/app/(app)/progress/_components/AllWorkoutsRow"
 import { BodyweightSection } from "@/app/(app)/progress/_components/BodyweightSection";
 import { NutritionTrendSection } from "@/app/(app)/progress/_components/NutritionTrendSection";
 import { PRHistorySection } from "@/app/(app)/progress/_components/PRHistorySection";
+import { ProgressPhotosSection } from "@/app/(app)/progress/_components/ProgressPhotosSection";
 import { PRTimelineRow } from "@/app/(app)/progress/_components/PRTimelineRow";
 import { WeeklyVolumeSection } from "@/app/(app)/progress/_components/WeeklyVolumeSection";
 import { ProgressSegments } from "@/app/(app)/progress/_components/ProgressSegments";
@@ -19,6 +20,7 @@ import {
 import { getSetLogWindow } from "@/lib/analytics/queries";
 import { getBodyweightTrend } from "@/lib/bodyweight/queries";
 import { getAllWorkouts, getPRTimeline } from "@/lib/history/queries";
+import { getProgressPhotos } from "@/lib/progress-photos/queries";
 import type { PRTimelineRow as PRTimelineRowData } from "@/lib/history/projections";
 import {
   getMealsForDateRange,
@@ -104,8 +106,11 @@ export default async function ProgressPage({
     now,
   });
 
-  // --- Nutrition trend + bodyweight (unchanged queries, re-homed). ---
-  const [meals, targets, bodyweight, prTimeline, allWorkouts] =
+  // --- Nutrition trend + body (bodyweight + progress photos). ---
+  // getProgressPhotos also SIGNS each photo's URL (the bucket is private), so
+  // it must run server-side here; the client section only renders what it
+  // returns.
+  const [meals, targets, bodyweight, photos, prTimeline, allWorkouts] =
     await Promise.all([
       getMealsForDateRange(
         addDaysToDayKey(today, -(NUTRITION_WINDOW_DAYS - 1)),
@@ -113,6 +118,7 @@ export default async function ProgressPage({
       ),
       getNutritionTargets(),
       getBodyweightTrend(BODYWEIGHT_WINDOW_DAYS),
+      getProgressPhotos(),
       getPRTimeline({ showAll }),
       getAllWorkouts(),
     ]);
@@ -183,13 +189,26 @@ export default async function ProgressPage({
       </p>
       <PRHistorySection spotlights={spotlights} />
       <WeeklyVolumeSection groups={volumeGroups} />
-      <BodyweightSection
-        points={
-          bodyweight.available ? buildBodyweightTrend(bodyweight.rows) : []
-        }
-        available={bodyweight.available}
-        logDate={today}
-      />
+
+      {/* BODY (D29) — weight and photos together, under one heading, because
+          this is where the trend already is. Both LOG here; Settings stays
+          config-only. Overview deliberately gets neither: it is the glance. */}
+      <section className="flex flex-col gap-4">
+        <h2 className="eyebrow mt-2">Body</h2>
+        <BodyweightSection
+          points={
+            bodyweight.available ? buildBodyweightTrend(bodyweight.rows) : []
+          }
+          available={bodyweight.available}
+          logDate={today}
+        />
+        <ProgressPhotosSection
+          photos={photos.available ? photos.photos : []}
+          available={photos.available}
+          defaultDate={today}
+        />
+      </section>
+
       <NutritionTrendSection series={nutritionSeries} targets={targets} />
     </>
   );

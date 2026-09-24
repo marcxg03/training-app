@@ -583,6 +583,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      // HAND-EDITED for migration 027 (progress_photos), same stopgap as D14 /
+      // migration 026: there is no live DB in this worktree, so the table is
+      // typed by hand. Migration 027 MUST be `supabase db push`ed BEFORE any
+      // `supabase gen types` regen — a regen against a database that has not
+      // received 027 deletes this table again. See KNOWN_ISSUES.md
+      // ("hand-edited generated types").
+      progress_photos: {
+        Row: {
+          created_at: string;
+          note: string;
+          photo_id: string;
+          storage_path: string;
+          taken_on: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          note?: string;
+          photo_id?: string;
+          storage_path: string;
+          taken_on: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          note?: string;
+          photo_id?: string;
+          storage_path?: string;
+          taken_on?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       recovery_activities: {
         Row: {
           activity_id: string;

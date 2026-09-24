@@ -89,3 +89,57 @@ export async function logBodyweight(
       : undefined,
   };
 }
+
+/**
+ * Re-point `profiles.bodyweight_kg` at the most recent bodyweight log.
+ *
+ * logBodyweight() sets the profile's "current" weight to whatever it just
+ * wrote — correct when the entry is today's, WRONG once the Body control can
+ * back-date (T2-C): filling in last Tuesday's missed weigh-in would otherwise
+ * overwrite today's current weight with a stale number, and every surface that
+ * reads profiles.bodyweight_kg would quietly regress.
+ *
+ * Additive on purpose — logBodyweight's signature and behaviour are untouched;
+ * the caller invokes this AFTER a back-dated log to restore the invariant
+ * "profiles.bodyweight_kg == the newest bodyweight_logs row". Failure is
+ * non-fatal: the log itself is already saved, so this returns a warning
+ * string, never an error the UI must block on.
+ */
+export async function syncCurrentBodyweight(
+  supabase: BrowserClient,
+): Promise<{ warning?: string }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { warning: undefined };
+  }
+
+  const { data, error } = await supabase
+    .from("bodyweight_logs")
+    .select("weight_kg")
+    .eq("user_id", user.id)
+    .order("log_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      warning: error
+        ? `Saved, but couldn't refresh your current weight: ${error.message}`
+        : undefined,
+    };
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ bodyweight_kg: data.weight_kg })
+    .eq("user_id", user.id);
+
+  return {
+    warning: profileError
+      ? `Saved, but couldn't refresh your current weight: ${profileError.message}`
+      : undefined,
+  };
+}

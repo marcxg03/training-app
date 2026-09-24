@@ -170,3 +170,23 @@ report footer.
 - Text matching is **not** affected by `text-transform: uppercase` (the
   `.eyebrow` class), but `visibleText()` / `expectNoText()` read `innerText`,
   which **is**. Compare case-insensitively (the default).
+- **A `text=` locator matches ONE element, not a phrase across siblings.** A
+  stat rendered as `<p>Bodyweight</p><p>183<span>lbs</span></p>` reads as
+  "Bodyweight 183 lbs" to a human and matches
+  `text=/Bodyweight\s+183\s*lbs/` for nobody — no element contains all of it.
+  Read the container with `visibleText(page, "section:has(…)")` and regex
+  that. (Cost the T2-C drive a full run.)
+- **Wait on the UI's own pending state before navigating or reading the DB.**
+  `page.goto` tears the page down and cancels in-flight requests, so asserting
+  straight after a click measures your own impatience. T2-C "caught" a bug that
+  was really the drive navigating away mid-save; the fix was to wait for the
+  submit button to go "Saving…" → back to its label. Any check that then reads
+  the DB is measuring the app.
+- **Storage objects do NOT cascade when the auth user is deleted.** `stop()`
+  removes rows via the FK cascade; anything a drive uploaded to a bucket
+  survives. Remove it yourself before the `finally`.
+- **A feature gated on an unapplied migration should be PROBED, not assumed.**
+  `drive-t2c.mjs` checks for its table + bucket up front and records the
+  dependent checks as `SKIP` with the reason. A drive that silently asserts
+  only the degraded path, or worse passes vacuously, is how an unverified
+  feature ships looking green.
