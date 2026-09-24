@@ -6,14 +6,26 @@
 // The contract: the two PR types must never render the same color again.
 // weight -> --pr-weight (#2563EB blue), in_range_rep -> --pr-rep (#7C3AED violet).
 // Both are tokens (bg-pr-*/text-pr-*), never raw hex, so the theme stays the
-// single source of truth. This map is ALSO the legend and series palette for
-// the per-exercise PR graph (PRHistoryChart, T2-B), so drift here would
-// silently mis-label that chart.
+// single source of truth. This map is ALSO the title, legend and series palette
+// for the per-exercise PR graphs (PRHistoryChart), so drift here would silently
+// mis-label those charts.
+//
+// T2-D: the charts split into TWO single-axis panels, so the per-type MARKER
+// GEOMETRY that existed only to keep two coincident marks readable on one
+// canvas is gone — with it, the assertions that the two types differ in radius
+// and that the smaller mark leaves a visible ring of the larger. The geometry
+// is now ONE shared set of constants (asserted as such below), and what the two
+// types must still differ on is what a reader actually distinguishes them by:
+// color, label, title, unit, empty state.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
+  PR_CHART_DOT_HALO,
+  PR_CHART_DOT_HALO_WIDTH,
+  PR_CHART_DOT_RADIUS,
+  PR_CHART_DOT_RADIUS_LATEST,
   PR_TYPE_STYLE,
   prTypeStyle,
   type PRType,
@@ -74,27 +86,21 @@ const fields: PRTypeStyleClassField[] = [
   "shortLabel",
   "label",
   "inlineLabel",
-  // T2-B chart fields — a copy/paste that leaves both PR series drawn in the
-  // same color (or both axes labelled the same unit) fails here.
+  // Chart fields — a copy/paste that leaves both PR series drawn in the same
+  // color (or both charts titled the same, or labelled the same unit, or
+  // sharing an empty state that names the wrong PR type) fails here. With the
+  // two series now on SEPARATE charts (T2-D) these strings are the only thing
+  // telling a reader which chart they are looking at, so their distinctness
+  // matters more than it did when a shared legend sat above both.
   "chartStroke",
   "chartDot",
   "swatch",
   "axisLabel",
+  "chartTitle",
+  "chartEmptyText",
 ];
 
-// Geometry fields that must ALSO differ: when one set earns both PR types at
-// the same instant the two marks land on the identical coordinate, and only
-// the size difference keeps both visible. (chartDotHalo is deliberately the
-// SAME on both — they halo to one card background — and the halo WIDTHS are
-// free to match or not, so neither is in this list; the halo invariants that
-// do matter are asserted per-series below.)
-const distinctFields: (keyof PRTypeStyle)[] = [
-  ...fields,
-  "chartDotRadius",
-  "chartDotRadiusLatest",
-];
-
-for (const field of distinctFields) {
+for (const field of fields) {
   check(
     `weight and rep differ on "${field}"`,
     PR_TYPE_STYLE.weight[field] !== PR_TYPE_STYLE.in_range_rep[field],
@@ -116,42 +122,38 @@ for (const [prType, style] of Object.entries(PR_TYPE_STYLE) as [
   }
 }
 
-// --- coincident marks stay readable ----------------------------------------
-// The exact geometry the T2-B drive's check 7 asserts in a real browser, held
-// here as a unit invariant: with both marks on one coordinate, the smaller
-// dot plus its halo must leave a visible ring of the larger dot's fill.
-// (halo is centered on the edge, so it eats radius/2 outward.)
-for (const pair of [
-  ["chartDotRadius", "steady points"],
-  ["chartDotRadiusLatest", "newest points"],
-] as const) {
-  const [field, label] = pair;
-  const weight = PR_TYPE_STYLE.weight[field];
-  const rep = PR_TYPE_STYLE.in_range_rep[field];
-  const outer = Math.max(weight, rep);
-  const innerStyle = weight < rep ? PR_TYPE_STYLE.weight : PR_TYPE_STYLE.in_range_rep;
-  const visibleRing = outer - (Math.min(weight, rep) + innerStyle.chartDotHaloWidth / 2);
-
-  check(
-    `coincident ${label}: the outer mark still shows a >=1px ring (got ${visibleRing.toFixed(2)})`,
-    visibleRing >= 1,
-    true,
-  );
-}
-
-for (const prType of dbPrTypes) {
-  const style = PR_TYPE_STYLE[prType];
-  check(
-    `${prType} dots carry a contrasting halo so one mark on another reads as two`,
-    style.chartDotHalo === "stroke-card" && style.chartDotHaloWidth > 0,
-    true,
-  );
-  check(
-    `${prType} newest point is emphasized (latest radius > steady radius)`,
-    style.chartDotRadiusLatest > style.chartDotRadius,
-    true,
-  );
-}
+// --- marker geometry is SHARED, not per-type (T2-D) -------------------------
+// One series per chart means a mark can only overlap another mark of its OWN
+// series (two PRs close in both time and value), so both charts draw at one
+// size and lean on the halo — not on a size difference — to keep a near-pair
+// readable. These assertions pin the geometry that replaced the per-type radii.
+check(
+  "marker radius is a single shared constant, not a per-type field",
+  ["chartDotRadius", "chartDotRadiusLatest", "chartDotHalo", "chartDotHaloWidth"].every(
+    (field) => !(field in PR_TYPE_STYLE.weight) && !(field in PR_TYPE_STYLE.in_range_rep),
+  ),
+  true,
+);
+check(
+  "the newest point is emphasized (latest radius > steady radius)",
+  PR_CHART_DOT_RADIUS_LATEST > PR_CHART_DOT_RADIUS,
+  true,
+);
+check(
+  "marks are big enough to see on a 390px phone (~0.86 css px per viewBox unit)",
+  PR_CHART_DOT_RADIUS * 2 * 0.86 >= 5,
+  true,
+);
+check(
+  "dots carry a contrasting halo, so two near-coincident points in ONE series still read as two",
+  PR_CHART_DOT_HALO === "stroke-card" && PR_CHART_DOT_HALO_WIDTH > 0,
+  true,
+);
+check(
+  "the halo does not eat the mark it rings (halo width < radius)",
+  PR_CHART_DOT_HALO_WIDTH < PR_CHART_DOT_RADIUS,
+  true,
+);
 
 // --- the tokens the classes reference actually exist ------------------------
 const globalsCss = readFileSync(join(repoRoot, "src/app/globals.css"), "utf8");
@@ -191,6 +193,33 @@ for (const prType of dbPrTypes) {
 }
 check("weight series is measured in LBS", PR_TYPE_STYLE.weight.axisLabel, "LBS");
 check("rep series is measured in REPS", PR_TYPE_STYLE.in_range_rep.axisLabel, "REPS");
+
+// --- the two charts' own copy (T2-D) ----------------------------------------
+// With no shared legend, each panel's title and empty state are what identify
+// it. An empty state that named the wrong PR type would tell a weight-only lift
+// it has no weight PRs.
+check("the weight chart is titled Weight PRs", PR_TYPE_STYLE.weight.chartTitle, "Weight PRs");
+check("the rep chart is titled Rep PRs", PR_TYPE_STYLE.in_range_rep.chartTitle, "Rep PRs");
+check(
+  "the weight chart's empty state names WEIGHT PRs",
+  PR_TYPE_STYLE.weight.chartEmptyText,
+  "No weight PRs yet",
+);
+check(
+  "the rep chart's empty state names REP PRs",
+  PR_TYPE_STYLE.in_range_rep.chartEmptyText,
+  "No rep PRs yet",
+);
+for (const prType of dbPrTypes) {
+  const style = PR_TYPE_STYLE[prType];
+  check(
+    `${prType}: its empty state names its own PR type (not the other chart's)`,
+    style.chartEmptyText
+      .toLowerCase()
+      .includes(style.chartTitle.toLowerCase().replace(/s$/, "")),
+    true,
+  );
+}
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed.`);

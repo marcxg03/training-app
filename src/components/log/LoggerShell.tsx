@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 
 import type {
   LoggerBlock,
@@ -384,15 +386,37 @@ export function LoggerShell({
   // state (completedBlockIds + currentBlockIndex), never a hardcoded count.
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-      {/* Top bar: end-early + live sync indicator, block progress, block label */}
+      {/* Top bar: the two ways out, live sync indicator, block progress, label.
+          EXIT and END are deliberately different things and are drawn as such
+          (T2-D, Marcus: "give me the option to exit the workout without ending
+          it"):
+            ← Exit          — leave for now. A plain navigation to /today; it
+                              writes NOTHING, so completed_at stays null and the
+                              session is picked back up exactly where it was
+                              (findLastIncompleteBlock resumes the block, the
+                              logged sets reload with it).
+            ✕ End workout   — finish the session. Unchanged behaviour: confirm
+                              dialog, completed_at + was_ended_early written,
+                              summary. Placed on the opposite side, in danger
+                              color, so it cannot be mistaken for the back
+                              chevron. */}
       <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
-          <EndWorkoutDialog
-            onConfirm={() =>
-              completeSession(true, completedBlockIdsRef.current)
-            }
-          />
-          <QueueIndicator userId={userId} />
+          <Link
+            href="/today"
+            className="inline-flex items-center gap-1 rounded-[10px] px-1 py-1 text-[13px] text-muted-foreground transition hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            Exit
+          </Link>
+          <div className="flex items-center gap-3">
+            <QueueIndicator userId={userId} />
+            <EndWorkoutDialog
+              onConfirm={() =>
+                completeSession(true, completedBlockIdsRef.current)
+              }
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -436,9 +460,16 @@ export function LoggerShell({
           handlers as before; only the presentation is recomposed. */}
       {currentBlock ? (
         <div key={currentBlock.block_id} className="flex flex-col gap-4">
+          {/* The picker owns the swap affordance (T2-D). This handler is the
+              SAME one a first selection uses — a swap is just another
+              selection, and it writes nothing: set_logs stay attributed to the
+              exercise they were logged under, and only the NEXT set goes to the
+              new one. loggedSetCount is what tells the picker whether the swap
+              is free or needs the confirm. */}
           <ExercisePicker
             exercises={currentBlock.exercises}
             selectedExerciseId={selectedExerciseId}
+            loggedSetCount={currentBlock.setLogs.length}
             onSelect={(exercise) =>
               setSelectedExerciseByBlockId((current) => ({
                 ...current,

@@ -57,14 +57,19 @@ export function EndWorkoutDialog({
         }
       }}
     >
+      {/* "End workout", not "End" — the logger also offers an Exit that simply
+          leaves the session running (T2-D), and a one-word label made the two
+          look like the same escape hatch. Danger color + the ✕ mark this one as
+          the terminal action; Exit is a muted back chevron on the other side of
+          the bar. Behaviour below is unchanged. */}
       <DialogTrigger asChild>
         <button
           type="button"
           disabled={disabled}
-          className="inline-flex items-center gap-1 rounded-[10px] px-1 py-1 text-[13px] text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-[10px] px-1 py-1 text-[13px] font-medium text-danger transition hover:text-danger/80 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <X className="h-4 w-4" />
-          End
+          End workout
         </button>
       </DialogTrigger>
       <DialogContent>

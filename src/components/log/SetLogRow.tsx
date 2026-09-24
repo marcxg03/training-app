@@ -6,6 +6,11 @@ import { cn } from "@/lib/utils/cn";
 type SetLogRowProps = {
   label: string;
   setLog: LoggerSetLog;
+  /** Set only when this set was logged under an exercise OTHER than the one the
+   * block is currently on — i.e. after a mid-block swap (T2-D). set_logs are
+   * append-only, so the row stays attributed to the exercise it was logged
+   * under and says so, rather than sitting silently under a new heading. */
+  exerciseName?: string | null;
 };
 
 // Styled to match the shared SetRow / demo LoggerSetRow so logged rows and
@@ -13,7 +18,11 @@ type SetLogRowProps = {
 // value, a green ✓ on done rows, the inline PR pill (blue "PR ▲" for a weight
 // PR, violet "REP PR ▲" for an in-range rep PR — see lib/methodology/pr-colors).
 // Keeps the Failure badge and notes — real info the shared SetRow can't carry.
-export function SetLogRow({ label, setLog }: SetLogRowProps) {
+export function SetLogRow({
+  label,
+  setLog,
+  exerciseName = null,
+}: SetLogRowProps) {
   const hasPr = setLog.prTypes.length > 0;
 
   return (
@@ -48,6 +57,11 @@ export function SetLogRow({ label, setLog }: SetLogRowProps) {
           )}
         </div>
       </div>
+      {exerciseName ? (
+        <p className="mt-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+          Logged under {exerciseName}
+        </p>
+      ) : null}
       {setLog.notes ? (
         <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
           {setLog.notes}

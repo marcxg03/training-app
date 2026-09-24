@@ -187,8 +187,50 @@ export async function getOrCreateWorkoutCompletion(
   });
 }
 
+/** Which exercise a block is currently on, derived from what has actually been
+ * logged — the resume path, and the fallback whenever local selection state is
+ * absent (a fresh page load).
+ *
+ * The MOST RECENTLY logged set decides, not the first (T2-D). Sets are
+ * append-only: swapping a block's exercise mid-session leaves the earlier sets
+ * attributed to the exercise they were logged under, so reading `setLogs[0]`
+ * would snap the picker back to the abandoned exercise on every reload and
+ * silently undo the swap. Compared on `set_index` rather than array position,
+ * because the loader does not guarantee an order. */
 export function getSelectedExerciseIdForBlock(block: LoggerBlock) {
-  return block.setLogs[0]?.exercise_id ?? null;
+  let latest: LoggerBlock["setLogs"][number] | null = null;
+
+  for (const setLog of block.setLogs) {
+    if (latest === null || setLog.set_index > latest.set_index) {
+      latest = setLog;
+    }
+  }
+
+  return latest?.exercise_id ?? null;
+}
+
+/** The exercise name a logged set row should carry, or null when it needs none.
+ *
+ * After a mid-block swap (T2-D) the block's earlier sets are still attributed
+ * to the exercise they were logged under — append-only, nothing rewrites them —
+ * so those rows say so. A row logged under the CURRENT exercise needs no label:
+ * the picker above it already names that exercise. An id the block no longer
+ * offers (an ad-hoc exercise removed from local state) degrades to a generic
+ * phrase rather than rendering a raw uuid or nothing at all. */
+export function priorExerciseLabel(
+  block: Pick<LoggerBlock, "exercises">,
+  setLogExerciseId: string,
+  currentExerciseId: string,
+): string | null {
+  if (setLogExerciseId === currentExerciseId) {
+    return null;
+  }
+
+  return (
+    block.exercises.find(
+      (exercise) => exercise.exercise_id === setLogExerciseId,
+    )?.name ?? "a previous exercise"
+  );
 }
 
 /** True once at least one WORKING set (a set past the warm-ups) is logged. This

@@ -39,7 +39,13 @@ function smoke(
     html.includes("NaN") ||
     html.includes("Infinity") ||
     (expectEmpty
-      ? !(html.includes("No data yet") || html.includes("No PRs logged yet"))
+      ? // PRHistoryChart draws two panels, each with its OWN empty state
+        // (T2-D), so its all-empty markup carries both strings and no "No
+        // data yet" at all.
+        !(
+          html.includes("No data yet") ||
+          (html.includes("No weight PRs yet") && html.includes("No rep PRs yet"))
+        )
       : !html.includes("<svg"));
 
   if (bad) {
@@ -62,13 +68,14 @@ smoke("BandChart: empty with zone", e(BandChart, { points: [], targetZone: { min
 smoke("BandChart: single flat point + zero-height zone", e(BandChart, { points: [{ label: "A", min: 100, max: 100 }], targetZone: { min: 100, max: 100 }, unitLabel: "G" }), false);
 smoke("BandChart: normal band", e(BandChart, { points: [{ label: "A", min: 1800, max: 2200 }, { label: "B", min: 1900, max: 2400 }], targetZone: { min: 2000, max: 2400 }, unitLabel: "KCAL" }), false);
 
-// PRHistoryChart (T2-B) — dual-axis, two-series. Degenerate shapes only; the
-// data contract is asserted in scripts/verify-pr-history-chart.ts.
+// PRHistoryChart (T2-B; two stacked single-axis panels since T2-D). Degenerate
+// shapes only; the data + two-chart contract is asserted in
+// scripts/verify-pr-history-chart.ts.
 const prModel = (rows: Parameters<typeof buildPRChartModel>[0]) =>
   buildPRChartModel(rows, DEFAULT_APP_TIMEZONE);
 smoke("PRHistoryChart: empty", e(PRHistoryChart, { model: prModel([]) }), true);
-smoke("PRHistoryChart: single weight PR", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "weight", weight_kg: 100, reps: 5, achieved_at: "2026-07-01T17:00:00Z" }]) }), false);
-smoke("PRHistoryChart: single rep PR (no left axis)", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "in_range_rep", weight_kg: 40, reps: 10, achieved_at: "2026-07-01T17:00:00Z" }]) }), false);
+smoke("PRHistoryChart: single weight PR (rep panel empty)", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "weight", weight_kg: 100, reps: 5, achieved_at: "2026-07-01T17:00:00Z" }]) }), false);
+smoke("PRHistoryChart: single rep PR (weight panel empty)", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "in_range_rep", weight_kg: 40, reps: 10, achieved_at: "2026-07-01T17:00:00Z" }]) }), false);
 smoke("PRHistoryChart: flat series, identical timestamps", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "weight", weight_kg: 100, reps: 5, achieved_at: "2026-07-01T17:00:00Z" }, { pr_id: "b", pr_type: "weight", weight_kg: 100, reps: 5, achieved_at: "2026-07-01T17:00:00Z" }]) }), false);
 smoke("PRHistoryChart: both series", e(PRHistoryChart, { model: prModel([{ pr_id: "a", pr_type: "weight", weight_kg: 100, reps: 5, achieved_at: "2026-07-01T17:00:00Z" }, { pr_id: "b", pr_type: "in_range_rep", weight_kg: 90, reps: 12, achieved_at: "2026-07-09T17:00:00Z" }, { pr_id: "c", pr_type: "weight", weight_kg: 110, reps: 3, achieved_at: "2026-07-20T17:00:00Z" }]) }), false);
 

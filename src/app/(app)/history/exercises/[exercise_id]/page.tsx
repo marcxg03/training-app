@@ -92,10 +92,11 @@ export default async function ExerciseProgressPage({
     );
   }
 
-  // THE progression chart for every exercise (T2-B): the real PR events from
-  // the append-only pr_history, not an estimate derived from them. No
-  // is_bodyweight / is_compound gate — a bodyweight lift charts its rep PRs
-  // and a loaded lift charts both series, on the same component.
+  // THE progression charts for every exercise (T2-B; two panels since T2-D):
+  // the real PR events from the append-only pr_history, not an estimate derived
+  // from them. No is_bodyweight / is_compound gate — a bodyweight lift charts
+  // its rep PRs (and reads "No weight PRs yet" in the other panel), a loaded
+  // lift charts both, on the same component.
   const prChart = buildPRChartModel(progression.prs, tz);
   const recentSets = progression.recent_sets.slice(0, 12);
 
@@ -137,7 +138,6 @@ export default async function ExerciseProgressPage({
         <h2 className="eyebrow">PR history · progression</h2>
         <PRHistoryChart
           model={prChart}
-          unitLabel="OLDEST → NEWEST"
           ariaLabel={`${progression.exercise_name} personal-record history`}
         />
       </section>

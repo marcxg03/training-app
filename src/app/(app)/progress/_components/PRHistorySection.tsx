@@ -4,13 +4,14 @@ import Link from "next/link";
 import { PRHistoryChart } from "@/components/shared/PRHistoryChart";
 import type { PRSpotlight } from "@/lib/analytics/pr-history";
 
-// Replaces the deleted E1rmSection (T2-B). Same slot, honest data: one PR
-// graph per featured exercise instead of an Epley estimate. Links into the
-// exercise's full history.
+// Replaces the deleted E1rmSection (T2-B). Same slot, honest data: a PR graph
+// pair (weight + reps, T2-D) per featured exercise instead of an Epley
+// estimate. Links into the exercise's full history.
 function SpotlightCard({ spotlight }: { spotlight: PRSpotlight }): JSX.Element {
-  const latestWeight =
-    spotlight.model.weight[spotlight.model.weight.length - 1];
-  const latestRep = spotlight.model.rep[spotlight.model.rep.length - 1];
+  const weightPoints = spotlight.model.weight.points;
+  const repPoints = spotlight.model.rep.points;
+  const latestWeight = weightPoints[weightPoints.length - 1];
+  const latestRep = repPoints[repPoints.length - 1];
   const headline = [
     latestWeight ? `${latestWeight.value} lbs` : null,
     latestRep ? `${latestRep.value} reps` : null,

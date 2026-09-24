@@ -6,12 +6,33 @@ import type { Enums } from "@/lib/supabase/types";
 // ONE place and the two PR types can never drift back into looking alike.
 //
 // Marcus's validation feedback (2026-09-23): weight PR = BLUE, rep PR = VIOLET.
-// This map is ALSO the legend and the series palette for the per-exercise PR
-// graph (PRHistoryChart, T2-B) — the chart reads chartStroke/chartDot/swatch/
-// axisLabel from here rather than hardcoding a color, so the graph can never
-// drift from the badges that name the same two events.
+// This map is ALSO the title, legend and series palette for the per-exercise PR
+// graphs (PRHistoryChart) — each chart reads chartTitle/chartStroke/chartDot/
+// swatch/axisLabel/chartEmptyText from here rather than hardcoding a color or a
+// string, so a graph can never drift from the badges that name the same event.
+//
+// T2-D (2026-09-24): the one dual-axis chart became TWO stacked single-axis
+// charts (Marcus: "the scaling might be off"), so the per-type MARKER GEOMETRY
+// that existed only to keep two coincident marks apart on a shared canvas is
+// gone. The two series never share a canvas now, so they share one geometry —
+// the constants below — and differ only in color, title, and unit.
 
 export type PRType = Enums<"pr_type_enum">;
+
+// --- shared chart geometry (viewBox units) ---------------------------------
+// One series per chart, so a mark can only ever overlap ANOTHER MARK OF ITS
+// OWN SERIES (two PRs close in both time and value). The halo is what keeps
+// that pair reading as two points instead of one blob; it is the card's own
+// background, drawn on the mark's edge.
+
+/** Marker radius for every point but the newest. */
+export const PR_CHART_DOT_RADIUS = 3.2;
+/** Marker radius for the newest point of a series (the emphasized one). */
+export const PR_CHART_DOT_RADIUS_LATEST = 4.6;
+/** Halo ring class — the chart card's background. */
+export const PR_CHART_DOT_HALO = "stroke-card";
+/** Halo stroke width, in chart viewBox units. */
+export const PR_CHART_DOT_HALO_WIDTH = 1.2;
 
 export type PRTypeStyle = {
   /** Solid pill — token background with a white foreground. */
@@ -26,35 +47,20 @@ export type PRTypeStyle = {
   label: string;
   /** Lowercase form for use mid-sentence (e.g. a timeline subtitle). */
   inlineLabel: string;
-  /** SVG stroke class for this series' line in PRHistoryChart. */
+  /** SVG stroke class for this series' line in its PRHistoryChart panel. */
   chartStroke: string;
-  /** SVG fill class for this series' dots in PRHistoryChart. */
+  /** SVG fill class for this series' dots. */
   chartDot: string;
-  /** Stroke class for the halo ring drawn around every dot — the chart card's
-   * own background, so a mark painted on top of another still reads as a
-   * separate mark instead of merging into one blob. */
-  chartDotHalo: string;
-  /** Halo stroke width, in chart viewBox units. */
-  chartDotHaloWidth: number;
-  /** Marker radius, in chart viewBox units.
-   *
-   * THE TWO SERIES ARE DELIBERATELY DIFFERENT SIZES. One set can earn a weight
-   * PR and a rep PR at the same instant, and when that is an exercise's ONLY
-   * PR event both series are single points: x is centered (no time span to
-   * spread across) and each y centers inside its own padded one-value axis —
-   * so both marks land on the EXACT same coordinate. That coordinate is the
-   * truth and must not be nudged. Instead the smaller mark sits inside the
-   * larger one, separated by the halo ring, and both stay visible where they
-   * actually belong. PRHistoryChart paints the largest series first for the
-   * same reason — see the sort in that file.
-   */
-  chartDotRadius: number;
-  /** Radius for the newest point of the series (the emphasized one). */
-  chartDotRadiusLatest: number;
   /** Legend swatch background. */
   swatch: string;
   /** Unit this series is measured in — its y-axis label. */
   axisLabel: string;
+  /** Heading above this series' OWN chart panel (T2-D: one chart per type). */
+  chartTitle: string;
+  /** What that panel says when this exercise has no PR of this type. Each
+   * panel carries its own empty state so a weight-only lift reads as
+   * "no rep PRs yet" rather than as a chart that silently vanished. */
+  chartEmptyText: string;
 };
 
 export const PR_TYPE_STYLE: Record<PRType, PRTypeStyle> = {
@@ -67,13 +73,10 @@ export const PR_TYPE_STYLE: Record<PRType, PRTypeStyle> = {
     inlineLabel: "weight PR",
     chartStroke: "stroke-pr-weight",
     chartDot: "fill-pr-weight",
-    chartDotHalo: "stroke-card",
-    chartDotHaloWidth: 1.3,
-    // The OUTER mark of a coincident pair.
-    chartDotRadius: 4.5,
-    chartDotRadiusLatest: 5.8,
     swatch: "bg-pr-weight",
     axisLabel: "LBS",
+    chartTitle: "Weight PRs",
+    chartEmptyText: "No weight PRs yet",
   },
   in_range_rep: {
     pill: "bg-pr-rep text-white",
@@ -84,20 +87,10 @@ export const PR_TYPE_STYLE: Record<PRType, PRTypeStyle> = {
     inlineLabel: "rep PR",
     chartStroke: "stroke-pr-rep",
     chartDot: "fill-pr-rep",
-    chartDotHalo: "stroke-card",
-    // Narrower than the weight series': this halo is what separates the inner
-    // mark from the outer one, and every unit of it is a unit of the outer
-    // mark's fill eaten AND a wider notch cut out of this series' own line
-    // between points. Just enough to read as a gap.
-    chartDotHaloWidth: 1,
-    // The INNER mark of a coincident pair: small enough that the weight dot's
-    // fill still shows as a ring around it, halo and all — but not so small
-    // that a rep-only exercise's single PR turns into a speck. Sized against
-    // the 390px phone, where the chart renders ~0.86 px per viewBox unit.
-    chartDotRadius: 2.2,
-    chartDotRadiusLatest: 3,
     swatch: "bg-pr-rep",
     axisLabel: "REPS",
+    chartTitle: "Rep PRs",
+    chartEmptyText: "No rep PRs yet",
   },
 };
 

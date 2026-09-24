@@ -1,18 +1,22 @@
-// Pure view-model builder for the per-exercise PR graph (T2-B). No React, no
-// Supabase — same contract as projections.ts, so scripts/verify-pr-history-
-// chart.ts can drive it with fixtures.
+// Pure view-model builder for the per-exercise PR graphs (T2-B, reshaped in
+// T2-D). No React, no Supabase — same contract as projections.ts, so
+// scripts/verify-pr-history-chart.ts can drive it with fixtures.
 //
 // WHY THIS EXISTS: estimated 1RM was deleted (Marcus, 2026-09-23) because it
 // is a derived guess dressed up as a measurement. This charts only events that
-// actually happened — rows of the append-only `pr_history` table — as two
-// series over time:
+// actually happened — rows of the append-only `pr_history` table.
 //
-//   weight PRs      -> LEFT axis, lbs   (pr_type 'weight')
-//   in-range rep PRs -> RIGHT axis, reps (pr_type 'in_range_rep')
-//
-// The two axes scale INDEPENDENTLY on purpose. Reps live in single digits and
-// loads in the hundreds; one shared domain would press every rep PR flat onto
-// the floor of the chart and the second series would be decorative.
+// WHY TWO SERIES, TWO CHARTS (T2-D, Marcus 2026-09-24: "maybe we create two
+// separate graphs … it is confusing looking at it on one graph and the scaling
+// might be off"). The first version drew both series on ONE canvas with two
+// independent y-axes — which is a lie of composition: two lines sharing a frame
+// read as comparable when reps (single digits) and loads (hundreds) share
+// nothing but a date. Now each series gets its OWN chart, its own y-axis, AND
+// its own x (time) domain — every panel spans its own first→last PR and labels
+// that range in its footer. One chart, one scale, one unit, nothing to
+// mis-read. A whole class of machinery went with it: the shared x domain, the
+// two-axis legend row, and the coincident-marker sizing (two marks can no
+// longer land on one coordinate because they are no longer on one canvas).
 //
 // Display units are resolved HERE, at the boundary between stored data and the
 // chart: weight_kg is the storage unit (wiring contract) and lbs is the only
@@ -44,10 +48,9 @@ export type PRChartPoint = {
   reps: number;
   /** What this series plots: lbs for the weight series, reps for the rep one. */
   value: number;
-  /** 0..1 along the SHARED time axis — both series use one x domain so two
-   * PRs earned by the same set line up vertically. */
+  /** 0..1 along THIS series' own time domain (oldest = 0, newest = 1). */
   x: number;
-  /** 0..1 within THIS series' OWN axis (0 = axis min, 1 = axis max). */
+  /** 0..1 within THIS series' own value axis (0 = axis min, 1 = axis max). */
   y: number;
 };
 
@@ -56,15 +59,22 @@ export type PRChartAxis = {
   max: number;
 };
 
-export type PRChartModel = {
-  weight: PRChartPoint[];
-  rep: PRChartPoint[];
-  /** lbs. Null when the exercise has no weight PRs — draw no left axis. */
-  weightAxis: PRChartAxis | null;
-  /** reps. Null when the exercise has no rep PRs — draw no right axis. */
-  repAxis: PRChartAxis | null;
+/** One chart's worth of data: its points, its axis, its date range. Everything
+ * a single-axis panel needs and nothing it shares with the other panel. */
+export type PRChartSeries = {
+  points: PRChartPoint[];
+  /** Null when this exercise has no PR of this type — the panel draws its own
+   * empty state rather than an axis with nothing on it. */
+  axis: PRChartAxis | null;
   startLabel: string | null;
   endLabel: string | null;
+  isEmpty: boolean;
+};
+
+export type PRChartModel = {
+  weight: PRChartSeries;
+  rep: PRChartSeries;
+  /** True only when BOTH series are empty. */
   isEmpty: boolean;
 };
 
@@ -122,100 +132,95 @@ function compareChronological(left: PRHistoryRow, right: PRHistoryRow): number {
   return left.pr_id.localeCompare(right.pr_id);
 }
 
-const EMPTY_MODEL: PRChartModel = {
-  weight: [],
-  rep: [],
-  weightAxis: null,
-  repAxis: null,
+const EMPTY_SERIES: PRChartSeries = {
+  points: [],
+  axis: null,
   startLabel: null,
   endLabel: null,
   isEmpty: true,
 };
 
 /**
- * Shape one exercise's `pr_history` rows into the two-series, dual-axis model
- * PRHistoryChart draws. Input order does not matter — the query that feeds the
- * detail page returns PRs newest-first, and drawing that raw would run the
- * history backwards.
+ * Shape ONE pr_type's rows into a single-axis series: chronological, scaled
+ * against its own value axis and its own time span.
+ *
+ * `rows` must already be filtered to one pr_type and sorted chronologically.
+ */
+function buildSeries(
+  rows: PRHistoryRow[],
+  valueOf: (row: PRHistoryRow) => number,
+  timeZone: string,
+): PRChartSeries {
+  if (rows.length === 0) {
+    return EMPTY_SERIES;
+  }
+
+  const values = rows.map(valueOf);
+  const axis = buildAxis(values);
+
+  if (axis === null) {
+    return EMPTY_SERIES;
+  }
+
+  const times = rows.map((row) => new Date(row.achieved_at).getTime());
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const timeSpan = maxTime - minTime;
+
+  const points = rows.map((row, index): PRChartPoint => {
+    const dayKey = dayKeyOf(row.achieved_at, timeZone);
+
+    return {
+      pr_id: row.pr_id,
+      achieved_at: row.achieved_at,
+      dayKey,
+      label: dayLabelOf(dayKey),
+      weightLbs: toDisplayLbs(row.weight_kg),
+      reps: Math.max(0, Math.round(finiteOrZero(row.reps))),
+      value: values[index],
+      // A single PR (or several at one instant) has no time span to spread
+      // across — center it rather than dividing by zero.
+      x: timeSpan > 0 ? (times[index] - minTime) / timeSpan : 0.5,
+      y: ratioWithin(values[index], axis),
+    };
+  });
+
+  return {
+    points,
+    axis,
+    startLabel: points[0].label,
+    endLabel: points[points.length - 1].label,
+    isEmpty: false,
+  };
+}
+
+/**
+ * Shape one exercise's `pr_history` rows into the two INDEPENDENT series
+ * PRHistoryChart draws as two stacked panels. Input order does not matter —
+ * the query that feeds the detail page returns PRs newest-first, and drawing
+ * that raw would run the history backwards.
  */
 export function buildPRChartModel(
   rows: PRHistoryRow[],
   timeZone: string,
 ): PRChartModel {
-  if (rows.length === 0) {
-    return EMPTY_MODEL;
-  }
-
   const ordered = [...rows].sort(compareChronological);
-  const times = ordered.map((row) => new Date(row.achieved_at).getTime());
-  const minTime = Math.min(...times);
-  const maxTime = Math.max(...times);
-  const timeSpan = maxTime - minTime;
 
-  const weightLbsValues: number[] = [];
-  const repValues: number[] = [];
-
-  const shaped = ordered.map((row, index) => {
-    const weightLbs = toDisplayLbs(row.weight_kg);
-    const reps = Math.max(0, Math.round(finiteOrZero(row.reps)));
-    const dayKey = dayKeyOf(row.achieved_at, timeZone);
-
-    if (row.pr_type === "weight") {
-      weightLbsValues.push(weightLbs);
-    } else {
-      repValues.push(reps);
-    }
-
-    return {
-      row,
-      weightLbs,
-      reps,
-      dayKey,
-      label: dayLabelOf(dayKey),
-      // A single PR (or several at one instant) has no time span to spread
-      // across — center it rather than dividing by zero.
-      x: timeSpan > 0 ? (times[index] - minTime) / timeSpan : 0.5,
-    };
-  });
-
-  const weightAxis = buildAxis(weightLbsValues);
-  const repAxis = buildAxis(repValues);
-
-  const weight: PRChartPoint[] = [];
-  const rep: PRChartPoint[] = [];
-
-  for (const point of shaped) {
-    const isWeight = point.row.pr_type === "weight";
-    const axis = isWeight ? weightAxis : repAxis;
-
-    if (axis === null) {
-      continue;
-    }
-
-    const value = isWeight ? point.weightLbs : point.reps;
-    const chartPoint: PRChartPoint = {
-      pr_id: point.row.pr_id,
-      achieved_at: point.row.achieved_at,
-      dayKey: point.dayKey,
-      label: point.label,
-      weightLbs: point.weightLbs,
-      reps: point.reps,
-      value,
-      x: point.x,
-      y: ratioWithin(value, axis),
-    };
-
-    (isWeight ? weight : rep).push(chartPoint);
-  }
+  const weight = buildSeries(
+    ordered.filter((row) => row.pr_type === "weight"),
+    (row) => toDisplayLbs(row.weight_kg),
+    timeZone,
+  );
+  const rep = buildSeries(
+    ordered.filter((row) => row.pr_type === "in_range_rep"),
+    (row) => Math.max(0, Math.round(finiteOrZero(row.reps))),
+    timeZone,
+  );
 
   return {
     weight,
     rep,
-    weightAxis,
-    repAxis,
-    startLabel: shaped[0]?.label ?? null,
-    endLabel: shaped[shaped.length - 1]?.label ?? null,
-    isEmpty: weight.length === 0 && rep.length === 0,
+    isEmpty: weight.isEmpty && rep.isEmpty,
   };
 }
 

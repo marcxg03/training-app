@@ -1,5 +1,5 @@
-// Fixture tests for the per-exercise PR-history chart (T2-B) — the honest
-// replacement for the deleted estimated-1RM surfaces. Run with:
+// Fixture tests for the per-exercise PR-history charts (T2-B, reshaped T2-D) —
+// the honest replacement for the deleted estimated-1RM surfaces. Run with:
 //   pnpm exec tsx scripts/verify-pr-history-chart.ts
 // Exits non-zero on any failure. No test framework needed (repo idiom).
 //
@@ -8,10 +8,17 @@
 //   ONLY real logged PR events, so the shaping layer has to be exact:
 //     - the two pr_history types land in the right series and nowhere else
 //     - points are chronological regardless of the query's ordering
-//     - the two y-axes scale INDEPENDENTLY (lbs on the left, reps on the
-//       right) — one shared domain would flatten reps into the floor
+//     - TWO SEPARATE CHARTS (T2-D, Marcus: "it is confusing looking at it on
+//       one graph and the scaling might be off"): each series carries its OWN
+//       value axis AND its own time domain, and each fills its own chart
 //     - a weight-only exercise, a rep-only exercise, and a brand-new exercise
-//       all render instead of throwing or emitting NaN
+//       all render — each empty panel carrying its OWN empty state — instead of
+//       throwing or emitting NaN
+//
+//   The old coincident-marker assertions (two marks on one coordinate kept
+//   apart by different radii, radius-ordered paint) are GONE with the behavior
+//   they guarded: with one series per canvas two marks can no longer collide.
+//   What replaces them is the two-chart contract below.
 //
 // Gotcha (load-bearing, same as verify-charts.ts): Next's tsconfig uses
 // jsx:preserve, so tsx compiles components to classic React.createElement —
@@ -84,51 +91,46 @@ const mixedModel = buildPRChartModel(mixed, TZ);
 
 check(
   "series split: weight PRs only in the weight series",
-  mixedModel.weight.map((p) => p.pr_id),
+  mixedModel.weight.points.map((p) => p.pr_id),
   ["w1", "w2"],
 );
 check(
   "series split: rep PRs only in the rep series",
-  mixedModel.rep.map((p) => p.pr_id),
+  mixedModel.rep.points.map((p) => p.pr_id),
   ["r1", "r2"],
 );
 check("mixed model is not empty", mixedModel.isEmpty, false);
 check(
   "weight series plots LBS (kg converted at the display boundary)",
-  mixedModel.weight.map((p) => p.value),
+  mixedModel.weight.points.map((p) => p.value),
   [220, 243],
 );
 check(
   "rep series plots REPS",
-  mixedModel.rep.map((p) => p.value),
+  mixedModel.rep.points.map((p) => p.value),
   [8, 12],
 );
 check(
   "every point carries both raw facts (weight lbs + reps)",
-  mixedModel.rep.map((p) => ({ lbs: p.weightLbs, reps: p.reps })),
+  mixedModel.rep.points.map((p) => ({ lbs: p.weightLbs, reps: p.reps })),
   [
     { lbs: 198, reps: 8 },
     { lbs: 198, reps: 12 },
   ],
 );
-check(
-  "day labels come from the app-timezone day key",
-  [mixedModel.startLabel, mixedModel.endLabel],
-  ["JUL 1", "JUL 20"],
-);
 
 // --- chronological order, regardless of query ordering ---------------------
-// getExerciseProgression returns PRs achieved_at DESC. The chart must not
+// getExerciseProgression returns PRs achieved_at DESC. The charts must not
 // draw the history backwards.
 const reversed = [...mixed].reverse();
 check(
   "chronological: descending input is sorted ascending",
-  buildPRChartModel(reversed, TZ).weight.map((p) => p.achieved_at),
+  buildPRChartModel(reversed, TZ).weight.points.map((p) => p.achieved_at),
   ["2026-07-01T17:00:00Z", "2026-07-10T17:00:00Z"],
 );
 check(
   "chronological: x increases with time",
-  mixedModel.weight[0].x < mixedModel.weight[1].x,
+  mixedModel.weight.points[0].x < mixedModel.weight.points[1].x,
   true,
 );
 // Ties break on pr_id so two PRs earned by the SAME set are deterministic.
@@ -141,50 +143,60 @@ const sameInstant = buildPRChartModel(
 );
 check(
   "chronological: same-instant PRs break ties on pr_id",
-  sameInstant.weight.map((p) => p.pr_id),
+  sameInstant.weight.points.map((p) => p.pr_id),
   ["a", "b"],
 );
 
-// --- dual axis: INDEPENDENT weight and rep ranges --------------------------
-// The whole point of the dual axis. Weight spans 220..243 lbs and reps span
-// 8..12; each series must fill its OWN axis (y 0 -> 1), not share one domain
-// in which 8 reps would sit invisibly on the floor under a 243 lb point.
+// --- TWO CHARTS: each series scales INDEPENDENTLY ---------------------------
+// The whole point of the split (T2-D). Weight spans 220..243 lbs and reps span
+// 8..12; each series must fill its OWN chart (y 0 -> 1) against its OWN axis,
+// never a shared domain in which 8 reps would sit invisibly on the floor under
+// a 243 lb point.
 check(
-  "dual axis: weight axis is built from weight PRs only (lbs)",
-  mixedModel.weightAxis,
+  "two charts: the weight chart's axis is built from weight PRs only (lbs)",
+  mixedModel.weight.axis,
   { min: 220, max: 243 },
 );
 check(
-  "dual axis: rep axis is built from rep PRs only (reps)",
-  mixedModel.repAxis,
+  "two charts: the rep chart's axis is built from rep PRs only (reps)",
+  mixedModel.rep.axis,
   { min: 8, max: 12 },
 );
-approx("dual axis: weight min sits at y=0", mixedModel.weight[0].y, 0);
-approx("dual axis: weight max sits at y=1", mixedModel.weight[1].y, 1);
-approx("dual axis: rep min sits at y=0", mixedModel.rep[0].y, 0);
-approx("dual axis: rep max sits at y=1", mixedModel.rep[1].y, 1);
+approx("weight chart: its min sits at y=0", mixedModel.weight.points[0].y, 0);
+approx("weight chart: its max sits at y=1", mixedModel.weight.points[1].y, 1);
+approx("rep chart: its min sits at y=0", mixedModel.rep.points[0].y, 0);
+approx("rep chart: its max sits at y=1", mixedModel.rep.points[1].y, 1);
 
 // A shared domain would put 8 reps at (8-8)/(243-8) ≈ 0 AND 12 reps at ≈ 0.017
 // — the mutant this kills.
 check(
-  "dual axis: the two axes are genuinely different domains",
-  JSON.stringify(mixedModel.weightAxis) !== JSON.stringify(mixedModel.repAxis),
+  "two charts: the two axes are genuinely different domains",
+  JSON.stringify(mixedModel.weight.axis) !== JSON.stringify(mixedModel.rep.axis),
   true,
 );
 
-// x is SHARED: two PR types earned on the same day line up vertically.
-const sameDay = buildPRChartModel(
-  [
-    row("w", "weight", 100, 5, "2026-07-01T17:00:00Z"),
-    row("r", "in_range_rep", 100, 5, "2026-07-01T17:00:00Z"),
-    row("w2", "weight", 110, 5, "2026-07-11T17:00:00Z"),
-  ],
-  TZ,
+// Each chart also owns its own TIME domain and says so in its own footer
+// labels: the weight series runs JUL 1 → JUL 10, the rep series JUL 5 → JUL 20,
+// and each spans its own chart edge to edge.
+check(
+  "two charts: the weight chart labels its OWN date range",
+  [mixedModel.weight.startLabel, mixedModel.weight.endLabel],
+  ["JUL 1", "JUL 10"],
 );
-approx(
-  "shared x axis: same-instant weight and rep PRs share an x",
-  sameDay.weight[0].x - sameDay.rep[0].x,
-  0,
+check(
+  "two charts: the rep chart labels its OWN date range",
+  [mixedModel.rep.startLabel, mixedModel.rep.endLabel],
+  ["JUL 5", "JUL 20"],
+);
+check(
+  "two charts: each series spans its own x domain edge to edge",
+  [
+    mixedModel.weight.points[0].x,
+    mixedModel.weight.points[1].x,
+    mixedModel.rep.points[0].x,
+    mixedModel.rep.points[1].x,
+  ],
+  [0, 1, 0, 1],
 );
 
 // --- a weight-only exercise ------------------------------------------------
@@ -195,18 +207,20 @@ const weightOnly = buildPRChartModel(
   ],
   TZ,
 );
-check("weight-only: rep series is empty", weightOnly.rep.length, 0);
-check("weight-only: rep axis is null (no right axis to draw)", weightOnly.repAxis, null);
-check("weight-only: weight axis still scales", weightOnly.weightAxis, {
+check("weight-only: rep series has no points", weightOnly.rep.points.length, 0);
+check("weight-only: the rep chart is empty", weightOnly.rep.isEmpty, true);
+check("weight-only: the rep chart has no axis", weightOnly.rep.axis, null);
+check("weight-only: the weight chart still scales", weightOnly.weight.axis, {
   min: 132,
   max: 154,
 });
-check("weight-only: not empty", weightOnly.isEmpty, false);
+check("weight-only: the weight chart is NOT empty", weightOnly.weight.isEmpty, false);
+check("weight-only: the model as a whole is not empty", weightOnly.isEmpty, false);
 
 // --- a rep-only exercise ---------------------------------------------------
 // Every rep PR row still carries the weight it was hit at, but with no weight
-// PRs there is no LEFT axis — the weight axis must not be synthesized from
-// rep rows.
+// PRs there is no weight chart data — the weight axis must not be synthesized
+// from rep rows.
 const repOnly = buildPRChartModel(
   [
     row("r1", "in_range_rep", 40, 10, "2026-07-01T17:00:00Z"),
@@ -214,25 +228,29 @@ const repOnly = buildPRChartModel(
   ],
   TZ,
 );
-check("rep-only: weight series is empty", repOnly.weight.length, 0);
-check("rep-only: weight axis is null", repOnly.weightAxis, null);
-check("rep-only: rep axis scales from the rep PRs", repOnly.repAxis, {
+check("rep-only: weight series has no points", repOnly.weight.points.length, 0);
+check("rep-only: the weight chart is empty", repOnly.weight.isEmpty, true);
+check("rep-only: the weight chart has no axis", repOnly.weight.axis, null);
+check("rep-only: the rep chart scales from the rep PRs", repOnly.rep.axis, {
   min: 10,
   max: 14,
 });
-check("rep-only: not empty", repOnly.isEmpty, false);
+check("rep-only: the rep chart is NOT empty", repOnly.rep.isEmpty, false);
+check("rep-only: the model as a whole is not empty", repOnly.isEmpty, false);
 
 // --- the empty case --------------------------------------------------------
 const empty = buildPRChartModel([], TZ);
 check(
-  "empty: no points, no axes, no labels",
+  "empty: no points, no axes, no labels, both charts empty",
   {
-    weight: empty.weight.length,
-    rep: empty.rep.length,
-    weightAxis: empty.weightAxis,
-    repAxis: empty.repAxis,
-    startLabel: empty.startLabel,
-    endLabel: empty.endLabel,
+    weight: empty.weight.points.length,
+    rep: empty.rep.points.length,
+    weightAxis: empty.weight.axis,
+    repAxis: empty.rep.axis,
+    weightStart: empty.weight.startLabel,
+    repEnd: empty.rep.endLabel,
+    weightEmpty: empty.weight.isEmpty,
+    repEmpty: empty.rep.isEmpty,
     isEmpty: empty.isEmpty,
   },
   {
@@ -240,8 +258,10 @@ check(
     rep: 0,
     weightAxis: null,
     repAxis: null,
-    startLabel: null,
-    endLabel: null,
+    weightStart: null,
+    repEnd: null,
+    weightEmpty: true,
+    repEmpty: true,
     isEmpty: true,
   },
 );
@@ -251,20 +271,20 @@ const onePoint = buildPRChartModel(
   [row("w1", "weight", 100, 5, "2026-07-01T17:00:00Z")],
   TZ,
 );
-approx("one point: x centers", onePoint.weight[0].x, 0.5);
-approx("one point: y centers", onePoint.weight[0].y, 0.5);
-check("one point: axis is padded so the domain is never zero-width", onePoint.weightAxis, {
+approx("one point: x centers", onePoint.weight.points[0].x, 0.5);
+approx("one point: y centers", onePoint.weight.points[0].y, 0.5);
+check("one point: axis is padded so the domain is never zero-width", onePoint.weight.axis, {
   min: 219,
   max: 221,
 });
 
 // --- the FIRST state of every newly-PR'd exercise --------------------------
-// One set that earns BOTH a weight PR and an in-range rep PR, and nothing
-// else. Both series are single points: x centers (no time span) and each y
-// centers inside its own padded one-value axis, so the two marks land on the
-// IDENTICAL coordinate. That coordinate is the truth — the fix is not to move
-// a mark but to make the two marks different sizes, so the smaller sits inside
-// the larger and a human sees two series where the legend promises two.
+// One set that earns BOTH a weight PR and an in-range rep PR, and nothing else.
+// On the OLD single-canvas chart this was the hard case: both marks landed on
+// the identical coordinate and one hid the other, which is why the two series
+// carried different radii. With one series per chart the case is trivial — each
+// panel holds exactly one mark, on its own canvas, and neither can occlude
+// anything. What still has to hold is that BOTH panels got their point.
 const coincident = buildPRChartModel(
   [
     row("w1", "weight", 61.2, 9, "2026-09-23T17:00:00Z"),
@@ -273,89 +293,22 @@ const coincident = buildPRChartModel(
   TZ,
 );
 check(
-  "coincident PRs: one point in each series",
-  [coincident.weight.length, coincident.rep.length],
+  "one set earning both PR types: one point in each series",
+  [coincident.weight.points.length, coincident.rep.points.length],
   [1, 1],
 );
-approx(
-  "coincident PRs: the two marks genuinely share x (same instant, honestly)",
-  coincident.weight[0].x - coincident.rep[0].x,
-  0,
-);
-approx(
-  "coincident PRs: the two marks genuinely share y (each centers in its own axis)",
-  coincident.weight[0].y - coincident.rep[0].y,
-  0,
-);
-
-/** Every <circle> in the markup, in PAINT ORDER, with the attributes that
- * decide whether a human can tell two stacked marks apart. */
-function circlesOf(html: string) {
-  return [...html.matchAll(/<circle\b[^>]*>/g)].map((match) => {
-    const tag = match[0];
-    const attr = (name: string) =>
-      tag.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
-
-    return {
-      cx: Number(attr("cx")),
-      cy: Number(attr("cy")),
-      r: Number(attr("r")),
-      cls: attr("class"),
-      strokeWidth: Number(attr("stroke-width")),
-    };
-  });
-}
-
-// NB: React.createElement spelled out — the `e` alias is defined further down,
-// with the rest of the render smokes.
-const coincidentHtml = smoke(
-  "PRHistoryChart: coincident weight + rep PR renders",
-  React.createElement(PRHistoryChart, { model: coincident }),
-  false,
-);
-const coincidentMarks = circlesOf(coincidentHtml);
-
-check("coincident PRs: exactly one mark per series", coincidentMarks.length, 2);
 check(
-  "coincident PRs: both marks ARE drawn on the same coordinate (not nudged apart)",
-  coincidentMarks.length === 2 &&
-    coincidentMarks[0].cx === coincidentMarks[1].cx &&
-    coincidentMarks[0].cy === coincidentMarks[1].cy,
-  true,
-);
-// THE REGRESSION GUARD. Same coordinate + same radius = the later mark hides
-// the earlier one completely and the chart shows ONE dot for TWO series.
-check(
-  "coincident PRs: the two marks differ in radius, so neither can hide the other",
-  coincidentMarks.length === 2 && coincidentMarks[0].r !== coincidentMarks[1].r,
-  true,
+  "one set earning both PR types: each chart is populated, neither empty",
+  [coincident.weight.isEmpty, coincident.rep.isEmpty, coincident.isEmpty],
+  [false, false, false],
 );
 check(
-  "coincident PRs: the LARGER mark is painted first (the smaller ends up inside it)",
-  coincidentMarks.length === 2 && coincidentMarks[0].r > coincidentMarks[1].r,
-  true,
-);
-check(
-  "coincident PRs: the inner mark's fill still leaves a >=1px ring of the outer one",
-  coincidentMarks.length === 2 &&
-    coincidentMarks[0].r -
-      (coincidentMarks[1].r + coincidentMarks[1].strokeWidth / 2) >=
-      1,
-  true,
-);
-check(
-  "coincident PRs: every mark carries a background halo (stroke + width)",
-  coincidentMarks.every(
-    (mark) => mark.cls.includes("stroke-card") && mark.strokeWidth > 0,
-  ),
-  true,
-);
-check(
-  "coincident PRs: one mark per series color, neither dropped",
-  coincidentMarks.map((mark) =>
-    mark.cls.includes(PR_TYPE_STYLE.weight.chartDot) ? "weight" : "rep",
-  ),
-  ["weight", "rep"],
+  "one set earning both PR types: each chart scales to its OWN single value",
+  [coincident.weight.axis, coincident.rep.axis],
+  [
+    { min: 134, max: 136 }, // 61.2 kg -> 135 lbs, padded
+    { min: 8, max: 10 }, // 9 reps, padded
+  ],
 );
 
 const flat = buildPRChartModel(
@@ -367,7 +320,7 @@ const flat = buildPRChartModel(
 );
 check(
   "flat series: both points center vertically",
-  flat.weight.map((p) => p.y),
+  flat.weight.points.map((p) => p.y),
   [0.5, 0.5],
 );
 
@@ -382,7 +335,7 @@ const corrupt = buildPRChartModel(
 );
 check(
   "corrupt rows coerce to 0 rather than NaN",
-  corrupt.weight.every(
+  corrupt.weight.points.every(
     (p) => Number.isFinite(p.value) && Number.isFinite(p.y) && Number.isFinite(p.x),
   ),
   true,
@@ -434,12 +387,12 @@ check(
 check(
   "spotlights: each carries its own chart model",
   buildPRSpotlights(spotlightRows, { limit: 1, timeZone: TZ })[0].model.weight
-    .length,
+    .points.length,
   2,
 );
 check("spotlights: no PRs -> no spotlights", buildPRSpotlights([], { limit: 4, timeZone: TZ }).length, 0);
 
-// --- render smoke: no NaN, no hardcoded hex, both series named in a legend --
+// --- render smoke: no NaN, no hardcoded hex, two titled charts --------------
 function smoke(name: string, element: React.ReactElement, expectEmpty: boolean) {
   let html = "";
   try {
@@ -454,7 +407,14 @@ function smoke(name: string, element: React.ReactElement, expectEmpty: boolean) 
     html.includes("NaN") ||
     html.includes("Infinity") ||
     /#[0-9a-fA-F]{3,8}\b/.test(html) ||
-    (expectEmpty ? !html.includes("No PRs logged yet") : !html.includes("<svg"));
+    // Both panels always render, so an all-empty model must show BOTH empty
+    // states and a populated one must draw at least one <svg>.
+    (expectEmpty
+      ? !(
+          html.includes(PR_TYPE_STYLE.weight.chartEmptyText) &&
+          html.includes(PR_TYPE_STYLE.in_range_rep.chartEmptyText)
+        )
+      : !html.includes("<svg"));
 
   if (bad) {
     failures += 1;
@@ -476,21 +436,168 @@ const mixedHtml = smoke(
 smoke("PRHistoryChart: empty", e(PRHistoryChart, { model: empty }), true);
 smoke("PRHistoryChart: one point", e(PRHistoryChart, { model: onePoint }), false);
 smoke("PRHistoryChart: flat series", e(PRHistoryChart, { model: flat }), false);
-smoke("PRHistoryChart: weight only", e(PRHistoryChart, { model: weightOnly }), false);
-smoke("PRHistoryChart: rep only", e(PRHistoryChart, { model: repOnly }), false);
+const weightOnlyHtml = smoke(
+  "PRHistoryChart: weight only",
+  e(PRHistoryChart, { model: weightOnly }),
+  false,
+);
+const repOnlyHtml = smoke(
+  "PRHistoryChart: rep only",
+  e(PRHistoryChart, { model: repOnly }),
+  false,
+);
+const coincidentHtml = smoke(
+  "PRHistoryChart: one set earning both PR types renders",
+  e(PRHistoryChart, { model: coincident }),
+  false,
+);
 
-// The legend is the contract with pr-colors.ts: both series named, both token
-// colors present, neither hardcoded.
+/** Every <circle> in the markup, with the attributes that decide whether a
+ * human can see the marks at all. */
+function circlesOf(html: string) {
+  return [...html.matchAll(/<circle\b[^>]*>/g)].map((match) => {
+    const tag = match[0];
+    const attr = (name: string) =>
+      tag.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+
+    return {
+      cx: Number(attr("cx")),
+      cy: Number(attr("cy")),
+      r: Number(attr("r")),
+      cls: attr("class"),
+      strokeWidth: Number(attr("stroke-width")),
+    };
+  });
+}
+
+/** How many <svg> the markup holds — one per POPULATED panel (an empty panel
+ * renders a text placeholder, no svg). */
+function svgCount(html: string) {
+  return [...html.matchAll(/<svg\b/g)].length;
+}
+
+// --- THE TWO-CHART CONTRACT, on the render ---------------------------------
 check(
-  "legend names the weight series",
-  mixedHtml.includes(PR_TYPE_STYLE.weight.label),
+  "two charts: a mixed exercise renders TWO separate <svg> canvases",
+  svgCount(mixedHtml),
+  2,
+);
+check(
+  "two charts: each panel is titled from pr-colors",
+  [
+    mixedHtml.includes(PR_TYPE_STYLE.weight.chartTitle),
+    mixedHtml.includes(PR_TYPE_STYLE.in_range_rep.chartTitle),
+  ],
+  [true, true],
+);
+check(
+  "two charts: each panel names its own unit (LBS / REPS)",
+  [
+    mixedHtml.includes(PR_TYPE_STYLE.weight.axisLabel),
+    mixedHtml.includes(PR_TYPE_STYLE.in_range_rep.axisLabel),
+  ],
+  [true, true],
+);
+check(
+  "two charts: the per-chart aria-labels are distinct",
+  [
+    mixedHtml.includes(
+      `aria-label="Personal-record history — ${PR_TYPE_STYLE.weight.chartTitle}"`,
+    ),
+    mixedHtml.includes(
+      `aria-label="Personal-record history — ${PR_TYPE_STYLE.in_range_rep.chartTitle}"`,
+    ),
+  ],
+  [true, true],
+);
+// The dual-axis legend is gone: nothing tells the reader to look left or right
+// any more, because there is no left-or-right to look at.
+check(
+  "two charts: no left/right axis legend survives",
+  /left\s*·|right\s*·/i.test(mixedHtml),
+  false,
+);
+
+// WEIGHT-ONLY: the weight chart carries data, the rep chart reads empty. The
+// panel is NOT hidden — a chart that vanished would read as a bug.
+check(
+  "weight-only: exactly ONE canvas is drawn (the weight one)",
+  svgCount(weightOnlyHtml),
+  1,
+);
+check(
+  "weight-only: the rep panel still renders, carrying its own empty state",
+  [
+    weightOnlyHtml.includes(PR_TYPE_STYLE.in_range_rep.chartTitle),
+    weightOnlyHtml.includes(PR_TYPE_STYLE.in_range_rep.chartEmptyText),
+  ],
+  [true, true],
+);
+check(
+  "weight-only: no rep-colored mark is drawn anywhere",
+  weightOnlyHtml.includes(PR_TYPE_STYLE.in_range_rep.chartDot),
+  false,
+);
+check(
+  "weight-only: every mark drawn is a weight mark",
+  circlesOf(weightOnlyHtml).every((mark) =>
+    mark.cls.includes(PR_TYPE_STYLE.weight.chartDot),
+  ),
+  true,
+);
+
+// REP-ONLY: the mirror image.
+check(
+  "rep-only: exactly ONE canvas is drawn (the rep one)",
+  svgCount(repOnlyHtml),
+  1,
+);
+check(
+  "rep-only: the weight panel still renders, carrying its own empty state",
+  [
+    repOnlyHtml.includes(PR_TYPE_STYLE.weight.chartTitle),
+    repOnlyHtml.includes(PR_TYPE_STYLE.weight.chartEmptyText),
+  ],
+  [true, true],
+);
+check(
+  "rep-only: no weight-colored mark is drawn anywhere",
+  repOnlyHtml.includes(PR_TYPE_STYLE.weight.chartDot),
+  false,
+);
+
+// ONE SET, BOTH PR TYPES — the case the deleted radius machinery existed for.
+const coincidentMarks = circlesOf(coincidentHtml);
+check(
+  "both-PR-types: two canvases, one mark on each",
+  [svgCount(coincidentHtml), coincidentMarks.length],
+  [2, 2],
+);
+check(
+  "both-PR-types: one mark per series color, neither dropped",
+  coincidentMarks.map((mark) =>
+    mark.cls.includes(PR_TYPE_STYLE.weight.chartDot) ? "weight" : "rep",
+  ),
+  ["weight", "rep"],
+);
+// The marks may now share a coordinate freely — they are on DIFFERENT canvases,
+// so nothing occludes anything and nothing has to be sized around it. This is
+// the assertion that replaces "the two marks differ in radius".
+check(
+  "both-PR-types: the two marks are the same size (no occlusion to design around)",
+  coincidentMarks.length === 2 && coincidentMarks[0].r === coincidentMarks[1].r,
   true,
 );
 check(
-  "legend names the rep series",
-  mixedHtml.includes(PR_TYPE_STYLE.in_range_rep.label),
+  "both-PR-types: every mark still carries a background halo",
+  coincidentMarks.every(
+    (mark) => mark.cls.includes("stroke-card") && mark.strokeWidth > 0,
+  ),
   true,
 );
+
+// The chart copy is the contract with pr-colors.ts: both series named, both
+// token colors present, neither hardcoded.
 check(
   "marks read the weight color from pr-colors",
   mixedHtml.includes(PR_TYPE_STYLE.weight.chartStroke),
@@ -502,13 +609,13 @@ check(
   true,
 );
 check(
-  "legend swatches read from pr-colors",
+  "panel swatches read from pr-colors",
   mixedHtml.includes(PR_TYPE_STYLE.weight.swatch) &&
     mixedHtml.includes(PR_TYPE_STYLE.in_range_rep.swatch),
   true,
 );
 check(
-  "axis units are labelled from pr-colors (LBS left, REPS right)",
+  "axis units are labelled from pr-colors (LBS on one chart, REPS on the other)",
   [PR_TYPE_STYLE.weight.axisLabel, PR_TYPE_STYLE.in_range_rep.axisLabel],
   ["LBS", "REPS"],
 );

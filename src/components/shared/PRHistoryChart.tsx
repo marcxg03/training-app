@@ -7,61 +7,41 @@ import {
   CHART_USABLE_WIDTH,
   ChartFrame,
 } from "@/components/shared/ChartFrame";
-import type {
-  PRChartAxis,
-  PRChartModel,
-  PRChartPoint,
-} from "@/lib/analytics/pr-history";
-import { PR_TYPE_STYLE, type PRTypeStyle } from "@/lib/methodology/pr-colors";
+import type { PRChartModel, PRChartSeries } from "@/lib/analytics/pr-history";
+import {
+  PR_CHART_DOT_HALO,
+  PR_CHART_DOT_HALO_WIDTH,
+  PR_CHART_DOT_RADIUS,
+  PR_CHART_DOT_RADIUS_LATEST,
+  PR_TYPE_STYLE,
+  type PRTypeStyle,
+} from "@/lib/methodology/pr-colors";
 
-// The per-exercise PR graph (T2-B) — the replacement for the deleted estimated
-// -1RM charts. Two series of REAL logged events over time:
+// The per-exercise PR graphs — the replacement for the deleted estimated-1RM
+// charts. REAL logged events over time, in TWO stacked panels (T2-D):
 //
-//   weight PRs (blue, --pr-weight)   -> LEFT  axis, lbs
-//   in-range rep PRs (violet, --pr-rep) -> RIGHT axis, reps
+//   Weight PRs (blue, --pr-weight)  -> its own chart, its own y-axis, lbs
+//   Rep PRs    (violet, --pr-rep)   -> its own chart, its own y-axis, reps
 //
-// Grammar note (D6): the frame is shared with the sparkline family, the
-// scaling is not. This chart's x domain is TIME (real gaps between PRs show as
-// real gaps) and its two y domains are INDEPENDENT — reps in single digits and
-// loads in the hundreds cannot share one axis without flattening the reps.
-// All shaping is done by buildPRChartModel; this component only draws.
+// WHY TWO (Marcus, 2026-09-24): one dual-axis canvas made the two series look
+// comparable when they share nothing but a date, and the reader had to work out
+// which axis a line belonged to before they could read it. Two single-axis
+// charts have no axis ambiguity, no scale ambiguity, and no marker-collision
+// problem — a weight mark and a rep mark can no longer land on one coordinate
+// because they are no longer on one canvas. All shaping is done by
+// buildPRChartModel; this component only draws.
 //
-// Every color, swatch, unit label, marker radius, and halo comes from
-// pr-colors.ts, the same map the PR badges read, so the legend can never say
-// one thing and the badge another — and so the two series' MARKER SIZES (which
-// are what keep a coincident pair readable, see seriesInPaintOrder below) live
-// next to the colors they belong to rather than as loose numbers in here.
+// BOTH panels always render. An exercise with only weight PRs shows a weight
+// chart with data and a rep chart reading "No rep PRs yet" — a panel that
+// disappeared would read as a bug, and the empty state is the honest answer to
+// "where are my rep PRs?". Every color, swatch, title, unit label and empty
+// string comes from pr-colors.ts, the same map the PR badges read.
 
 type PRHistoryChartProps = {
   model: PRChartModel;
+  /** Base label; each panel appends its own series name. */
   ariaLabel?: string;
-  unitLabel?: string;
-  emptyText?: string;
 };
-
-/**
- * The two series in paint order: LARGEST MARKER FIRST.
- *
- * Two PRs earned by the same set share an x, and when each series holds only
- * that one PR they share a y as well (each centers in its own padded
- * single-value axis) — the first state every newly-PR'd exercise is in. Both
- * marks then sit on the identical, correct coordinate, so the one painted
- * second is the only one a human can see. Rather than lie about the data by
- * offsetting a mark in time or value, the series carry different radii
- * (pr-colors.ts) and the bigger one goes down first: the smaller mark lands
- * inside it, ringed by its own background-colored halo, and BOTH read.
- *
- * Derived from the radii rather than hardcoded, so changing a radius in
- * pr-colors.ts can never silently re-hide a series here.
- */
-function seriesInPaintOrder(
-  model: PRChartModel,
-): { key: string; points: PRChartPoint[]; style: PRTypeStyle }[] {
-  return [
-    { key: "weight", points: model.weight, style: PR_TYPE_STYLE.weight },
-    { key: "rep", points: model.rep, style: PR_TYPE_STYLE.in_range_rep },
-  ].sort((a, b) => b.style.chartDotRadiusLatest - a.style.chartDotRadiusLatest);
-}
 
 function svgX(x: number): number {
   return CHART_PADDING_X + CHART_USABLE_WIDTH * x;
@@ -71,8 +51,8 @@ function svgY(y: number): number {
   return CHART_PADDING_TOP + CHART_USABLE_HEIGHT * (1 - y);
 }
 
-function linePath(points: PRChartPoint[]): string {
-  return points
+function linePath(series: PRChartSeries): string {
+  return series.points
     .map(
       (point, index) =>
         `${index === 0 ? "M" : "L"} ${svgX(point.x).toFixed(2)} ${svgY(point.y).toFixed(2)}`,
@@ -80,85 +60,82 @@ function linePath(points: PRChartPoint[]): string {
     .join(" ");
 }
 
-function Series({
-  points,
+/** Title + range for one panel: the swatch and name on the left, the span this
+ * chart's own axis covers on the right. Axis ticks cannot live inside the svg —
+ * ChartFrame draws with preserveAspectRatio="none", which would stretch text
+ * horizontally — so the extent is stated here instead. */
+function PanelHeader({
   style,
+  series,
 }: {
-  points: PRChartPoint[];
   style: PRTypeStyle;
-}): JSX.Element | null {
-  if (points.length === 0) {
-    return null;
-  }
-
+  series: PRChartSeries;
+}): JSX.Element {
   return (
-    <>
-      {points.length > 1 ? (
-        <path
-          d={linePath(points)}
-          fill="none"
-          className={style.chartStroke}
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      ) : null}
-
-      {points.map((point, index) => (
-        <circle
-          key={point.pr_id}
-          cx={svgX(point.x)}
-          cy={svgY(point.y)}
-          r={
-            index === points.length - 1
-              ? style.chartDotRadiusLatest
-              : style.chartDotRadius
-          }
-          className={`${style.chartDot} ${style.chartDotHalo}`}
-          strokeWidth={style.chartDotHaloWidth}
-        />
-      ))}
-    </>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${style.swatch}`} />
+        <span className="truncate text-[11px] font-medium text-foreground">
+          {style.chartTitle}
+        </span>
+      </span>
+      <span className="shrink-0 font-mono text-[9px] uppercase tabular-nums tracking-[0.06em] text-faint">
+        {series.axis === null
+          ? "—"
+          : `${Math.round(series.axis.min)}–${Math.round(series.axis.max)} ${style.axisLabel}`}
+      </span>
+    </div>
   );
 }
 
-// Legend + axis extents in ONE row: the left item is the left axis, the right
-// item is the right axis, and each names its series, its unit, and the range it
-// spans. Axis ticks cannot live inside the svg — ChartFrame draws with
-// preserveAspectRatio="none", which would stretch text horizontally.
-function LegendItem({
+/** One series, one chart, one y-axis. */
+function SeriesChart({
   style,
-  axis,
-  align,
+  series,
+  ariaLabel,
 }: {
   style: PRTypeStyle;
-  axis: PRChartAxis | null;
-  align: "left" | "right";
+  series: PRChartSeries;
+  ariaLabel: string;
 }): JSX.Element {
-  const range =
-    axis === null
-      ? "—"
-      : `${Math.round(axis.min)}–${Math.round(axis.max)} ${style.axisLabel}`;
-
   return (
-    <div
-      className={`flex min-w-0 flex-col gap-0.5 ${align === "right" ? "items-end text-right" : "items-start text-left"} ${axis === null ? "opacity-45" : ""}`}
-    >
-      <span className="flex items-center gap-1.5">
-        {align === "right" ? null : (
-          <span className={`h-2 w-2 shrink-0 rounded-full ${style.swatch}`} />
-        )}
-        <span className="truncate text-[11px] font-medium text-foreground">
-          {style.label}
-        </span>
-        {align === "right" ? (
-          <span className={`h-2 w-2 shrink-0 rounded-full ${style.swatch}`} />
+    <div className="flex flex-col gap-1.5">
+      <PanelHeader style={style} series={series} />
+
+      <ChartFrame
+        isEmpty={series.isEmpty}
+        emptyText={style.chartEmptyText}
+        ariaLabel={ariaLabel}
+        unitLabel={style.axisLabel}
+        startLabel={series.startLabel ?? undefined}
+        endLabel={series.endLabel ?? undefined}
+      >
+        {series.points.length > 1 ? (
+          <path
+            d={linePath(series)}
+            fill="none"
+            className={style.chartStroke}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
         ) : null}
-      </span>
-      <span className="font-mono text-[9px] uppercase tabular-nums tracking-[0.06em] text-faint">
-        {align === "right" ? "right · " : "left · "}
-        {range}
-      </span>
+
+        {series.points.map((point, index) => (
+          <circle
+            key={point.pr_id}
+            cx={svgX(point.x)}
+            cy={svgY(point.y)}
+            r={
+              index === series.points.length - 1
+                ? PR_CHART_DOT_RADIUS_LATEST
+                : PR_CHART_DOT_RADIUS
+            }
+            className={`${style.chartDot} ${PR_CHART_DOT_HALO}`}
+            strokeWidth={PR_CHART_DOT_HALO_WIDTH}
+          />
+        ))}
+      </ChartFrame>
     </div>
   );
 }
@@ -166,40 +143,19 @@ function LegendItem({
 export function PRHistoryChart({
   model,
   ariaLabel = "Personal-record history",
-  unitLabel = "PR HISTORY",
-  emptyText = "No PRs logged yet",
 }: PRHistoryChartProps): JSX.Element {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-3">
-        <LegendItem
-          style={PR_TYPE_STYLE.weight}
-          axis={model.weightAxis}
-          align="left"
-        />
-        <LegendItem
-          style={PR_TYPE_STYLE.in_range_rep}
-          axis={model.repAxis}
-          align="right"
-        />
-      </div>
-
-      <ChartFrame
-        isEmpty={model.isEmpty}
-        emptyText={emptyText}
-        ariaLabel={ariaLabel}
-        unitLabel={unitLabel}
-        startLabel={model.startLabel ?? undefined}
-        endLabel={model.endLabel ?? undefined}
-      >
-        {seriesInPaintOrder(model).map((series) => (
-          <Series
-            key={series.key}
-            points={series.points}
-            style={series.style}
-          />
-        ))}
-      </ChartFrame>
+    <div className="flex flex-col gap-3.5">
+      <SeriesChart
+        style={PR_TYPE_STYLE.weight}
+        series={model.weight}
+        ariaLabel={`${ariaLabel} — ${PR_TYPE_STYLE.weight.chartTitle}`}
+      />
+      <SeriesChart
+        style={PR_TYPE_STYLE.in_range_rep}
+        series={model.rep}
+        ariaLabel={`${ariaLabel} — ${PR_TYPE_STYLE.in_range_rep.chartTitle}`}
+      />
     </div>
   );
 }

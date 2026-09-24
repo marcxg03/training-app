@@ -261,7 +261,7 @@ try {
   //   Navigated the way a human would: Progress → History → click the PR
   //   timeline row for an exercise that has PRs.
   // =====================================================================
-  await run.check("3. PR history chart renders with real data", async () => {
+  await run.check("3. PR history charts render with real data", async () => {
     await session.go("/progress?view=history", "h1");
     await expectVisible(page, 'h2:text-is("Personal records")');
 
@@ -272,39 +272,43 @@ try {
     await prLink.click();
     await page.waitForURL(/\/history\/exercises\//, { timeout: 15_000 });
 
-    // The chart itself: role=img svg with the exercise's aria-label.
-    const chart = page.locator(
-      `svg[aria-label="${seed.topExerciseName} personal-record history"]`,
+    // T2-D: TWO charts, one per PR type, each its own role=img svg.
+    const weightChart = page.locator(
+      `svg[aria-label="${seed.topExerciseName} personal-record history — Weight PRs"]`,
     );
-    await chart.first().waitFor({ state: "visible", timeout: 8000 });
+    const repChart = page.locator(
+      `svg[aria-label="${seed.topExerciseName} personal-record history — Rep PRs"]`,
+    );
+    await weightChart.first().waitFor({ state: "visible", timeout: 8000 });
+    await repChart.first().waitFor({ state: "visible", timeout: 8000 });
 
-    // Both series present — a path per series (>1 point) plus dots.
-    const paths = await chart.locator("path").count();
-    const dots = await chart.locator("circle").count();
+    // Each canvas carries ONE series: its own line and its own marks, and no
+    // mark of the other color anywhere in it.
+    const weightDots = await weightChart.locator("circle").count();
+    const repDots = await repChart.locator("circle").count();
+    expectTrue(weightDots > 0, `the weight chart has no <circle> marks`);
+    expectTrue(repDots > 0, `the rep chart has no <circle> marks`);
     expectTrue(
-      paths >= 2,
-      `expected 2 series lines in the chart svg, found ${paths} <path> elements`,
+      (await weightChart.locator("circle.fill-pr-rep").count()) === 0 &&
+        (await repChart.locator("circle.fill-pr-weight").count()) === 0,
+      "a series was drawn on the other series' canvas — the split did not hold",
     );
-    expectTrue(dots > 0, `chart svg has no <circle> marks (${dots})`);
 
-    // Legend, from pr-colors.ts — both series named, both axes labelled.
+    // Titles + units, from pr-colors.ts. The old left/right axis legend is
+    // gone with the dual axis it described.
     const text = await visibleText(page);
-    for (const label of [
-      "Weight PR",
-      "Rep PR",
-      "LBS",
-      "REPS",
-      "left ·",
-      "right ·",
-    ]) {
+    for (const label of ["Weight PRs", "Rep PRs", "LBS", "REPS"]) {
       expectTrue(
         text.toLowerCase().includes(label.toLowerCase()),
-        `legend is missing "${label}" — saw: ${text.slice(0, 260)}`,
+        `chart copy is missing "${label}" — saw: ${text.slice(0, 260)}`,
       );
     }
+    expectTrue(
+      !/left\s*·|right\s*·/i.test(text),
+      `a left/right axis legend survived the two-chart split: ${text.slice(0, 260)}`,
+    );
 
-    // The dual-axis failure mode: a NaN in a path/coordinate attribute draws
-    // NOTHING and reports NO error.
+    // A NaN in a path/coordinate attribute draws NOTHING and reports NO error.
     const bad = await findSvgNaN(page);
     expectTrue(
       bad.length === 0,
@@ -312,7 +316,7 @@ try {
     );
 
     await shoot(page, "t2b-pr-chart");
-    return `${paths} paths, ${dots} dots, 0 NaN`;
+    return `weight chart ${weightDots} dots · rep chart ${repDots} dots · 0 NaN`;
   });
 
   // =====================================================================
@@ -512,7 +516,11 @@ try {
       await session.go(`/history/exercises/${seed.topExerciseId}`, "h1");
       await expectVisible(
         page,
-        `svg[aria-label="${seed.topExerciseName} personal-record history"]`,
+        `svg[aria-label="${seed.topExerciseName} personal-record history — Weight PRs"]`,
+      );
+      await expectVisible(
+        page,
+        `svg[aria-label="${seed.topExerciseName} personal-record history — Rep PRs"]`,
       );
       await shoot(page, "t2b-pr-chart-detail");
 
@@ -529,84 +537,56 @@ try {
   // =====================================================================
   // CHECK 7 — the chart's FIRST state: one set that earned both PR types
   //   Every newly-PR'd exercise passes through this state, and check 5 just
-  //   created one: with a single PR per series both marks land on the SAME
-  //   coordinate (x centers with no time span, each y centers in its own
-  //   padded one-value axis). That coordinate is the truth and must not be
-  //   nudged, so this check does NOT ask the marks to be apart — it asks
-  //   whether a human can still see TWO of them there.
+  //   created one: a single weight PR and a single rep PR from the same set.
   //
-  //   The earlier version of this check only asked "distance > 0", which a
-  //   single-pixel offset would satisfy while still looking like one dot.
-  //   What it measures now, all off the LIVE render (computed style + layout
-  //   boxes + hit testing), never off the source:
-  //     • one mark per series, each in its own token color
-  //     • the two marks are rendered at DIFFERENT sizes (>= 3 CSS px of
-  //       diameter apart), so neither can hide the other
-  //     • each mark carries a non-zero contrasting halo stroke
-  //     • the smaller mark sits INSIDE the larger one, and hit-testing proves
-  //       both are actually painted: the center belongs to the inner mark,
-  //       every compass point of the ring belongs to the outer one
+  //   On the OLD single-canvas chart this was the dangerous state — both marks
+  //   landed on the identical coordinate (x centers with no time span, each y
+  //   centers in its own padded one-value axis) and the one painted second hid
+  //   the first, which is what the per-series radius difference existed to fix.
+  //   T2-D removed the collision instead of managing it: the two series are now
+  //   on SEPARATE canvases, so this check no longer asks whether two stacked
+  //   marks can be told apart. It asks the thing that replaced it — that the
+  //   split is real in the browser. Measured off the LIVE render, never off
+  //   the source:
+  //     • TWO svg canvases, each titled and aria-labelled for its own series
+  //     • exactly one mark on each, each in its own token color, and NEITHER
+  //       canvas carrying a mark belonging to the other series
+  //     • the two marks are in different SVG elements and vertically separated
+  //       on the page, so neither can occlude the other at any size
+  //     • each mark is actually PAINTED (hit testing goes through the real
+  //       paint tree) and carries its contrasting halo
   // =====================================================================
   await run.check(
-    "7. both series are distinguishable when each has one PR",
+    "7. each series gets its OWN chart when each has one PR",
     async () => {
-      await session.go(
-        `/history/exercises/${exerciseId["T2B Pulldown (with media)"]}`,
-        "h1",
-      );
-      const chart = page
+      const exerciseName = "T2B Pulldown (with media)";
+      await session.go(`/history/exercises/${exerciseId[exerciseName]}`, "h1");
+
+      const weightChart = page
         .locator(
-          'svg[aria-label="T2B Pulldown (with media) personal-record history"]',
+          `svg[aria-label="${exerciseName} personal-record history — Weight PRs"]`,
         )
         .first();
-      await chart.waitFor({ state: "visible", timeout: 8000 });
-      await chart.scrollIntoViewIfNeeded();
+      const repChart = page
+        .locator(
+          `svg[aria-label="${exerciseName} personal-record history — Rep PRs"]`,
+        )
+        .first();
+      await weightChart.waitFor({ state: "visible", timeout: 8000 });
+      await repChart.waitFor({ state: "visible", timeout: 8000 });
 
-      const probe = await chart.evaluate((svg) => {
-        const circles = [...svg.querySelectorAll("circle")];
+      // Each series is measured AFTER scrolling its own canvas into view. The
+      // second chart sits below the fold on a 390px phone, and a hit test
+      // against an off-screen point returns whatever is painted at that
+      // viewport coordinate instead — the bottom tab bar, in practice. So the
+      // geometry that has to be comparable across the two (their stacking) is
+      // recorded in PAGE coordinates, while hit testing uses viewport ones.
+      const probe = await page.evaluate((name) => {
+        const svgFor = (series) =>
+          document.querySelector(
+            `svg[aria-label="${name} personal-record history — ${series}"]`,
+          );
         const classOf = (node) => node.getAttribute("class") ?? "";
-        const describe = (node) => {
-          const box = node.getBoundingClientRect();
-          const computed = getComputedStyle(node);
-
-          return {
-            cls: classOf(node),
-            // The attribute coordinate — is this genuinely the coincident case?
-            cx: Number(node.getAttribute("cx")),
-            cy: Number(node.getAttribute("cy")),
-            // What the browser actually painted, in CSS px.
-            diameter: box.width,
-            centerX: box.x + box.width / 2,
-            centerY: box.y + box.height / 2,
-            fill: computed.fill,
-            stroke: computed.stroke,
-            strokeWidth: Number.parseFloat(computed.strokeWidth) || 0,
-          };
-        };
-
-        const weight = circles.find((node) =>
-          classOf(node).includes("fill-pr-weight"),
-        );
-        const rep = circles.find((node) =>
-          classOf(node).includes("fill-pr-rep"),
-        );
-
-        if (!weight || !rep) {
-          return {
-            count: circles.length,
-            classes: circles.map(classOf),
-            weight: null,
-            rep: null,
-          };
-        }
-
-        const w = describe(weight);
-        const r = describe(rep);
-        const inner = w.diameter <= r.diameter ? w : r;
-        const outer = inner === w ? r : w;
-        // Midway between the two painted edges — inside the outer mark, clear of
-        // the inner one and of the inner one's halo.
-        const ring = (inner.diameter / 2 + outer.diameter / 2) / 2;
         const at = (x, y) => {
           const el = document.elementFromPoint(x, y);
           return el === null
@@ -614,94 +594,115 @@ try {
             : (el.getAttribute("class") ?? el.tagName);
         };
 
-        return {
-          count: circles.length,
-          classes: circles.map(classOf),
-          weight: w,
-          rep: r,
-          innerIsRep: inner === r,
-          ring,
-          hits: {
-            center: at(inner.centerX, inner.centerY),
-            east: at(outer.centerX + ring, outer.centerY),
-            west: at(outer.centerX - ring, outer.centerY),
-            north: at(outer.centerX, outer.centerY - ring),
-            south: at(outer.centerX, outer.centerY + ring),
-          },
+        const measure = (series) => {
+          const svg = svgFor(series);
+
+          if (!svg) {
+            return { svg: false };
+          }
+
+          svg.scrollIntoView({ block: "center" });
+
+          const marks = [...svg.querySelectorAll("circle")];
+          const stray = marks
+            .map(classOf)
+            .filter((cls) =>
+              series === "Weight PRs"
+                ? cls.includes("fill-pr-rep")
+                : cls.includes("fill-pr-weight"),
+            ).length;
+
+          if (marks.length !== 1) {
+            return { svg: true, count: marks.length, stray, mark: null };
+          }
+
+          const node = marks[0];
+          const box = node.getBoundingClientRect();
+          const computed = getComputedStyle(node);
+          const centerX = box.x + box.width / 2;
+          const centerY = box.y + box.height / 2;
+
+          return {
+            svg: true,
+            count: marks.length,
+            stray,
+            mark: {
+              cls: classOf(node),
+              diameter: box.width,
+              // Page coordinates: comparable between the two measurements even
+              // though each was taken at a different scroll offset.
+              pageY: centerY + window.scrollY,
+              fill: computed.fill,
+              stroke: computed.stroke,
+              strokeWidth: Number.parseFloat(computed.strokeWidth) || 0,
+            },
+            hit: at(centerX, centerY),
+          };
         };
-      });
+
+        const weight = measure("Weight PRs");
+        const rep = measure("Rep PRs");
+
+        return {
+          weightSvg: weight.svg,
+          repSvg: rep.svg,
+          weightCount: weight.count,
+          repCount: rep.count,
+          strayInWeight: weight.stray,
+          strayInRep: rep.stray,
+          weight: weight.mark,
+          rep: rep.mark,
+          hits: { weight: weight.hit ?? "none", rep: rep.hit ?? "none" },
+        };
+      }, exerciseName);
 
       expectTrue(
-        probe.count === 2 && probe.weight !== null && probe.rep !== null,
-        `expected one mark per series, found ${probe.count}: ${JSON.stringify(probe.classes)}`,
-      );
-
-      const { weight, rep, hits, ring } = probe;
-      const apart = Math.hypot(
-        weight.centerX - rep.centerX,
-        weight.centerY - rep.centerY,
-      );
-      const coincident = apart < 1;
-
-      // This check only means something in the coincident state. Say so loudly
-      // if the fixture ever stops producing it, rather than passing vacuously.
-      expectTrue(
-        coincident,
-        `FIXTURE DRIFT: this check exists for the case where both PRs land on ` +
-          `ONE coordinate, but the marks rendered ${apart.toFixed(1)}px apart ` +
-          `(weight ${weight.cx},${weight.cy} · rep ${rep.cx},${rep.cy}). ` +
-          `Re-seed a single set that earns both a weight and a rep PR.`,
-      );
-
-      // THE FIX, measured on the render: different sizes at one coordinate.
-      const sizeGap = Math.abs(weight.diameter - rep.diameter);
-      expectTrue(
-        sizeGap >= 3,
-        `both marks are drawn at (${weight.cx},${weight.cy}) but their rendered ` +
-          `diameters are ${weight.diameter.toFixed(1)}px and ${rep.diameter.toFixed(1)}px ` +
-          `— only ${sizeGap.toFixed(1)}px apart, so the mark painted second covers ` +
-          `the first and the chart shows ONE dot while the legend promises two series.`,
+        probe.weightSvg && probe.repSvg,
+        `expected two separate chart canvases, got weight=${probe.weightSvg} rep=${probe.repSvg}`,
       );
       expectTrue(
-        weight.diameter > rep.diameter,
-        `the rep mark (${rep.diameter.toFixed(1)}px) is not smaller than the weight ` +
-          `mark (${weight.diameter.toFixed(1)}px) — the inner/outer relationship the ` +
-          `paint order depends on has inverted`,
+        probe.weightCount === 1 && probe.repCount === 1,
+        `expected exactly one mark on each canvas, found weight=${probe.weightCount} rep=${probe.repCount}`,
       );
       expectTrue(
-        probe.innerIsRep,
-        "the smaller (inner) mark is not the rep series — check the paint order",
+        probe.strayInWeight === 0 && probe.strayInRep === 0,
+        `a series was drawn on the other canvas (${probe.strayInWeight} rep marks in the weight chart, ` +
+          `${probe.strayInRep} weight marks in the rep chart) — the two-chart split did not hold`,
       );
 
-      // The halo: what keeps the inner mark from merging into the outer fill.
+      const { weight, rep, hits } = probe;
+      expectTrue(
+        weight !== null && rep !== null,
+        "could not measure one mark per canvas",
+      );
+
+      // THE POINT OF THE SPLIT: the marks are in different canvases, stacked
+      // vertically, so neither can ever cover the other — which is why they no
+      // longer need to differ in size.
+      expectTrue(
+        Math.abs(weight.pageY - rep.pageY) > weight.diameter,
+        `the two marks are only ${Math.abs(weight.pageY - rep.pageY).toFixed(1)}px apart ` +
+          `vertically on the page — they are not in separate stacked charts`,
+      );
+
+      // Both are genuinely PAINTED, not merely in the DOM.
+      expectTrue(
+        hits.weight.includes("fill-pr-weight"),
+        `hit test at the weight mark returned "${hits.weight}"`,
+      );
+      expectTrue(
+        hits.rep.includes("fill-pr-rep"),
+        `hit test at the rep mark returned "${hits.rep}"`,
+      );
       for (const [name, mark] of [
         ["weight", weight],
         ["rep", rep],
       ]) {
         expectTrue(
-          mark.strokeWidth > 0,
-          `the ${name} mark renders with stroke-width ${mark.strokeWidth} — no halo, ` +
-            `so a mark drawn on top of it merges into one blob`,
-        );
-        expectTrue(
-          mark.stroke !== "none" && mark.stroke !== mark.fill,
-          `the ${name} mark's halo (${mark.stroke}) does not contrast with its own ` +
-            `fill (${mark.fill})`,
-        );
-      }
-
-      // Both series are genuinely PAINTED, not just present in the DOM: the
-      // center of the stack belongs to the inner mark, the surrounding ring to
-      // the outer one. Hit testing goes through the real paint tree.
-      expectTrue(
-        hits.center.includes("fill-pr-rep"),
-        `hit test at the marks' center returned "${hits.center}", expected the rep mark`,
-      );
-      for (const compass of ["east", "west", "north", "south"]) {
-        expectTrue(
-          hits[compass].includes("fill-pr-weight"),
-          `hit test ${ring.toFixed(1)}px ${compass} of center returned "${hits[compass]}" ` +
-            `— the weight mark is not visible as a ring around the rep mark`,
+          mark.strokeWidth > 0 &&
+            mark.stroke !== "none" &&
+            mark.stroke !== mark.fill,
+          `the ${name} mark has no contrasting halo (stroke ${mark.stroke}, width ${mark.strokeWidth}, fill ${mark.fill})`,
         );
       }
 
@@ -710,24 +711,24 @@ try {
 
       await shoot(page, "t2b-pr-chart-first-state");
 
-      // A magnified shot of the same chart for the human reviewer — the SVG is
-      // vector, so widening its container is a clean zoom, not an upscale. The
-      // assertions above are already done; this only changes the picture.
+      // A magnified shot of both charts for the human reviewer — the SVGs are
+      // vector, so widening their container is a clean zoom, not an upscale.
       await session.setViewport("desktop");
-      const card = chart.locator("xpath=..");
-      await card.evaluate((node) => {
+      const pair = page
+        .locator("section:has(h2:text-is('PR history · progression'))")
+        .first();
+      await pair.evaluate((node) => {
         node.style.width = "1100px";
       });
-      await shoot(page, "t2b-pr-chart-first-state-zoom", { of: card });
-      await card.evaluate((node) => {
+      await shoot(page, "t2b-pr-chart-first-state-zoom", { of: pair });
+      await pair.evaluate((node) => {
         node.style.width = "";
       });
       await session.setViewport("mobile");
 
       return (
-        `coincident at (${weight.cx},${weight.cy}): weight ${weight.diameter.toFixed(1)}px ` +
-        `vs rep ${rep.diameter.toFixed(1)}px (${sizeGap.toFixed(1)}px apart), ` +
-        `halos ${weight.strokeWidth}/${rep.strokeWidth}px, center=rep ring=weight`
+        `two canvases · weight mark ${weight.diameter.toFixed(1)}px, rep mark ${rep.diameter.toFixed(1)}px · ` +
+        `${Math.abs(weight.pageY - rep.pageY).toFixed(0)}px apart vertically · no cross-contamination`
       );
     },
   );

@@ -179,17 +179,13 @@ export default async function ProgressPage({
   );
 
   // ---------------- Segment: TRENDS ----------------
-  // All the analytical charts: the full per-exercise PR history plus the
-  // re-homed weekly-volume, bodyweight, and nutrition trends.
+  // All the analytical charts. ORDER (Marcus, 2026-09-24 — T2-D):
+  //   Body → Fuel → PR history → Training load.
+  // The two he logs into daily come first (Body carries the bodyweight + photo
+  // capture controls, Fuel the intake trend); the two he only reads sit below.
+  // Only the order changed — no section's internals were touched.
   const trends = (
     <>
-      <p className="text-sm leading-6 text-muted-foreground">
-        Weight and rep PRs per exercise, over time. Tap any to open its full
-        history and recent sets.
-      </p>
-      <PRHistorySection spotlights={spotlights} />
-      <WeeklyVolumeSection groups={volumeGroups} />
-
       {/* BODY (D29) — weight and photos together, under one heading, because
           this is where the trend already is. Both LOG here; Settings stays
           config-only. Overview deliberately gets neither: it is the glance. */}
@@ -210,6 +206,16 @@ export default async function ProgressPage({
       </section>
 
       <NutritionTrendSection series={nutritionSeries} targets={targets} />
+
+      <div className="flex flex-col gap-2.5">
+        <p className="text-sm leading-6 text-muted-foreground">
+          Weight and rep PRs per exercise, over time — each on its own chart.
+          Tap any to open its full history and recent sets.
+        </p>
+        <PRHistorySection spotlights={spotlights} />
+      </div>
+
+      <WeeklyVolumeSection groups={volumeGroups} />
     </>
   );
 
