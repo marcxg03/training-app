@@ -73,7 +73,6 @@ const ISOLATION_RULES: Rule[] = [
   // Chest / back single-joint
   { label: "isolation: fly", pattern: /\bfl(y|ys|ies|yes)\b/ },
   { label: "isolation: cable crossover", pattern: /\bcross ?overs?\b/ },
-  { label: "isolation: pullover", pattern: /\bpull ?overs?\b/ },
   { label: "isolation: straight-arm pulldown", pattern: /\bstraight arm\b/ },
   // Legs — accessory, unilateral, machine
   { label: "isolation: calf", pattern: /\b(calf|calves)\b/ },
@@ -84,8 +83,9 @@ const ISOLATION_RULES: Rule[] = [
   },
   { label: "isolation: hyperextension", pattern: /\bhyper ?extensions?\b/ },
   { label: "isolation: glute-ham raise", pattern: /\bglute ham\b/ },
-  // Unilateral leg work rides with walking lunges under D28, not Back Squat.
-  { label: "isolation: single-leg (unilateral)", pattern: /\bsingle leg\b/ },
+  // NOTE: no blanket "single leg" deny — Marcus flipped single-leg SQUAT to
+  // compound (2026-09-23). Unilateral isolation still denies via its own rule
+  // (single-leg calf raise → calf, single-leg curl → curl, etc.).
   { label: "isolation: split squat", pattern: /\bsplit squats?\b/ },
   { label: "isolation: bulgarian split squat", pattern: /\bbulgarian\b/ },
   { label: "isolation: leg press (not in D28)", pattern: /\bleg press\b/ },
@@ -104,7 +104,6 @@ const ISOLATION_RULES: Rule[] = [
   // Mobility / prehab / ATG circuit — never an e1RM surface
   { label: "isolation: ATG circuit", pattern: /\batg\b/ },
   { label: "isolation: dead hang", pattern: /\bdead hangs?\b/ },
-  { label: "isolation: good morning", pattern: /\bgood mornings?\b/ },
   { label: "isolation: jefferson curl", pattern: /\bjefferson\b/ },
   { label: "isolation: external rotation", pattern: /\bexternal rotation\b/ },
   { label: "isolation: TYI raise", pattern: /\btyi\b/ },
@@ -116,8 +115,20 @@ const COMPOUND_RULES: Rule[] = [
   { label: "compound: bench press", pattern: /\bbench press\b/ },
   { label: "compound: chest press", pattern: /\bchest press\b/ },
   { label: "compound: flat press", pattern: /\bflat\b.*\bpress\b/ },
-  // Incline Press (and the decline bench variant of the same lift)
+  // Incline Press (and the decline bench variant of the same lift).
+  // Broadened to bare "incline" so machine/Smith variants that omit the word
+  // "press" ("Incline Smith", "Incline Smith Machine") still classify —
+  // the deny list runs FIRST, so "Incline DB Curl" / "Incline Fly" are safe.
+  { label: "compound: incline (press variants)", pattern: /\bincline\b/ },
   { label: "compound: incline press", pattern: /\bincline\b.*\bpress\b/ },
+  // Smith-machine work in this plan is press/squat loading.
+  { label: "compound: smith machine", pattern: /\bsmith\b/ },
+  // Machine press variants that omit chest/shoulder ("Seated Machine Press").
+  { label: "compound: machine press", pattern: /\bmachine press\b/ },
+  // Loaded squat-pattern machine.
+  { label: "compound: hack squat", pattern: /\bhack squats?\b/ },
+  // Bodyweight compound pull+press (is_bodyweight gates e1RM separately).
+  { label: "compound: muscle-up", pattern: /\bmuscle ?ups?\b/ },
   { label: "compound: decline press", pattern: /\bdecline\b.*\bpress\b/ },
   { label: "compound: smith press", pattern: /\bsmith press\b/ },
   // Overhead / Shoulder Press
@@ -127,6 +138,11 @@ const COMPOUND_RULES: Rule[] = [
   // Back Squat
   { label: "compound: back/front squat", pattern: /\b(back|front) squats?\b/ },
   { label: "compound: barbell squat", pattern: /\b(bb|barbell) squats?\b/ },
+  // Marcus flipped these three to compound 2026-09-23 (they were isolation
+  // under the first reading of D28). Split squat / Bulgarian stay isolation.
+  { label: "compound: single-leg squat", pattern: /\bsingle leg\b.*\bsquats?\b/ }, // prettier-ignore
+  { label: "compound: good morning", pattern: /\bgood mornings?\b/ },
+  { label: "compound: pullover", pattern: /\bpull ?overs?\b/ },
   // Deadlift — RDL / sumo / conventional
   { label: "compound: deadlift", pattern: /\bdead ?lifts?\b/ },
   { label: "compound: RDL", pattern: /\brdls?\b/ },
