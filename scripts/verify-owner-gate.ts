@@ -19,7 +19,7 @@
 // pure runtime test can't drive it without Supabase — instead we assert the
 // STRUCTURE that makes /admin owner-only: the admin page sits under the
 // `(owner)` group, and that group's layout awaits requireOwner().
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { isOwner } from "../src/lib/auth/owner";
@@ -65,10 +65,20 @@ process.env.OWNER_USER_IDS = "solo-owner-id";
 check("single-id list matches", isOwner("solo-owner-id"), true);
 check("single-id list rejects others", isOwner("someone-else"), false);
 
-// --- S6 structural coverage: /admin is owner-gated by the (owner) group -----
+// --- structural coverage: /admin is owner-gated by the (owner) group -------
+//
+// T3-A MOVED THE GROUP from `src/app/(app)/(owner)/` to a top-level
+// `src/app/(owner)/`, so the hub could stop inheriting the member app's phone
+// chrome (bottom tab bar, phone padding). URLs are unchanged — a route group
+// never appears in the path — but the GUARD moved with it, and a refactor
+// that relocates a route group is exactly how a gate gets silently dropped.
+// These assertions are pinned to the new path deliberately: if the group moves
+// again, this goes red rather than quietly passing against a file that no
+// longer guards anything.
 const repoRoot = join(__dirname, "..");
+const OWNER_GROUP = "src/app/(owner)";
 const ownerLayoutRaw = readFileSync(
-  join(repoRoot, "src/app/(app)/(owner)/layout.tsx"),
+  join(repoRoot, `${OWNER_GROUP}/layout.tsx`),
   "utf8",
 );
 // Strip comments so a commented-out guard (`// await requireOwner();` or a
@@ -78,7 +88,7 @@ const ownerLayout = ownerLayoutRaw
   .replace(/\/\/[^\n]*/g, ""); // line comments
 const adminPageExists = (() => {
   try {
-    readFileSync(join(repoRoot, "src/app/(app)/(owner)/admin/page.tsx"), "utf8");
+    readFileSync(join(repoRoot, `${OWNER_GROUP}/admin/page.tsx`), "utf8");
     return true;
   } catch {
     return false;
@@ -99,6 +109,34 @@ check(
   "/admin lives under the (owner) group (so it inherits the gate)",
   adminPageExists,
   true,
+);
+// The old location must be GONE, not merely unused: a leftover
+// `(app)/(owner)/` would still serve /admin, and whichever Next resolved
+// first would decide whether the hub was gated. Two route groups claiming one
+// URL is a coin flip, not a guard.
+check(
+  "the pre-T3-A (app)/(owner) group no longer exists",
+  existsSync(join(repoRoot, "src/app/(app)/(owner)")),
+  false,
+);
+// Every page under the group inherits the one layout guard. Assert the whole
+// set, so a section added later cannot sit outside it.
+const hubPages = readdirSync(join(repoRoot, OWNER_GROUP, "admin"), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+check(
+  "every admin section lives under the gated group",
+  hubPages.every((name) =>
+    existsSync(join(repoRoot, OWNER_GROUP, "admin", name, "page.tsx")),
+  ),
+  true,
+);
+check(
+  "the hub has the sections T3-A built",
+  [...hubPages].sort(),
+  ["analytics", "members", "programs"],
 );
 
 if (failures > 0) {
