@@ -91,3 +91,46 @@ S0 first (everyone depends on the nav + primitives). S2 (Logger) is the flagship
 ## Final pass
 
 Whole-app e2e on the live authenticated app (test user, Block II seeded): open every tab, log a set, log a meal, switch a plan, view progress. Final `/roast-code` over the whole diff → 4F triage → ralph to convergence (bounded; escalate if non-converging). Close `build-log.md` with the `✅ BUILD COMPLETE` entry. Present integration options (recommend: PR for Marcus's review; do NOT auto-merge). Update the vault `overview.md`.
+
+---
+
+## SLICE T2-F — Swap exercise media to CC-BY-SA line figures ✅ SHIPPED
+
+**Delivered:** the 46 stock photos are replaced by animated line figures on **76 of 83**
+exercises. Three PNG frames per exercise, cross-faded by a pure-CSS step loop, recoloured
+in the browser so white-on-transparent art reads on the warm-white theme.
+
+**Source (D35, corrected by D36):** npm `@bryllim/workout-guide@1.0.0` — 302 exercises ×
+3 frames. Code MIT; **artwork CC-BY-SA-4.0**. The frames are **PNG, not SVG** (D36 §1) and
+**white on transparent** (D36 §2). Everkinetic — the real SVG upstream — was cloned and
+matched head-to-head and lost on vocabulary, 34/83 vs 76/83 (D36 §3).
+
+**Licence posture (D35's hard rule, honoured):** the artwork ships **byte-identical**;
+`filter: invert(1)` recolours it at DISPLAY time only. No Adapted Material is distributed,
+so ShareAlike never reaches the app's own source. `MediaCredits` (Settings) names creator,
+source, licence-with-link and discloses the recolour. **Never pre-process the PNGs.**
+
+**What shipped**
+
+- `src/lib/catalog/name-match.ts` — the T2-A matcher extracted so both catalogs agree,
+  plus an optional alias table consulted before scoring (D37) and two real bug fixes (D38).
+- `scripts/vendor-figures.ts` — dry-run-by-default, `--user`-scoped, aborts on a dangling
+  alias. Copies frames verbatim and vendors the four licence files beside them.
+- `supabase/migrations/028_figure_sequence_media.sql` — widens the `media_type` CHECK to
+  add `'figure-sequence'` (media_path becomes a DIRECTORY of `frame-N.png`). **Applied.**
+- `ExerciseImage` — a third media model; still a server component, zero client JS.
+- `.figure-seq` in `globals.css` — the 3-frame loop + `prefers-reduced-motion` fallback.
+- `MediaCredits` + its slot in Settings — a licence obligation, not decoration.
+
+**Verified:** `verify-name-match.ts` (43 checks) · `verify-exercise-image.ts` (24 checks) ·
+all 19 verify scripts green · `ralph-verify` green · **`e2e/drive-t2f.mjs` 14/14**, which
+reads COMPUTED STYLE rather than markup: one frame opaque at a time, the loop provably
+advances (1→2→3), the invert filter really applied, every frame 200s, no-media degrades to
+nothing, reduced motion holds frame 1, 0px horizontal overflow at 390px, and all 57 distinct
+vendored figure paths serve.
+
+**Left open for Marcus's eye:** 4 exercises have no figure and keep their photo (DB
+Pullover · Jefferson Curl · Muscle Ups · Tib Raises). A few matches are deliberate
+approximations — Single Leg BB Squat → Bulgarian Split Squat, Incline Smith → Incline Bench
+Press, JM Press → Skull Crusher, Seated Ab Curl Machine → Crunch. One `--prune` run deletes
+the 45 orphaned photo JPGs once he is happy; they are deliberately still on disk.

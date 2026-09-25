@@ -52,6 +52,9 @@ supabase/.temp
 # Slice 2 — wiki source files (parsed by seed script, not tracked)
 supabase/seed/wiki/*.md
 
+# T2-A — cached third-party catalog (free-exercise-db); re-downloadable
+scripts/.cache/
+
 # Vercel
 .vercel
 .env*

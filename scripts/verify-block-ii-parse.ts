@@ -22,6 +22,7 @@ import {
   parsePlanFromWiki,
   validateTrainingPlan,
 } from "../supabase/seed/lib/methodology-rules";
+import { isTypeOnlyNote } from "../src/lib/methodology/exercise-notes";
 import type { ParsedBlock, ParsedDaySpec } from "../supabase/seed/lib/types";
 import { wikiPaths } from "../src/lib/utils/wiki-paths";
 
@@ -184,6 +185,40 @@ async function main() {
   check(
     "only the dips block is toFailure among failure blocks",
     strayFailure.map((block) => block.blockName),
+    [],
+  );
+
+  // --- (d2) T2-E: the seed can never write a type label into `notes` ---
+  // 39 of Marcus's 83 exercises carried "Compound\nCompound\nCompound" in the
+  // field the logger's exercise picker prints. Two defects made it: the plan's
+  // TYPE column reaching a free-text note, and a per-round merge that
+  // concatenated identical notes. scripts/clean-exercise-notes.ts fixes the
+  // DATA; these two checks are what stop a re-seed putting it back.
+  const allParsedExercises = spec.liftingBlocks.flatMap((block) =>
+    block.exercises.map((exercise) => ({
+      where: `${block.blockName} / ${exercise.name}`,
+      notes: exercise.notes,
+    })),
+  );
+  check(
+    "no parsed exercise carries a type-label-only note",
+    allParsedExercises
+      .filter((entry) => isTypeOnlyNote(entry.notes))
+      .map((entry) => `${entry.where}: ${JSON.stringify(entry.notes)}`),
+    [],
+  );
+  check(
+    "no parsed exercise note repeats a line (the round-merge stutter)",
+    allParsedExercises
+      .filter((entry) => {
+        const lines = entry.notes
+          .split(/\r?\n/)
+          .map((line) => line.trim().toLowerCase())
+          .filter(Boolean);
+
+        return new Set(lines).size !== lines.length;
+      })
+      .map((entry) => `${entry.where}: ${JSON.stringify(entry.notes)}`),
     [],
   );
 

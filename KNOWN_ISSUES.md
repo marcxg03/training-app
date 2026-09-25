@@ -630,6 +630,29 @@ reading a DB that lacks the columns — deletes `warmup_sets` / `working_sets` /
 `>= NaN` (always false), and failure blocks never auto-complete — the same
 lockout class as migration 023. Push the migration first, then regen.
 
+## Slice T2-A — Exercise catalog + media
+
+### 🔴 High — types.ts hand-edited AGAIN for migration 026; push 026 before any `supabase gen types` regen (D14 pattern)
+
+`src/lib/supabase/types.ts` now also carries hand-written `media_path` /
+`media_type` / `source_slug` on the `exercises` Row/Insert/Update (migration
+`026_exercise_media.sql`), for the same reason as 025: no live DB in the
+worktree. Same rule, same failure mode — **`supabase db push` migration 026
+BEFORE any `supabase gen types` regen**, or the regen silently deletes the three
+fields and `scripts/enrich-exercises.ts` stops typechecking (and any media UI
+built on top reads `undefined`). The columns are all NULLABLE and additive, so
+the migration itself is safe to apply to the populated production table.
+
+### 🟡 Medium — `is_compound` is stale DATA until `scripts/classify-compounds.ts --apply` runs (D28)
+
+Migration 002 gave `exercises.is_compound` a `DEFAULT false` and nothing ever
+backfilled it, so **every** exercise row reads as isolation. `buildE1rmSpotlights`
+and (after this slice) the per-exercise detail page both gate e1RM on the flag,
+which means the Strength/e1RM surfaces render EMPTY until the classification
+script is run against Marcus's user with `--apply`. Dry-run first. Until then
+the gate is "correct but starved" — no wrong e1RM is shown, but no right one is
+either.
+
 ## Owner-gate is UI-only until the community/admin-hub build (D24)
 
 **Status:** deferred by design (not a regression, not a cross-user breach). The S0 owner-gate (`requireOwner()`) hides the authoring PAGES from non-owners, but library/plan **mutations** are client-side Supabase calls under per-user RLS (`auth.uid() = owner_user_id`) — so an authenticated non-owner can still write **their own** private library by invoking a mutation directly. RLS silos every user (nobody can reach Marcus's data), and no "follower" users exist this build (Community is a placeholder). The product rule "followers do not author" must be enforced at the **data boundary** in the future community/admin-hub build: move authoring mutations to server actions/route handlers that `await requireOwner()`, and/or add an owner-allowlist to the write RLS policies. See DECISIONS.md D24/D25.
@@ -637,3 +660,66 @@ lockout class as migration 023. Push the migration first, then regen.
 ## activatePlan is non-atomic — a partial failure can leave ZERO active plans (S4 roast F2)
 
 **Status:** deferred (pre-existing, rare, self-healing on retry). `src/lib/plan/plan-mutations.ts` `activatePlan` runs two writes — UPDATE is_active=false on all other plans, then UPDATE is_active=true on the target — with no transaction. If the second write fails, the DB has no active plan → Today (`.eq(is_active,true).maybeSingle()`) returns null and the app looks empty. Recovery is one tap (re-tap Load re-runs deactivate-all + activate; the selector surfaces the error + guards double-submit). Proper fix: a transactional Supabase RPC that flips both in one statement (or `SELECT ... FOR UPDATE`). Not fixed in S4 (presentational slice; a prod migration should be a deliberate backend change). See FUTURE_WORK.
+
+## Slice T2-C — Body area (bodyweight + progress photos)
+
+### 🔴 Blocking-until-pushed — Migration 027 is written but NOT applied, so the photo half has never run
+
+`supabase/migrations/027_progress_photos.sql` (the `progress_photos`
+table, its RLS policies, the private `progress-photos` Storage bucket,
+and the three `storage.objects` policies) is committed but not pushed —
+the slice was explicitly not permitted to touch the live project, and a
+local Supabase stack needs Docker, which is not installed on this
+machine (no docker / colima / podman / orbstack, no local postgres).
+
+Consequence: **upload, signed-URL rendering, client-side compression,
+and delete have never executed against a real database or Storage.**
+Their pure logic is pinned by `scripts/verify-progress-photos.ts`, and
+`e2e/drive-t2c.mjs` contains the real browser checks — but it probes for
+the table + bucket and records them as SKIP rather than faking a pass.
+
+Resolve by: `supabase db push`, then re-run `node e2e/drive-t2c.mjs`
+unchanged. The probe flips and checks 5–7 execute for real. Do not
+consider the photo feature verified before that run is green.
+
+### 🟡 Medium — `src/lib/supabase/types.ts` is hand-edited for 027
+
+Same stopgap as migrations 026 / D14: there is no live DB in this
+worktree, so the `progress_photos` table is typed by hand. A
+`supabase gen types` regen against a database that has not received 027
+will delete the block again. Push 027 BEFORE any regen.
+
+### 🟢 Low — The absent-table diagnostic trips Next's dev-overlay issue counter
+
+`getProgressPhotos` logs `console.error("progress_photos missing — apply
+migration 027")` on every Progress render when the table is absent —
+deliberate, and the same contract `getBodyweightTrend` uses for 021. In
+`next dev` this registers on the red "1 Issue" overlay badge, which
+looks alarming in screenshots. It disappears once 027 is pushed. Left as
+an error (not a warn) so the same message is visible in Vercel logs if
+a deploy ever lands ahead of its migration.
+
+### 🟢 Low — No CSP today, but signed Storage URLs would need one if that changes
+
+D27 says "the CSP blocks external hosts", but there is in fact no CSP
+configured anywhere in the repo (no `next.config.mjs` headers, no
+`vercel.json`, no meta tag) — which is why the progress-photo
+thumbnails, served from the Supabase Storage host, load fine. If a CSP
+is ever added, `img-src` must include the project's Storage origin or
+every thumbnail silently renders as a zero-width image. The drive's
+`naturalWidth > 0` assertion (check 5) is what would catch it.
+
+### 🟢 Low — HEIC is refused, not converted
+
+Accepted upload types are jpeg/png/webp only, enforced client-side and
+again by the bucket's `allowed_mime_types`. Chrome cannot decode HEIC at
+all (so neither the canvas downscale nor the `<img>` would work), and
+iOS already transcodes camera captures to JPEG for web uploads. A user
+who manages to pick a HEIC from a desktop file picker gets "Use a JPEG,
+PNG, or WebP photo." rather than a conversion.
+
+### 🟢 Low — The photo timeline loads at most 60 photos, with no paging
+
+`PROGRESS_PHOTO_LIMIT = 60`. The Body area is a glance surface and
+signing N URLs is one round-trip whose cost grows with N. Paging is
+FUTURE_WORK if Marcus ever fills it.

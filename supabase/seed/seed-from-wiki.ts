@@ -9,6 +9,7 @@ import type {
   Tables,
   TablesInsert,
 } from "../../src/lib/supabase/types";
+import { mergeExerciseNotes } from "../../src/lib/methodology/exercise-notes";
 import { wikiPaths } from "../../src/lib/utils/wiki-paths";
 import { parsePlanFromWiki } from "./lib/methodology-rules";
 import { bodyweightExerciseNames } from "./lib/bodyweight-exercises";
@@ -452,14 +453,17 @@ function collectExercises(liftingBlocks: ParsedBlock[]) {
       }
 
       summary.exercisesDeduped += 1;
-      const mergedNotes =
-        exercise.notes && existing.notes && exercise.notes !== existing.notes
-          ? `${existing.notes}\n${exercise.notes}`
-          : existing.notes || exercise.notes;
+      // The second merge point (the first is the per-block one in
+      // methodology-rules.ts). Its old `!==` guard only compared the two values
+      // WHOLE, so merging an already-stuttered "Compound\nCompound" with a fresh
+      // "Compound" still appended a third copy — the last step that built the
+      // junk Marcus saw in the picker (T2-E). Line-level de-duplication closes
+      // it for good.
+      const mergedNotes = mergeExerciseNotes(existing.notes, exercise.notes);
 
       exercisesByName.set(exercise.name, {
         ...existing,
-        notes: mergedNotes.trim(),
+        notes: mergedNotes,
         prescribedMin: Math.min(existing.prescribedMin, exercise.prescribedMin),
         prescribedMax: Math.max(existing.prescribedMax, exercise.prescribedMax),
         muscleGroups: [

@@ -313,17 +313,26 @@ export type Database = {
           },
         ];
       };
+      // HAND-EDITED for migration 026 (media_path / media_type / source_slug),
+      // same stopgap as D14: there is no live DB in this worktree, so the three
+      // columns are typed by hand. Migration 026 MUST be `supabase db push`ed
+      // BEFORE any `supabase gen types` regen — a regen against a database that
+      // has not received 026 deletes these three fields again. See
+      // KNOWN_ISSUES.md ("hand-edited generated types").
       exercises: {
         Row: {
           created_at: string;
           exercise_id: string;
           is_bodyweight: boolean;
           is_compound: boolean;
+          media_path: string | null;
+          media_type: string | null;
           muscle_groups: string[];
           name: string;
           notes: string;
           prescribed_max: number;
           prescribed_min: number;
+          source_slug: string | null;
           updated_at: string;
           user_id: string;
         };
@@ -332,11 +341,14 @@ export type Database = {
           exercise_id?: string;
           is_bodyweight?: boolean;
           is_compound?: boolean;
+          media_path?: string | null;
+          media_type?: string | null;
           muscle_groups?: string[];
           name: string;
           notes?: string;
           prescribed_max: number;
           prescribed_min: number;
+          source_slug?: string | null;
           updated_at?: string;
           user_id: string;
         };
@@ -345,11 +357,14 @@ export type Database = {
           exercise_id?: string;
           is_bodyweight?: boolean;
           is_compound?: boolean;
+          media_path?: string | null;
+          media_type?: string | null;
           muscle_groups?: string[];
           name?: string;
           notes?: string;
           prescribed_max?: number;
           prescribed_min?: number;
+          source_slug?: string | null;
           updated_at?: string;
           user_id?: string;
         };
@@ -564,6 +579,39 @@ export type Database = {
           goal_mode?: Database["public"]["Enums"]["goal_mode_enum"];
           height_cm?: number | null;
           updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      // HAND-EDITED for migration 027 (progress_photos), same stopgap as D14 /
+      // migration 026: there is no live DB in this worktree, so the table is
+      // typed by hand. Migration 027 MUST be `supabase db push`ed BEFORE any
+      // `supabase gen types` regen — a regen against a database that has not
+      // received 027 deletes this table again. See KNOWN_ISSUES.md
+      // ("hand-edited generated types").
+      progress_photos: {
+        Row: {
+          created_at: string;
+          note: string;
+          photo_id: string;
+          storage_path: string;
+          taken_on: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          note?: string;
+          photo_id?: string;
+          storage_path: string;
+          taken_on: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          note?: string;
+          photo_id?: string;
+          storage_path?: string;
+          taken_on?: string;
           user_id?: string;
         };
         Relationships: [];
