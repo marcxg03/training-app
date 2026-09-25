@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarDays,
+  Dumbbell,
   FolderCog,
   Gauge,
   Smartphone,
@@ -33,6 +35,8 @@ const ICONS: Record<string, LucideIcon> = {
   folder: FolderCog,
   chart: BarChart3,
   users: Users,
+  dumbbell: Dumbbell,
+  calendar: CalendarDays,
 };
 
 export function AdminSidebar() {

@@ -168,7 +168,7 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Link
-            href="/plan/edit"
+            href="/admin/schedule"
             className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent/40"
           >
             <CalendarDays className="h-5 w-5 shrink-0 text-accent" />

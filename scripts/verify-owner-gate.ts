@@ -134,9 +134,30 @@ check(
   true,
 );
 check(
-  "the hub has the sections T3-A built",
+  "the hub has the sections T3-A/T3-B built",
   [...hubPages].sort(),
-  ["analytics", "members", "programs"],
+  ["analytics", "members", "programs", "schedule"],
+);
+// T3-B moved the authoring surfaces into the gated group too. These keep
+// their own URLs (`/library/**`), so they are NOT under `admin/` and would
+// slip past the loop above — assert them explicitly.
+check(
+  "the Library authoring surface is inside the gated group",
+  existsSync(join(repoRoot, OWNER_GROUP, "library/layout.tsx")),
+  true,
+);
+check(
+  "the Library no longer lives in the member group",
+  existsSync(join(repoRoot, "src/app/(app)/library")),
+  false,
+);
+// The schedule editors used to sit at /plan/edit, where the member group's
+// dynamic /plan/[day] route ALSO matched them (D45). Assert the collision
+// cannot come back.
+check(
+  "no owner route group re-creates a /plan surface",
+  existsSync(join(repoRoot, OWNER_GROUP, "plan")),
+  false,
 );
 
 if (failures > 0) {

@@ -723,3 +723,38 @@ PNG, or WebP photo." rather than a conversion.
 `PROGRESS_PHOTO_LIMIT = 60`. The Body area is a glance surface and
 signing N URLs is one round-trip whose cost grows with N. Paging is
 FUTURE_WORK if Marcus ever fills it.
+
+## Slice T3-B — Admin hub
+
+### 🟡 Medium (harness, not product) — admin-hub screenshots come back blank from inside a drive
+
+`shoot()` captures of `/library/**` rendered in the admin-hub shell return an
+image whose entire content area is white, while:
+
+- the DOM is correct (`main.innerText` = 90 chars: the eyebrow, the heading,
+  the five tabs, the empty state and the Add button),
+- `getBoundingClientRect()` on `main` and its first child are correct
+  (`main` 1200×900 at x=240; content 1120×290 at 280,40),
+- the heading reports `state: "visible"` to Playwright,
+- and **the same screen captures correctly from a standalone script**, both by
+  direct navigation and via the same click path.
+
+Tried and did NOT fix it: `fullPage: false` (the hub has an `lg:h-screen`
+fixed rail, so a fullPage capture was the first suspect), waiting on a visible
+locator, two `requestAnimationFrame`s, an 800 ms settle, and taking the shot on
+a brand-new page in the same context. The capture is freshly written each run
+(verified by mtime), so it is not a stale file.
+
+**Impact: none on the product.** Every behavioural assertion in
+`e2e/drive-t3a.mjs` passes against the real click path — chrome, active nav
+item, content length, and the absence of the member tab bar. What is lost is
+the _visual_ evidence for this one screen; the Overview, not-built and mobile
+captures in the same drive are fine.
+
+**Workaround if you need the image:** navigate to `/library/lifting` directly
+in a standalone Playwright script with `fullPage: false`.
+
+**Next step when someone picks this up:** diff the standalone repro against the
+drive's context setup — the only material differences left are the number of
+prior navigations on the context and the fact that the drive's browser is
+shared with the non-owner session.

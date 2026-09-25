@@ -77,6 +77,33 @@ check(
   false,
 );
 
+// --- the authoring surfaces at their own URLs (T3-B) --------------------
+// /library/** and /plan/edit are part of the hub but keep their historical
+// paths, because a route group never changes a URL and those paths are linked
+// from elsewhere. The sidebar has to claim them or the owner editing an
+// exercise sees NO active section and the builder looks like it fell away.
+check("library is a section", isAdminSectionActive("/library", "/library"), true); // prettier-ignore
+check("a library child is claimed", isAdminSectionActive("/library/exercises", "/library"), true); // prettier-ignore
+check("a deep library child is claimed", isAdminSectionActive("/library/lifting/blocks/abc/edit", "/library"), true); // prettier-ignore
+
+// The Schedule editors moved to /admin/schedule/<day> in T3-B (D45), so they
+// need no special matching — but the MEMBER plan routes must still never be
+// claimed by any hub section, which is what the old wildcard existed to
+// guarantee. Assert that directly instead.
+for (const memberRoute of ["/plan", "/plan/mon", "/today", "/progress"]) {
+  check(
+    `no hub section claims the member route ${memberRoute}`,
+    ADMIN_SECTIONS.filter((s) => isAdminSectionActive(memberRoute, s.href))
+      .length,
+    0,
+  );
+}
+check(
+  "schedule claims its own day editor",
+  isAdminSectionActive("/admin/schedule/mon", "/admin/schedule"),
+  true,
+);
+
 // --- exactly one active section, on every hub route ---------------------
 // The invariant the sidebar depends on. Asserted over every declared section
 // plus a child of each, so adding a section that breaks it fails here.
@@ -86,6 +113,8 @@ const ROUTES = [
     s.href,
     `${s.href}/child`,
   ]),
+  "/admin/schedule/mon",
+  "/library/exercises",
 ];
 
 for (const route of ROUTES) {
@@ -104,10 +133,19 @@ check("activeAdminSection is null outside the hub", activeAdminSection("/today")
 
 // --- the section list itself --------------------------------------------
 check("Overview is first", ADMIN_SECTIONS[0].href, "/admin");
+// Not every section lives under /admin any more (T3-B): the authoring
+// surfaces keep their own URLs. Assert the set explicitly instead.
 check(
-  "every section href is under /admin",
-  ADMIN_SECTIONS.every((s) => s.href === "/admin" || s.href.startsWith("/admin/")), // prettier-ignore
-  true,
+  "sections cover the hub plus the authoring surfaces",
+  ADMIN_SECTIONS.map((s) => s.href),
+  [
+    "/admin",
+    "/admin/programs",
+    "/library",
+    "/admin/schedule",
+    "/admin/analytics",
+    "/admin/members",
+  ],
 );
 check(
   "hrefs are unique",
@@ -124,6 +162,16 @@ check(
 check(
   "Programs is not marked soon",
   ADMIN_SECTIONS.find((s) => s.href === "/admin/programs")?.soon,
+  undefined,
+);
+check(
+  "Library is not marked soon (it is fully built)",
+  ADMIN_SECTIONS.find((s) => s.href === "/library")?.soon,
+  undefined,
+);
+check(
+  "Schedule is not marked soon",
+  ADMIN_SECTIONS.find((s) => s.href === "/admin/schedule")?.soon,
   undefined,
 );
 

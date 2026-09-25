@@ -15,7 +15,7 @@ export type AdminSection = {
   /** One line under the label in the sidebar — what the section is FOR. */
   hint: string;
   /** Lucide icon name, resolved by the component (keeps this module pure). */
-  icon: "gauge" | "folder" | "chart" | "users";
+  icon: "gauge" | "folder" | "chart" | "users" | "dumbbell" | "calendar";
   /** Not yet built — rendered muted, with a "soon" chip. */
   soon?: boolean;
 };
@@ -42,6 +42,18 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "folder",
   },
   {
+    href: "/library",
+    label: "Library",
+    hint: "Exercises, blocks, workouts",
+    icon: "dumbbell",
+  },
+  {
+    href: "/admin/schedule",
+    label: "Schedule",
+    hint: "What lands on which day",
+    icon: "calendar",
+  },
+  {
     href: "/admin/analytics",
     label: "Analytics",
     hint: "Training health",
@@ -60,11 +72,19 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 /**
  * Is `href` the active section for `pathname`?
  *
- * Exact match for the hub root, prefix match for everything else. Without the
- * root special-case "/admin" would light up on every child route and the
- * sidebar would show two active items at once — the same class of bug
- * isTabActive() exists to prevent on mobile, but it cannot be reused here
- * because it is deliberately prefix-only.
+ * Exact match for the hub root, prefix match for every other section.
+ *
+ * The root special-case is the load-bearing part: without it "/admin" lights
+ * up on every child route and the sidebar shows two active items at once. The
+ * mobile `isTabActive()` helper cannot be reused here because it is
+ * deliberately prefix-only.
+ *
+ * T3-B NOTE: an earlier cut of this carried an `owns` field with a
+ * segment-wildcard matcher, so the Schedule section could claim
+ * `/plan/<day>/edit`. That whole mechanism is gone, because the editors moved
+ * to `/admin/schedule/<day>` instead — see D45. The plain prefix rule now
+ * covers every section, including `/library`, which is the only one that does
+ * not live under `/admin`.
  */
 export function isAdminSectionActive(pathname: string, href: string): boolean {
   if (href === "/admin") {

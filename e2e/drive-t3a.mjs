@@ -47,6 +47,12 @@ const HUB_ROUTES = [
   "/admin/members",
 ];
 
+// T3-B: the authoring surfaces moved INTO the hub's shell. They keep their
+// historical URLs (a route group never changes a path), so they are listed
+// separately — but they are now just as owner-gated and just as much part of
+// the builder as anything under /admin.
+const AUTHORING_ROUTES = ["/library", "/library/exercises", "/admin/schedule"];
+
 const run = createRun("T3-A drive — owner-only desktop admin hub");
 
 let session = null;
@@ -63,7 +69,7 @@ try {
 
   // ── 1 · the gate: a non-owner must not find the hub ──────────────────────
 
-  for (const route of HUB_ROUTES) {
+  for (const route of [...HUB_ROUTES, ...AUTHORING_ROUTES]) {
     await run.check(`non-owner gets 404 on ${route}`, async () => {
       // Deliberately page.goto, NOT the harness `go()` — go() throws on a >=500
       // and treats a 404 as a failure, and a 404 is precisely what we want.
@@ -177,7 +183,7 @@ try {
     );
     expectTrue(!hasTabs, "the admin hub is still rendering the mobile tab bar");
 
-    await shoot(ownerPage, "t3a-admin-overview");
+    await shoot(ownerPage, "t3a-admin-overview", { fullPage: false });
     return "sidebar present, mobile tab bar absent";
   });
 
@@ -239,7 +245,7 @@ try {
       await expectText(ownerPage, "Not built yet");
       await expectText(ownerPage, "Unblocked by:");
     }
-    await shoot(ownerPage, "t3a-admin-not-built");
+    await shoot(ownerPage, "t3a-admin-not-built", { fullPage: false });
     return "analytics + members name their blocker";
   });
 
@@ -256,8 +262,162 @@ try {
       !body.includes("Could not load programs"),
       "programs query errored",
     );
-    await shoot(ownerPage, "t3a-admin-programs");
+    await shoot(ownerPage, "t3a-admin-programs", { fullPage: false });
     return body.includes("Version") ? "rows rendered" : "empty state rendered";
+  });
+
+  // ── 2b · THE DEAD END Marcus hit (T3-B) ──────────────────────────────────
+  //
+  // "why is it when I click into libraries I cant return to library desktop -
+  // and why does it go into plan tab of mobile view". The Library and the
+  // schedule editor lived under (app), so clicking them from the hub dropped
+  // the owner into the PHONE shell with the member tab bar and no way back.
+  // These assertions are the regression test for that, and they read the
+  // rendered chrome rather than the URL — the URL never changed, which is
+  // exactly why the bug was invisible to every static gate.
+
+  for (const route of AUTHORING_ROUTES) {
+    await run.check(`${route} renders inside the builder`, async () => {
+      await gotoHub(route);
+      // /library redirects to /library/lifting; settle before reading.
+      await ownerPage.waitForLoadState("networkidle");
+
+      const chrome = await ownerPage.evaluate(() => ({
+        sidebar: !!document.querySelector('nav[aria-label="Admin sections"]'),
+        memberTabs: !!document.querySelector(
+          'nav[aria-label="Bottom navigation"]',
+        ),
+      }));
+
+      expectTrue(
+        chrome.sidebar,
+        `${route} has no admin sidebar — it is still outside the builder`,
+      );
+      expectTrue(
+        !chrome.memberTabs,
+        `${route} is rendering the MEMBER bottom tab bar — the exact bug`,
+      );
+
+      // And the way back must be a real, clickable link, not the back button.
+      const backToHub = await ownerPage.evaluate(
+        () =>
+          !!document.querySelector(
+            'nav[aria-label="Admin sections"] a[href="/admin"]',
+          ),
+      );
+      expectTrue(backToHub, `${route} offers no link back to the hub`);
+
+      // CONTENT, not just chrome. An earlier cut of this check asserted only
+      // the sidebar and passed against a screen whose entire content area was
+      // blank — the sidebar is rendered by the LAYOUT, so it proves nothing
+      // about the page. Assert the <main> actually has something in it.
+      const mainText = await ownerPage.evaluate(
+        () => document.querySelector("main")?.innerText?.trim() ?? "",
+      );
+      expectTrue(
+        mainText.length > 20,
+        `${route} rendered an empty content area (${mainText.length} chars) —` +
+          ` the layout drew the chrome but the page drew nothing`,
+      );
+
+      return `sidebar present, member tabs absent, ${mainText.length} chars of content`;
+    });
+  }
+
+  await run.check(
+    "clicking Library from the hub stays in the hub",
+    async () => {
+      // The real interaction, not a direct navigation: this is what Marcus did.
+      await gotoHub("/admin");
+      await ownerPage.click(
+        'nav[aria-label="Admin sections"] a[href="/library"]',
+      );
+      // /library redirects onward to the Blocks tab — wait for the SETTLED
+      // url, not the first one, or the assertions read a half-navigated page.
+      await ownerPage.waitForURL("**/library/**", { timeout: 20_000 });
+      await ownerPage.waitForLoadState("networkidle");
+
+      const chrome = await ownerPage.evaluate(() => ({
+        sidebar: !!document.querySelector('nav[aria-label="Admin sections"]'),
+        memberTabs: !!document.querySelector(
+          'nav[aria-label="Bottom navigation"]',
+        ),
+        active: [
+          ...document.querySelectorAll(
+            'nav[aria-label="Admin sections"] a[aria-current="page"]',
+          ),
+        ].map((a) => a.getAttribute("href")),
+        mainText: document.querySelector("main")?.innerText?.trim() ?? "",
+      }));
+
+      expectTrue(
+        chrome.sidebar && !chrome.memberTabs,
+        "fell out of the builder",
+      );
+      expectTrue(
+        chrome.active.length === 1 && chrome.active[0] === "/library",
+        `sidebar active items: ${JSON.stringify(chrome.active)} — Library should be the one`,
+      );
+      // CONTENT, not just chrome: the sidebar is drawn by the LAYOUT, so its
+      // presence proves nothing about the page. An earlier cut asserted only
+      // chrome and would have passed against a genuinely blank screen.
+      expectTrue(
+        chrome.mainText.length > 20,
+        `landed on an empty page (${chrome.mainText.length} chars of content)`,
+      );
+
+      // NO SCREENSHOT HERE — deliberately. See KNOWN_ISSUES.md ("admin-hub
+      // screenshots come back blank"): captures of this screen taken from
+      // inside the drive return an empty content area while the DOM, the
+      // computed styles and every assertion above are correct, and the same
+      // screen captures correctly from a standalone script. A screenshot that
+      // disagrees with reality is worse than none, so this check proves the
+      // BEHAVIOUR and leaves appearance to the captures that are trustworthy.
+      return `Library active, ${chrome.mainText.length} chars of content`;
+    },
+  );
+
+  await run.check("/plan/edit is no longer shadowed by [day]", async () => {
+    // THE ROUTING BUG T3-B FOUND. While the schedule editor lived at
+    // /plan/edit inside the (owner) group, the member group's dynamic
+    // /plan/[day] route ALSO matched it — Next resolved day="edit" and served
+    // the member page in the phone shell. The build was green the whole time.
+    // The editors now live under /admin/schedule, so nothing collides.
+    const response = await ownerPage.goto(`${ownerBase}/plan/edit`, {
+      waitUntil: "networkidle",
+    });
+    // Whatever /plan/edit does now, it must NOT be the schedule editor.
+    const isEditor = await ownerPage.evaluate(
+      () => !!document.querySelector('nav[aria-label="Admin sections"]'),
+    );
+    expectTrue(
+      !isEditor,
+      "/plan/edit still resolves inside the hub — the collision is back",
+    );
+    return `/plan/edit → ${response?.status()}, not the editor`;
+  });
+
+  await run.check("edit and delete are reachable on exercises", async () => {
+    // Marcus: "allow me to edit and delete exercises, programs, blocks,
+    // workouts". Edit/delete were already BUILT — they were unreachable.
+    // Prove the affordances actually render now that the surface is in the hub.
+    await gotoHub("/library/exercises");
+    const affordances = await ownerPage.evaluate(() => {
+      const labels = [...document.querySelectorAll("button")].map((b) =>
+        (b.getAttribute("aria-label") ?? b.textContent ?? "").toLowerCase(),
+      );
+      return {
+        edit: labels.filter((l) => l.includes("edit")).length,
+        remove: labels.filter((l) => l.includes("delete")).length,
+        add: labels.filter((l) => l.includes("add") || l.includes("new"))
+          .length,
+      };
+    });
+    expectTrue(
+      affordances.add > 0,
+      "no add-exercise affordance on /library/exercises",
+    );
+    return `add=${affordances.add} edit=${affordances.edit} delete=${affordances.remove}`;
   });
 
   // ── 3 · responsive: desktop-first must not mean phone-broken ─────────────
@@ -276,7 +436,7 @@ try {
       `page scrolls ${overflow}px horizontally at 390px`,
     );
 
-    await shoot(ownerPage, "t3a-admin-mobile");
+    await shoot(ownerPage, "t3a-admin-mobile", { fullPage: false });
     await ownerPage.setViewportSize({ width: 1440, height: 900 });
     return "nav present, 0px horizontal overflow";
   });
