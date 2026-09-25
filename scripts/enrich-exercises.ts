@@ -43,6 +43,7 @@ import {
   explainCompoundClassification,
   normalizeExerciseName,
 } from "../src/lib/methodology/compound-classification";
+import { buildIndex, findMatch } from "../src/lib/catalog/name-match";
 
 const CATALOG_URL =
   "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
@@ -193,237 +194,12 @@ async function loadCatalog(refresh: boolean): Promise<CatalogEntry[]> {
 }
 
 // --- matching -----------------------------------------------------------
-
-// Marcus's names are gym shorthand ("BB RDL", "SA Cable Kneeling Pulldown");
-// the catalog writes them out ("Romanian Deadlift"). Expand the shorthand
-// before matching or almost nothing lines up.
-const TOKEN_EXPANSIONS: Record<string, string[]> = {
-  bb: ["barbell"],
-  db: ["dumbbell"],
-  dbs: ["dumbbell"],
-  bw: ["bodyweight"],
-  sa: ["single", "arm"],
-  ohp: ["overhead", "press"],
-  rdl: ["romanian", "deadlift"],
-  dl: ["deadlift"],
-  wg: ["wide", "grip"],
-  cg: ["close", "grip"],
-};
-
-// Dropped before scoring: grammar words present in one vocabulary and absent
-// from the other far more often than they are meaningful.
-const STOP_TOKENS = new Set([
-  "the",
-  "a",
-  "an",
-  "and",
-  "or",
-  "with",
-  "of",
-  "for",
-]);
-
-// Trailing equipment/qualifier nouns. "Rear Delt Fly Machine" and "Cable Rear
-// Delt Fly" are the same movement, so the head noun must be read past these.
-const TRAILING_QUALIFIERS = new Set([
-  "machine",
-  "band",
-  "attachment",
-  "version",
-  "variation",
-  "alternative",
-  "bar",
-  "cable",
-  "dumbbell",
-  "barbell",
-  "bodyweight",
-]);
-
-const HEAD_SYNONYMS: Record<string, string> = {
-  flye: "fly",
-  flie: "fly",
-  chin: "pullup",
-  chinup: "pullup",
-};
-
-// Crude singular stem — enough to make "Dips"/"Dip", "Lunges"/"Lunge",
-// "Raises"/"Raise", "Flyes"/"Fly" agree. Never touches "press"/"triceps"-style
-// double-s or short tokens.
-function stem(token: string): string {
-  if (token.endsWith("ies") && token.length > 4) {
-    return `${token.slice(0, -3)}y`;
-  }
-
-  if (token.endsWith("ss")) {
-    return token;
-  }
-
-  if (
-    token.endsWith("es") &&
-    token.length > 4 &&
-    (token.endsWith("yes") || token.endsWith("ches") || token.endsWith("shes"))
-  ) {
-    return token.slice(0, -2);
-  }
-
-  if (token.endsWith("s") && token.length > 3) {
-    return token.slice(0, -1);
-  }
-
-  return token;
-}
-
-function tokenize(name: string): string[] {
-  return normalizeExerciseName(name)
-    .split(" ")
-    .filter((token) => token.length > 0 && !STOP_TOKENS.has(token))
-    .flatMap((token) => TOKEN_EXPANSIONS[token] ?? [token])
-    .map(stem);
-}
-
-function matchKey(name: string): string {
-  return tokenize(name).join(" ");
-}
-
-// The movement noun — the last token that is not an equipment qualifier. Two
-// names may only be matched if these agree. This is the guard that stops
-// "Seated Cable Row" landing on "Cable Seated Crunch" and "SA Cable Kneeling
-// Pulldown" landing on "Single-Arm Cable Crossover": a high word-overlap score
-// alone is not evidence that two exercises are the same movement.
-function headToken(tokens: string[]): string {
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const token = tokens[i];
-
-    if (!TRAILING_QUALIFIERS.has(token)) {
-      return HEAD_SYNONYMS[token] ?? token;
-    }
-  }
-
-  const last = tokens[tokens.length - 1] ?? "";
-
-  return HEAD_SYNONYMS[last] ?? last;
-}
-
-// IDF over the catalog's own names. Plain Dice treats "barbell" and "romanian"
-// as equally informative, which is how "BB Romanian Deadlift" tied onto
-// "Barbell Deadlift" instead of "Romanian Deadlift". Weighting by rarity picks
-// the distinctive word.
-function buildIdf(catalog: CatalogEntry[]): (token: string) => number {
-  const documentFrequency = new Map<string, number>();
-
-  for (const entry of catalog) {
-    for (const token of new Set(tokenize(entry.name))) {
-      documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
-    }
-  }
-
-  const total = catalog.length;
-
-  return (token: string) =>
-    Math.log((total + 1) / ((documentFrequency.get(token) ?? 0) + 1)) + 1;
-}
-
-// IDF-weighted Sørensen–Dice over token SETS. Order-insensitive ("Bent Over BB
-// Row" vs "Barbell Bent Over Row") and length-tolerant. No dependency.
-function weightedDice(
-  left: string[],
-  right: string[],
-  idf: (token: string) => number,
-): number {
-  const a = new Set(left);
-  const b = new Set(right);
-
-  if (a.size === 0 || b.size === 0) {
-    return 0;
-  }
-
-  let overlap = 0;
-  let weightA = 0;
-  let weightB = 0;
-
-  for (const token of a) {
-    weightA += idf(token);
-
-    if (b.has(token)) {
-      overlap += idf(token);
-    }
-  }
-
-  for (const token of b) {
-    weightB += idf(token);
-  }
-
-  return (2 * overlap) / (weightA + weightB);
-}
-
-type Match = {
-  entry: CatalogEntry;
-  score: number;
-  how: "exact" | "fuzzy" | "none";
-};
-
-type CatalogIndex = {
-  entries: { entry: CatalogEntry; tokens: string[]; head: string }[];
-  exact: Map<string, CatalogEntry>;
-  idf: (token: string) => number;
-};
-
-function buildIndex(catalog: CatalogEntry[]): CatalogIndex {
-  const exact = new Map<string, CatalogEntry>();
-  const entries = catalog.map((entry) => {
-    const tokens = tokenize(entry.name);
-    const key = tokens.join(" ");
-
-    if (!exact.has(key)) {
-      exact.set(key, entry);
-    }
-
-    return { entry, tokens, head: headToken(tokens) };
-  });
-
-  return { entries, exact, idf: buildIdf(catalog) };
-}
-
-function findMatch(
-  name: string,
-  index: CatalogIndex,
-  minScore: number,
-): Match | null {
-  const exact = index.exact.get(matchKey(name));
-
-  if (exact) {
-    return { entry: exact, score: 1, how: "exact" };
-  }
-
-  const tokens = tokenize(name);
-  const head = headToken(tokens);
-  let best: CatalogEntry | null = null;
-  let bestScore = 0;
-
-  for (const candidate of index.entries) {
-    if (candidate.head !== head) {
-      continue;
-    }
-
-    const score = weightedDice(tokens, candidate.tokens, index.idf);
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = candidate.entry;
-    }
-  }
-
-  if (best === null) {
-    return null;
-  }
-
-  if (bestScore >= minScore) {
-    return { entry: best, score: bestScore, how: "fuzzy" };
-  }
-
-  // Return the near-miss so the unmatched report can show what it almost hit.
-  return { entry: best, score: bestScore, how: "none" };
-}
+//
+// EXTRACTED IN T2-F to src/lib/catalog/name-match.ts so the figure catalog
+// (scripts/vendor-figures.ts) matches by exactly the same rules. The guards
+// that live there — the head-noun gate, the IDF weighting, the singular
+// stemmer — were all hardened against false positives found in THIS script's
+// dry-runs; scripts/verify-name-match.ts pins each one.
 
 // --- media --------------------------------------------------------------
 
@@ -481,7 +257,9 @@ type Plan = {
   row: ExerciseRow;
   entry: CatalogEntry;
   score: number;
-  how: "exact" | "fuzzy";
+  // "alias" is reachable only when a caller passes an alias table; this
+  // script does not, but the shared matcher's type includes it (T2-F).
+  how: "exact" | "alias" | "fuzzy";
   sourceSlug: string;
   d28Compound: boolean;
   d28Rule: string;

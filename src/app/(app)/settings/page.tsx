@@ -9,6 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { MediaCredits } from "@/components/shared/MediaCredits";
 import { isOwner } from "@/lib/auth/owner";
 import { createClient } from "@/lib/supabase/server";
 
@@ -111,6 +112,8 @@ export default async function SettingsPage() {
           </nav>
         </section>
       ) : null}
+
+      <MediaCredits />
 
       <div className="pt-2">
         <SignOutButton userId={user.id} />

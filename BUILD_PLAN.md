@@ -94,19 +94,43 @@ Whole-app e2e on the live authenticated app (test user, Block II seeded): open e
 
 ---
 
-## SLICE T2-F — Swap exercise media to CC-BY-SA vector line figures (NEXT)
+## SLICE T2-F — Swap exercise media to CC-BY-SA line figures ✅ SHIPPED
 
-**Delivers:** the stock photos vendored in T2-A are replaced by clean vector line figures, animated as a 3-frame loop, with the attribution CC-BY-SA requires.
+**Delivered:** the 46 stock photos are replaced by animated line figures on **76 of 83**
+exercises. Three PNG frames per exercise, cross-faded by a pure-CSS step loop, recoloured
+in the browser so white-on-transparent art reads on the warm-white theme.
 
-**Source (D35):** `bryllim/workout-guide` — 302 exercises, 3 transparent 512×512 SVG frames each (npm `@bryllim/workout-guide`; code MIT, **artwork CC-BY-SA-4.0**).
+**Source (D35, corrected by D36):** npm `@bryllim/workout-guide@1.0.0` — 302 exercises ×
+3 frames. Code MIT; **artwork CC-BY-SA-4.0**. The frames are **PNG, not SVG** (D36 §1) and
+**white on transparent** (D36 §2). Everkinetic — the real SVG upstream — was cloned and
+matched head-to-head and lost on vocabulary, 34/83 vs 76/83 (D36 §3).
 
-**Approach:**
-- Fetch/cache the catalog; name-match Marcus's 83 exercises (REUSE the hardened matcher from `scripts/enrich-exercises.ts` — singular stemming + IDF weighting + head-noun gate; it already caught false positives like `Seated Cable Row → Cable Seated Crunch`). Print unmatched for review; keep the ≥0.65 threshold lesson from T2-A.
-- Vendor the 3 SVG frames per matched exercise into `public/exercises/` (same-origin, CSP-clean). Check for and strip nothing — see the license rule.
-- Media model: `media_type` gains `'svg-sequence'` (or store the frame basename + count). Keep `media_path` pluggable per D27 so Marcus's own filmed clips can still replace any single exercise later.
-- Render: extend `src/components/shared/ExerciseImage.tsx` to cycle the 3 frames on a slow loop (CSS animation or a tiny client component; prefers-reduced-motion must fall back to a single static frame). Must still degrade to nothing when an exercise has no media.
-- **Attribution (REQUIRED by CC-BY-SA):** a visible credit — e.g. on the exercise detail near the figure and/or a credits line in Settings — naming the source + license with a link. Do NOT modify the SVG artwork.
-- Remove the now-unused photo JPGs from `public/exercises/` for exercises that get an SVG (keep any exercise whose only media is a photo until it has a replacement, or clear it — Marcus's call in the dry-run).
+**Licence posture (D35's hard rule, honoured):** the artwork ships **byte-identical**;
+`filter: invert(1)` recolours it at DISPLAY time only. No Adapted Material is distributed,
+so ShareAlike never reaches the app's own source. `MediaCredits` (Settings) names creator,
+source, licence-with-link and discloses the recolour. **Never pre-process the PNGs.**
 
-**DoD:** matched exercises show an animated line figure in the logger picker + exercise detail; unmatched degrade cleanly; attribution visible; artwork unmodified; reduced-motion respected.
-**Verify:** test-first pure helpers (frame-path building, match scoring reuse); **mandatory browser drive `e2e/drive-t2f.mjs`** (D32) — figure animates, reduced-motion shows a static frame, null media degrades, attribution renders, no horizontal overflow at 390px; plus a t2d/t2e regression run. 17+ verify scripts + ralph-verify GREEN.
+**What shipped**
+
+- `src/lib/catalog/name-match.ts` — the T2-A matcher extracted so both catalogs agree,
+  plus an optional alias table consulted before scoring (D37) and two real bug fixes (D38).
+- `scripts/vendor-figures.ts` — dry-run-by-default, `--user`-scoped, aborts on a dangling
+  alias. Copies frames verbatim and vendors the four licence files beside them.
+- `supabase/migrations/028_figure_sequence_media.sql` — widens the `media_type` CHECK to
+  add `'figure-sequence'` (media_path becomes a DIRECTORY of `frame-N.png`). **Applied.**
+- `ExerciseImage` — a third media model; still a server component, zero client JS.
+- `.figure-seq` in `globals.css` — the 3-frame loop + `prefers-reduced-motion` fallback.
+- `MediaCredits` + its slot in Settings — a licence obligation, not decoration.
+
+**Verified:** `verify-name-match.ts` (43 checks) · `verify-exercise-image.ts` (24 checks) ·
+all 19 verify scripts green · `ralph-verify` green · **`e2e/drive-t2f.mjs` 14/14**, which
+reads COMPUTED STYLE rather than markup: one frame opaque at a time, the loop provably
+advances (1→2→3), the invert filter really applied, every frame 200s, no-media degrades to
+nothing, reduced motion holds frame 1, 0px horizontal overflow at 390px, and all 57 distinct
+vendored figure paths serve.
+
+**Left open for Marcus's eye:** 4 exercises have no figure and keep their photo (DB
+Pullover · Jefferson Curl · Muscle Ups · Tib Raises). A few matches are deliberate
+approximations — Single Leg BB Squat → Bulgarian Split Squat, Incline Smith → Incline Bench
+Press, JM Press → Skull Crusher, Seated Ab Curl Machine → Crunch. One `--prune` run deletes
+the 45 orphaned photo JPGs once he is happy; they are deliberately still on disk.
