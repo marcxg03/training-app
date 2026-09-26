@@ -779,3 +779,30 @@ while a dev server is up.**
 
 Every drive passes individually on a fresh server. If a drive fails in a batch,
 re-run it alone on a clean server before believing it.
+
+### 🟡 Medium — screens still take ~900ms to fill (a dozen sequential Supabase hops)
+
+T3-D removed the DEAD AIR (a tap now paints in ~140ms instead of ~920ms of
+frozen previous screen) but did not make the screens faster. Content still
+arrives at ~900–950ms, and the cause is measured, not guessed:
+
+- a production build is **no faster** than dev (1005ms vs 817ms on `/plan`),
+  so this was never a dev-mode artifact;
+- a single Supabase round-trip from here is **76ms median**;
+- so ~900ms is roughly **a dozen sequential round-trips per screen**.
+
+`/today` and `/plan` each have 11 `await`s with only one `Promise.all` between
+them; `getAppTimezone()` is already `cache()`d and there is only one
+`auth.getUser()` per render, so those are not the cost — it is the data
+queries, run one after another where many are independent.
+
+**The fix is a query-layer pass, not a patch:** batch independent reads into
+`Promise.all`, collapse the per-row follow-up queries in
+`src/lib/history/queries.ts` (27 query call sites) and
+`src/lib/nutrition/queries.ts` (12) into joined selects, and consider a
+PostgREST nested select for the today/plan projections the way
+`getProgramList` already does. Budget: get content under ~400ms.
+
+Not urgent for solo use now that the dead air is gone, and it does not block
+distributing to friends — but it is the single biggest remaining quality gap
+in the member app, and it gets worse on a phone on cellular.
