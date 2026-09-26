@@ -17,6 +17,10 @@ type PlanEditFormProps = {
   data: PlanEditData;
 };
 
+// T3-C: save and cancel used to `router.push("/plan")` — a MEMBER route —
+// which dropped the owner out of the builder with no way back, the same dead
+// end D44 fixed for the Library. They now return to the program list.
+
 type Row = {
   workout_id: string | null;
   workout_def_id: string | null;
@@ -138,7 +142,7 @@ export function PlanEditForm({ data }: PlanEditFormProps) {
     );
   };
 
-  const goBack = () => router.push("/plan");
+  const goBack = () => router.push("/admin/programs");
 
   const handleSave = async () => {
     setSaving(true);
@@ -162,7 +166,7 @@ export function PlanEditForm({ data }: PlanEditFormProps) {
       return;
     }
     setDirty(false);
-    router.push("/plan");
+    router.push("/admin/programs");
   };
 
   return (

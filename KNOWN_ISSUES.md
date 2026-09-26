@@ -758,3 +758,24 @@ in a standalone Playwright script with `fullPage: false`.
 drive's context setup — the only material differences left are the number of
 prior navigations on the context and the fact that the drive's browser is
 shared with the non-owner session.
+
+### 🟡 Medium (harness, not product) — drives degrade when run back-to-back against one dev server
+
+Running several `e2e/drive-*.mjs` in sequence against a single long-lived
+`next dev` produces failures that look exactly like product regressions:
+`ENOENT .next/server/app/(app)/today/page.js` → a 500 on `/today`, selectors
+that "never became visible", a PR selector that stops swapping. Three separate
+false alarms in one session, one of which was investigated as a real
+regression via `git stash` before being ruled out.
+
+Two compounding causes: each drive spawns its OWN `next dev` on another port
+against the SAME `.next`, and running `scripts/ralph-verify.sh` (which runs
+`next build`) while a dev server is live wipes the directory it is serving.
+
+**Rule: one drive per dev server when a run matters.** Before a verification
+batch: `pkill -f "next dev"; rm -rf .next`, start one server, run the drives,
+and restart between batches. **Never run `ralph-verify` (or any `next build`)
+while a dev server is up.**
+
+Every drive passes individually on a fresh server. If a drive fails in a batch,
+re-run it alone on a clean server before believing it.

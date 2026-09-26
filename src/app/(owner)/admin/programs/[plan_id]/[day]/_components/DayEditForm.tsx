@@ -26,6 +26,13 @@ import { daySchema, type DayFormValues } from "@/lib/plan/schemas";
 import { createClient } from "@/lib/supabase/client";
 
 type DayEditFormProps = {
+  /**
+   * Where save and cancel return to (T3-C). This used to be a hardcoded
+   * `router.push("/plan/<day>")` — a MEMBER route — which dropped the owner
+   * out of the builder with no way back, the same dead end D44 fixed for the
+   * Library. The caller now says where "done" goes.
+   */
+  backHref: string;
   day: string;
   dayLabel: string;
   data: DayEditData;
@@ -59,7 +66,12 @@ const TIMINGS = [
   { value: "pm", label: "PM" },
 ] as const;
 
-export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
+export function DayEditForm({
+  day,
+  dayLabel,
+  data,
+  backHref,
+}: DayEditFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initialWorkoutIds = data.workouts
@@ -102,7 +114,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
     otherDaysHaveRest: data.other_days_have_rest,
   });
 
-  const goBack = () => router.push(`/plan/${day}`);
+  const goBack = () => router.push(backHref);
 
   const handleSubmit = async (values: DayFormValues) => {
     setSubmitError(null);
@@ -139,7 +151,7 @@ export function DayEditForm({ day, dayLabel, data }: DayEditFormProps) {
     }
 
     form.reset(values);
-    router.push(`/plan/${day}`);
+    router.push(backHref);
     router.refresh();
   };
 

@@ -134,10 +134,21 @@ check(
   true,
 );
 check(
-  "the hub has the sections T3-A/T3-B built",
+  "the hub has the sections T3-A/T3-B/T3-C built",
   [...hubPages].sort(),
   ["analytics", "members", "programs", "schedule"],
 );
+// T3-C: the program editors live UNDER /admin/programs, so they inherit the
+// group guard. Assert the routes exist where the guard covers them.
+for (const route of ["[plan_id]", "[plan_id]/[day]"]) {
+  check(
+    `the program editor route ${route} is inside the gated group`,
+    existsSync(
+      join(repoRoot, OWNER_GROUP, "admin/programs", route, "page.tsx"),
+    ),
+    true,
+  );
+}
 // T3-B moved the authoring surfaces into the gated group too. These keep
 // their own URLs (`/library/**`), so they are NOT under `admin/` and would
 // slip past the loop above — assert them explicitly.

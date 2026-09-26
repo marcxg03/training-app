@@ -249,21 +249,23 @@ try {
     return "analytics + members name their blocker";
   });
 
-  await run.check("programs lists real snapshots", async () => {
+  await run.check("programs lists the owner's real programs", async () => {
+    // T3-C repointed this page from `plan_templates` (a seed-written snapshot
+    // archive) to `training_plans` (the real, editable programs). The
+    // throwaway user has none, so the EMPTY STATE is the correct render — and
+    // it must be the empty state, not a crash and not a blank.
     await gotoHub("/admin/programs");
-    // The throwaway user has no plan_templates rows, so the empty state is the
-    // correct render — and it must be the EMPTY STATE, not a crash or a blank.
     const body = await ownerPage.evaluate(() => document.body.innerText ?? "");
     expectTrue(
-      body.includes("No program snapshots yet") || body.includes("Version"),
-      "programs page rendered neither rows nor an empty state",
+      body.includes("No programs yet") || body.includes("New program"),
+      "programs page rendered neither programs nor an empty state",
     );
     expectTrue(
-      !body.includes("Could not load programs"),
-      "programs query errored",
+      !body.includes("Read-only for now"),
+      "the retired read-only plan_templates page is still rendering",
     );
     await shoot(ownerPage, "t3a-admin-programs", { fullPage: false });
-    return body.includes("Version") ? "rows rendered" : "empty state rendered";
+    return body.includes("No programs yet") ? "empty state" : "programs listed";
   });
 
   // ── 2b · THE DEAD END Marcus hit (T3-B) ──────────────────────────────────

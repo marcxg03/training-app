@@ -1,96 +1,31 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { PlanEditForm } from "./_components/PlanEditForm";
 import { requireOwner } from "@/lib/auth/requireOwner";
-import { getPlanEditData } from "@/lib/plan/queries";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * /admin/schedule — the weekly schedule editor (moved here in T3-B).
+ * /admin/schedule — a REDIRECT, kept only so old links keep working (T3-C).
  *
- * IT USED TO LIVE AT `/plan/edit`, which was a real routing bug: the member
- * group's dynamic `/plan/[day]` route ALSO matched that path, so Next resolved
- * `day = "edit"` and served the member page inside the phone shell. The build
- * stayed green throughout — two route groups claiming one URL is not a
- * compile error (D45).
+ * Schedule was folded into Programs (D48): it only existed as its own section
+ * because the week editor was hardcoded to the active plan, which is exactly
+ * the confusion Marcus named — "shouldn't editing only happen in the program
+ * editing page?". It should, and now it does.
  *
- * The no-active-plan case renders an empty state IN THE HUB rather than
- * redirecting to `/plan`. Bouncing the owner out to a member page is the exact
- * dead end this slice exists to remove, and "you have no plan yet" is a state
- * the builder should be able to show and act on.
+ * This forwards to the active program's editor rather than 404ing, because
+ * `/admin/schedule` was linked from the hub and from the member day cards for
+ * one slice, and a dead link is a worse answer than a redirect. Delete this
+ * once nothing points here.
  */
-
-function NoActivePlan({ reason }: { reason: string }) {
-  return (
-    <div className="flex flex-col gap-8">
-      <header className="space-y-1.5">
-        <p className="eyebrow">Owner · Admin</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Schedule
-        </h1>
-      </header>
-      <div className="flex max-w-xl flex-col gap-3 rounded-xl border border-dashed border-border bg-card-alt p-5">
-        <p className="eyebrow">No active plan</p>
-        <p className="text-sm leading-relaxed text-subtle">{reason}</p>
-        <Link
-          href="/admin/programs"
-          className="text-sm font-medium text-accent underline underline-offset-2"
-        >
-          Go to Programs
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-export default async function PlanEditPage() {
-  // Plan editing is owner-only authoring (Slice S0 · D18/D22): a non-owner
-  // gets notFound() before any plan data is read.
-  await requireOwner();
-
+export default async function ScheduleRedirectPage() {
+  const ownerId = await requireOwner();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: plan, error } = await supabase
+  const { data: plan } = await supabase
     .from("training_plans")
     .select("plan_id")
+    .eq("user_id", ownerId)
     .eq("is_active", true)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(`Failed to load active plan: ${error.message}`);
-  }
-  if (!plan) {
-    return (
-      <NoActivePlan reason="There is no active training plan to schedule against. Activate one and its week becomes editable here." />
-    );
-  }
-
-  const data = await getPlanEditData(plan.plan_id);
-  if (!data) {
-    return (
-      <NoActivePlan reason="The active plan could not be loaded — it may have no schedule rows yet." />
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <header className="space-y-1.5">
-        <p className="eyebrow">Owner · Admin</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Schedule
-        </h1>
-      </header>
-      <div className="max-w-4xl">
-        <PlanEditForm data={data} />
-      </div>
-    </div>
-  );
+  redirect(plan ? `/admin/programs/${plan.plan_id}` : "/admin/programs");
 }

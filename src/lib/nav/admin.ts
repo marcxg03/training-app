@@ -15,7 +15,7 @@ export type AdminSection = {
   /** One line under the label in the sidebar — what the section is FOR. */
   hint: string;
   /** Lucide icon name, resolved by the component (keeps this module pure). */
-  icon: "gauge" | "folder" | "chart" | "users" | "dumbbell" | "calendar";
+  icon: "gauge" | "folder" | "chart" | "users" | "dumbbell";
   /** Not yet built — rendered muted, with a "soon" chip. */
   soon?: boolean;
 };
@@ -38,7 +38,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   {
     href: "/admin/programs",
     label: "Programs",
-    hint: "Create, publish, archive",
+    hint: "Create, edit, activate",
     icon: "folder",
   },
   {
@@ -46,12 +46,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     label: "Library",
     hint: "Exercises, blocks, workouts",
     icon: "dumbbell",
-  },
-  {
-    href: "/admin/schedule",
-    label: "Schedule",
-    hint: "What lands on which day",
-    icon: "calendar",
   },
   {
     href: "/admin/analytics",
@@ -79,12 +73,12 @@ export const ADMIN_SECTIONS: AdminSection[] = [
  * mobile `isTabActive()` helper cannot be reused here because it is
  * deliberately prefix-only.
  *
- * T3-B NOTE: an earlier cut of this carried an `owns` field with a
- * segment-wildcard matcher, so the Schedule section could claim
- * `/plan/<day>/edit`. That whole mechanism is gone, because the editors moved
- * to `/admin/schedule/<day>` instead — see D45. The plain prefix rule now
- * covers every section, including `/library`, which is the only one that does
- * not live under `/admin`.
+ * T3-B/T3-C NOTE: an earlier cut carried an `owns` field with a segment
+ * wildcard so a Schedule section could claim `/plan/<day>/edit`. Both the
+ * mechanism and the section are gone — the editors moved under
+ * `/admin/programs/<plan_id>` and Schedule was folded into Programs (D45,
+ * D48). The plain prefix rule covers every section, including `/library`,
+ * the only one that does not live under `/admin`.
  */
 export function isAdminSectionActive(pathname: string, href: string): boolean {
   if (href === "/admin") {

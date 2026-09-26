@@ -86,10 +86,11 @@ check("library is a section", isAdminSectionActive("/library", "/library"), true
 check("a library child is claimed", isAdminSectionActive("/library/exercises", "/library"), true); // prettier-ignore
 check("a deep library child is claimed", isAdminSectionActive("/library/lifting/blocks/abc/edit", "/library"), true); // prettier-ignore
 
-// The Schedule editors moved to /admin/schedule/<day> in T3-B (D45), so they
-// need no special matching — but the MEMBER plan routes must still never be
-// claimed by any hub section, which is what the old wildcard existed to
-// guarantee. Assert that directly instead.
+// T3-C folded Schedule into Programs (D48): the week and day editors are
+// `/admin/programs/<plan_id>` and `/admin/programs/<plan_id>/<day>`, so the
+// Programs section claims them by plain prefix. The MEMBER plan routes must
+// still never be claimed by any hub section — that is what the old segment
+// wildcard existed to guarantee, asserted directly here instead.
 for (const memberRoute of ["/plan", "/plan/mon", "/today", "/progress"]) {
   check(
     `no hub section claims the member route ${memberRoute}`,
@@ -99,8 +100,13 @@ for (const memberRoute of ["/plan", "/plan/mon", "/today", "/progress"]) {
   );
 }
 check(
-  "schedule claims its own day editor",
-  isAdminSectionActive("/admin/schedule/mon", "/admin/schedule"),
+  "programs claims its week editor",
+  isAdminSectionActive("/admin/programs/abc123", "/admin/programs"),
+  true,
+);
+check(
+  "programs claims its day editor",
+  isAdminSectionActive("/admin/programs/abc123/mon", "/admin/programs"),
   true,
 );
 
@@ -113,7 +119,8 @@ const ROUTES = [
     s.href,
     `${s.href}/child`,
   ]),
-  "/admin/schedule/mon",
+  "/admin/programs/abc123",
+  "/admin/programs/abc123/mon",
   "/library/exercises",
 ];
 
@@ -142,7 +149,6 @@ check(
     "/admin",
     "/admin/programs",
     "/library",
-    "/admin/schedule",
     "/admin/analytics",
     "/admin/members",
   ],
@@ -169,10 +175,12 @@ check(
   ADMIN_SECTIONS.find((s) => s.href === "/library")?.soon,
   undefined,
 );
+// Schedule is GONE as a section (D48) — if it comes back, that is a decision
+// being reversed by accident.
 check(
-  "Schedule is not marked soon",
-  ADMIN_SECTIONS.find((s) => s.href === "/admin/schedule")?.soon,
-  undefined,
+  "there is no Schedule section",
+  ADMIN_SECTIONS.some((s) => s.label === "Schedule"),
+  false,
 );
 
 if (failures > 0) {
