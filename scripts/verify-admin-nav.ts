@@ -178,6 +178,17 @@ check(
 // Schedule is GONE as a section (D48) — if it comes back, that is a decision
 // being reversed by accident.
 check(
+  "Analytics is not marked soon (T3-E built it)",
+  ADMIN_SECTIONS.find((s) => s.href === "/admin/analytics")?.soon,
+  undefined,
+);
+// Members stays honest until a subscriptions table exists.
+check(
+  "Members is still marked soon",
+  ADMIN_SECTIONS.find((s) => s.href === "/admin/members")?.soon,
+  true,
+);
+check(
   "there is no Schedule section",
   ADMIN_SECTIONS.some((s) => s.label === "Schedule"),
   false,

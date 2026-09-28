@@ -52,7 +52,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     label: "Analytics",
     hint: "Training health",
     icon: "chart",
-    soon: true,
   },
   {
     href: "/admin/members",
