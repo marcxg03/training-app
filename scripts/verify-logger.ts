@@ -14,7 +14,9 @@ import {
   findLastIncompleteBlock,
   getSelectedExerciseIdForBlock,
   isBlockComplete,
+  priorExerciseLabel,
   type LoggerBlock,
+  type LoggerExercise,
   type LoggerSetLog,
 } from "../src/lib/methodology/workout-state";
 
@@ -233,11 +235,76 @@ check(
 );
 
 check(
-  "selected exercise comes from the first set logged this session",
+  "selected exercise comes from the set logged this session",
   getSelectedExerciseIdForBlock(
     block({ block_id: "block-1", setLogs: [setLog(1, "ex-7")] }),
   ),
   "ex-7",
+);
+
+// T2-D — the mid-block SWAP contract. A block whose exercise was changed after
+// sets were already logged holds set_logs against BOTH exercises (append-only:
+// the earlier ones are never rewritten). The picker must resume on the exercise
+// the user swapped TO, i.e. the one the LATEST set was logged under — reading
+// setLogs[0] would snap it back to the abandoned exercise on every reload and
+// silently undo the swap.
+check(
+  "after a swap, the selection follows the LATEST set, not the first",
+  getSelectedExerciseIdForBlock(
+    block({
+      block_id: "block-1",
+      setLogs: [setLog(1, "ex-old"), setLog(2, "ex-new")],
+    }),
+  ),
+  "ex-new",
+);
+
+// The loader does not guarantee row order, so the comparison must be on
+// set_index rather than array position.
+check(
+  "latest-set selection is decided by set_index, not array order",
+  getSelectedExerciseIdForBlock(
+    block({
+      block_id: "block-1",
+      setLogs: [setLog(3, "ex-new"), setLog(1, "ex-old"), setLog(2, "ex-old")],
+    }),
+  ),
+  "ex-new",
+);
+
+// --- priorExerciseLabel: honest attribution of already-logged sets (T2-D) ---
+function exercise(id: string, name: string): LoggerExercise {
+  return {
+    exercise_id: id,
+    name,
+    notes: "",
+    prescribed_min: 6,
+    prescribed_max: 8,
+    muscle_groups: ["chest"],
+    is_bodyweight: false,
+    media_path: null,
+    media_type: null,
+  };
+}
+
+const swappedBlock = {
+  exercises: [exercise("ex-old", "Incline Press"), exercise("ex-new", "Dip")],
+};
+
+check(
+  "a set logged under the CURRENT exercise needs no label (the picker names it)",
+  priorExerciseLabel(swappedBlock, "ex-new", "ex-new"),
+  null,
+);
+check(
+  "a set logged under the PREVIOUS exercise says which one it belongs to",
+  priorExerciseLabel(swappedBlock, "ex-old", "ex-new"),
+  "Incline Press",
+);
+check(
+  "an exercise the block no longer offers degrades to a phrase, never a raw id",
+  priorExerciseLabel(swappedBlock, "ex-gone", "ex-new"),
+  "a previous exercise",
 );
 
 if (failures > 0) {

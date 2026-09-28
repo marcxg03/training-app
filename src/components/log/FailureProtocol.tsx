@@ -13,6 +13,7 @@ import {
   getSetLabel,
   getSetSchemeSteps,
   nextAddedSetIndex,
+  priorExerciseLabel,
 } from "@/lib/methodology/workout-state";
 import { SetRow } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -100,6 +101,11 @@ export function FailureProtocol({
               key={step.setIndex}
               label={step.label}
               setLog={savedSet}
+              exerciseName={priorExerciseLabel(
+                block,
+                savedSet.exercise_id,
+                exercise.exercise_id,
+              )}
             />
           );
         }
@@ -140,6 +146,11 @@ export function FailureProtocol({
           key={setLog.set_log_id}
           label={getSetLabel(block, setLog.set_index)}
           setLog={setLog}
+          exerciseName={priorExerciseLabel(
+            block,
+            setLog.exercise_id,
+            exercise.exercise_id,
+          )}
         />
       ))}
 

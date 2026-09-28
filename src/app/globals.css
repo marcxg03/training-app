@@ -90,3 +90,73 @@
     font-family: var(--font-mono), "JetBrains Mono", monospace;
   }
 }
+
+@layer components {
+  /* Animated exercise line figures (T2-F, media_type 'figure-sequence').
+   *
+   * Three stacked frames cross-faded on a step loop. Pure CSS so the whole
+   * thing renders from a SERVER component — no client bundle, no hydration,
+   * no JS timer per row in a list of exercises.
+   *
+   * THE RECOLOUR (D35/D36): the source art is WHITE line work on transparent,
+   * drawn for dark UIs; this app is warm-white, where it would be invisible.
+   * `invert(1)` maps white to near-black at DISPLAY time and leaves alpha
+   * alone, so antialiased edges stay clean. The file on disk is never
+   * modified — that is what keeps CC-BY-SA's ShareAlike clause off the app's
+   * own source, so do not "fix" this by pre-processing the PNGs.
+   */
+  .figure-seq {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .figure-seq__frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: invert(1);
+    opacity: 0;
+    /* fill-mode none: before its delay elapses a frame falls back to the
+       base opacity 0 above, so exactly one frame is ever visible. */
+    animation: figure-seq-cycle 2.4s steps(1, end) infinite;
+  }
+
+  .figure-seq__frame[data-frame="0"] {
+    animation-delay: 0s;
+  }
+  .figure-seq__frame[data-frame="1"] {
+    animation-delay: 0.8s;
+  }
+  .figure-seq__frame[data-frame="2"] {
+    animation-delay: 1.6s;
+  }
+
+  @keyframes figure-seq-cycle {
+    0% {
+      opacity: 1;
+    }
+    33.333% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Reduced motion: hold the first pose. The other two frames are removed
+     from the box entirely rather than left at opacity 0, so nothing can
+     flash if the animation is re-enabled mid-session. */
+  @media (prefers-reduced-motion: reduce) {
+    .figure-seq__frame {
+      animation: none;
+    }
+    .figure-seq__frame[data-frame="0"] {
+      opacity: 1;
+    }
+    .figure-seq__frame:not([data-frame="0"]) {
+      display: none;
+    }
+  }
+}

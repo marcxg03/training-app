@@ -18,6 +18,8 @@ export type BankExercise = Pick<
   | "prescribed_max"
   | "muscle_groups"
   | "is_bodyweight"
+  | "media_path"
+  | "media_type"
 >;
 
 function toArray<T>(value: T | T[] | null | undefined): T[] {
@@ -92,7 +94,9 @@ export async function getBankExercisesByBlockId(
           prescribed_min,
           prescribed_max,
           muscle_groups,
-          is_bodyweight
+          is_bodyweight,
+          media_path,
+          media_type
         )
       `,
     )
@@ -121,6 +125,8 @@ export async function getBankExercisesByBlockId(
         prescribed_max: exercise.prescribed_max,
         muscle_groups: exercise.muscle_groups,
         is_bodyweight: exercise.is_bodyweight,
+        media_path: exercise.media_path,
+        media_type: exercise.media_type,
       });
     }
 

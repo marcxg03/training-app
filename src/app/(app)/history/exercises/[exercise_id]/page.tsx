@@ -1,21 +1,17 @@
 import type { JSX } from "react";
 
 import { HistoryBackLink } from "@/app/(app)/history/_components/HistoryBackLink";
-import { ProgressionChart } from "@/components/shared/ProgressionChart";
-import {
-  buildBestE1rmByDay,
-  buildBestRepsByDay,
-  dayKeyOf,
-  dayLabelOf,
-} from "@/lib/analytics/projections";
+import { ExerciseImage } from "@/components/shared/ExerciseImage";
+import { PRHistoryChart } from "@/components/shared/PRHistoryChart";
+import { buildPRChartModel } from "@/lib/analytics/pr-history";
+import { dayKeyOf, dayLabelOf } from "@/lib/analytics/projections";
 import { getExerciseProgression } from "@/lib/history/queries";
 import { getAppTimezone } from "@/lib/time/server";
 import type {
-  ExerciseProgression,
   ExerciseProgressionPoint,
   ExerciseProgressionPR,
 } from "@/lib/history/projections";
-import { kgToLbs, toLbsChartPoints } from "@/lib/units";
+import { kgToLbs } from "@/lib/units";
 
 type ExerciseProgressPageProps = {
   params: Promise<{
@@ -70,39 +66,6 @@ function StatCard({
   );
 }
 
-// Chart the best estimated 1RM per day (Epley) — a rep PR at the same weight
-// now shows as progress, unlike raw top-set weight. Computed from ALL sets
-// (recent_sets), not top_sets: the heaviest set of a day is not always its
-// best e1RM set. Bodyweight exercises have no external load, so their
-// progression axis is best reps per day instead.
-function buildChartConfig(
-  progression: ExerciseProgression,
-  timeZone: string,
-): {
-  points: { label: string; value: number }[];
-  heading: string;
-  unitLabel: string;
-  ariaLabel: string;
-} {
-  if (progression.is_bodyweight) {
-    return {
-      points: buildBestRepsByDay(progression.recent_sets, timeZone),
-      heading: "Best reps · progression",
-      unitLabel: "REPS · OLDEST → NEWEST",
-      ariaLabel: "Best reps progression",
-    };
-  }
-
-  return {
-    points: toLbsChartPoints(
-      buildBestE1rmByDay(progression.recent_sets, timeZone),
-    ),
-    heading: "Estimated 1RM · progression",
-    unitLabel: "LBS E1RM · OLDEST → NEWEST",
-    ariaLabel: "Estimated one-rep-max progression",
-  };
-}
-
 export default async function ExerciseProgressPage({
   params,
 }: ExerciseProgressPageProps): Promise<JSX.Element> {
@@ -129,7 +92,12 @@ export default async function ExerciseProgressPage({
     );
   }
 
-  const chart = buildChartConfig(progression, tz);
+  // THE progression charts for every exercise (T2-B; two panels since T2-D):
+  // the real PR events from the append-only pr_history, not an estimate derived
+  // from them. No is_bodyweight / is_compound gate — a bodyweight lift charts
+  // its rep PRs (and reads "No weight PRs yet" in the other panel), a loaded
+  // lift charts both, on the same component.
+  const prChart = buildPRChartModel(progression.prs, tz);
   const recentSets = progression.recent_sets.slice(0, 12);
 
   return (
@@ -143,6 +111,15 @@ export default async function ExerciseProgressPage({
           {progression.exercise_name}
         </h1>
       </header>
+
+      {/* Renders nothing at all when media_path is NULL — no frame, no
+          placeholder, no reserved gap (flex-col gap collapses). */}
+      <ExerciseImage
+        mediaPath={progression.media_path}
+        mediaType={progression.media_type}
+        name={progression.exercise_name}
+        size="header"
+      />
 
       <div className="flex gap-2.5">
         <StatCard
@@ -158,11 +135,10 @@ export default async function ExerciseProgressPage({
       </div>
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="eyebrow">{chart.heading}</h2>
-        <ProgressionChart
-          points={chart.points}
-          unitLabel={chart.unitLabel}
-          ariaLabel={chart.ariaLabel}
+        <h2 className="eyebrow">PR history · progression</h2>
+        <PRHistoryChart
+          model={prChart}
+          ariaLabel={`${progression.exercise_name} personal-record history`}
         />
       </section>
 

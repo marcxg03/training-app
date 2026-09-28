@@ -106,8 +106,8 @@ export function ExerciseForm({
               <div className="space-y-1">
                 <FormLabel>Compound lift</FormLabel>
                 <p className="text-sm text-muted-foreground">
-                  Compound lifts are featured in the Strength (e1RM) spotlights
-                  on Trends.
+                  Multi-joint lift (squat, bench, row) rather than an isolation
+                  movement.
                 </p>
               </div>
               <FormControl>

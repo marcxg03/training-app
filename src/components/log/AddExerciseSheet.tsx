@@ -113,7 +113,10 @@ export function AddExerciseSheet({
         is_bodyweight: isBodyweight,
       })
       .select(
-        "exercise_id, name, notes, prescribed_min, prescribed_max, muscle_groups, is_bodyweight",
+        // media_* is always NULL on a just-created exercise, but LoggerExercise
+        // carries it (T2-B) and the picker reads it — select it rather than
+        // widening the type with a cast.
+        "exercise_id, name, notes, prescribed_min, prescribed_max, muscle_groups, is_bodyweight, media_path, media_type",
       )
       .single();
 

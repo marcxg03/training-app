@@ -8,6 +8,7 @@ import type {
   LoggerExercise,
   LoggerSetLog,
 } from "@/lib/methodology/workout-state";
+import { priorExerciseLabel } from "@/lib/methodology/workout-state";
 import { Button } from "@/components/ui/button";
 import { SetEntryForm } from "@/components/log/SetEntryForm";
 import { SetLogRow } from "@/components/log/SetLogRow";
@@ -65,6 +66,11 @@ export function FreeFormProtocol({
           key={setLog.set_log_id}
           label={`Set ${setLog.set_index}`}
           setLog={setLog}
+          exerciseName={priorExerciseLabel(
+            block,
+            setLog.exercise_id,
+            exercise.exercise_id,
+          )}
         />
       ))}
 

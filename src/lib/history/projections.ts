@@ -43,6 +43,10 @@ export type ExerciseProgression = {
   exercise_id: string;
   exercise_name: string;
   is_bodyweight: boolean;
+  // Same-origin illustration for the page header, when the exercise has one.
+  // NULL for most of the library (T2-B) — the UI must degrade without it.
+  media_path: string | null;
+  media_type: string | null;
   best_weight_pr: ExerciseProgressionPR | null;
   best_in_range_pr: ExerciseProgressionPR | null;
   prs: ExerciseProgressionPR[];

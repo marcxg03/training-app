@@ -2,15 +2,11 @@
 //   pnpm exec tsx scripts/verify-analytics.ts
 // Exits non-zero on any failure. No test framework needed.
 import {
-  buildBestE1rmByDay,
   buildBodyweightTrend,
   buildWeeklyVolumeByGroup,
   weekKeyOf,
-  buildBestRepsByDay,
-  buildE1rmSpotlights,
   buildNutritionBands,
   dayKeyOf,
-  epleyE1rmKg,
   type AnalyticsSetRow,
 } from "../src/lib/analytics/projections";
 import { addDaysToDayKey, dateStringInTz, dayOfWeekInTz, DEFAULT_APP_TIMEZONE } from "../src/lib/time/appDay";
@@ -36,18 +32,11 @@ function approx(name: string, actual: number, expected: number, eps = 1e-9) {
   }
 }
 
-// --- epleyE1rmKg ---
-approx("epley: 100kg x 1 = 100 + 100/30", epleyE1rmKg(100, 1), 100 * (1 + 1 / 30));
-approx("epley: 90kg x 8 = 114", epleyE1rmKg(90, 8), 90 * (1 + 8 / 30));
-approx("epley: zero weight -> 0", epleyE1rmKg(0, 10), 0);
-approx("epley: zero reps -> 0", epleyE1rmKg(100, 0), 0);
-
-// Rep cap pinned to LITERALS on both sides of the boundary — a comparison of
-// the implementation against itself passes for any cap and catches nothing
-// (mutation-tested: cap 12 -> 10 slipped through the old assertion).
-approx("rep cap binds at 12: 60x20 = 60*(1+12/30) = 84", epleyE1rmKg(60, 20), 84);
-approx("13th rep adds nothing: 60x13 = 84", epleyE1rmKg(60, 13), 84);
-approx("11 reps NOT capped", epleyE1rmKg(60, 11), 60 * (1 + 11 / 30));
+// NOTE (T2-B): the estimated-1RM assertions that used to open this file are
+// GONE with the feature. Epley, buildBestE1rmByDay, buildBestRepsByDay and
+// buildE1rmSpotlights were deleted — e1RM is a derived guess, and the app now
+// charts only real logged PR events (scripts/verify-pr-history-chart.ts).
+// Everything below is unchanged and still load-bearing.
 
 // --- timezone day bucketing ---
 // 02:00 UTC on Jul 2 is 9pm Jul 1 in Chicago (APP_TIMEZONE): an evening set
@@ -55,161 +44,6 @@ approx("11 reps NOT capped", epleyE1rmKg(60, 11), 60 * (1 + 11 / 30));
 check("dayKeyOf: evening Chicago set stays on its local day",
   dayKeyOf("2026-07-02T02:00:00Z", DEFAULT_APP_TIMEZONE),
   "2026-07-01");
-check(
-  "e1rm by day: one Chicago evening session = ONE chart point",
-  buildBestE1rmByDay([
-    { logged_at: "2026-07-01T23:50:00Z", weight_kg: 185, reps: 5 },
-    { logged_at: "2026-07-02T00:10:00Z", weight_kg: 205, reps: 3 },
-  ], DEFAULT_APP_TIMEZONE).map((p) => p.dayKey),
-  ["2026-07-01"],
-);
-
-// --- buildBestE1rmByDay ---
-// Heaviest set of the day (100x1 -> 103.3) must LOSE to the better-e1RM set
-// (90x8 -> 114) on the same day.
-const day1 = [
-  { logged_at: "2026-07-01T10:00:00Z", weight_kg: 100, reps: 1 },
-  { logged_at: "2026-07-01T10:05:00Z", weight_kg: 90, reps: 8 },
-];
-check(
-  "e1rm by day: best e1RM wins over heaviest weight",
-  buildBestE1rmByDay(day1, DEFAULT_APP_TIMEZONE).map((p) => ({ dayKey: p.dayKey, value: p.value })),
-  [{ dayKey: "2026-07-01", value: 90 * (1 + 8 / 30) }],
-);
-
-// Multi-day: chronological output, null/zero weights skipped.
-const multi = [
-  { logged_at: "2026-07-03T10:00:00Z", weight_kg: 80, reps: 5 },
-  { logged_at: "2026-07-01T10:00:00Z", weight_kg: 100, reps: 3 },
-  { logged_at: "2026-07-02T10:00:00Z", weight_kg: null, reps: 10 },
-  { logged_at: "2026-07-02T11:00:00Z", weight_kg: 0, reps: 10 },
-];
-check(
-  "e1rm by day: chronological, skips null/zero weight days entirely",
-  buildBestE1rmByDay(multi, DEFAULT_APP_TIMEZONE).map((p) => p.dayKey),
-  ["2026-07-01", "2026-07-03"],
-);
-
-// --- buildBestRepsByDay ---
-const bw = [
-  { logged_at: "2026-07-01T10:00:00Z", weight_kg: null, reps: 12 },
-  { logged_at: "2026-07-01T10:05:00Z", weight_kg: null, reps: 15 },
-  { logged_at: "2026-07-02T10:00:00Z", weight_kg: null, reps: 14 },
-];
-check(
-  "reps by day: max reps per day, chronological",
-  buildBestRepsByDay(bw, DEFAULT_APP_TIMEZONE).map((p) => ({ dayKey: p.dayKey, value: p.value })),
-  [
-    { dayKey: "2026-07-01", value: 15 },
-    { dayKey: "2026-07-02", value: 14 },
-  ],
-);
-
-// --- buildE1rmSpotlights: ranking, cutoff, limit, exclusions ---
-function makeRows(
-  exerciseId: string,
-  name: string,
-  isBodyweight: boolean,
-  setDays: string[], // dayKeys (noon UTC = same local day in Chicago)
-  isCompound = true,
-): AnalyticsSetRow[] {
-  return setDays.map((day, index) => ({
-    exercise_id: exerciseId,
-    weight_kg: isBodyweight ? null : 100,
-    reps: 5,
-    logged_at: `${day}T17:0${index % 10}:00Z`, // noon Chicago
-    exercises: {
-      name,
-      is_bodyweight: isBodyweight,
-      is_compound: isCompound,
-      muscle_groups: ["test"],
-    },
-  }));
-}
-
-const CUTOFF = "2026-07-01"; // rank window start
-const WINDOW = "2026-06-01"; // fetch window start
-const inWin = (n: number) => Array.from({ length: n }, (_, i) => `2026-07-${String(2 + (i % 20)).padStart(2, "0")}`);
-
-const spotlightRows: AnalyticsSetRow[] = [
-  ...makeRows("ex-a", "Alpha", false, inWin(9)),
-  ...makeRows("ex-b", "Bravo", false, inWin(7)),
-  ...makeRows("ex-c", "Charlie", false, inWin(7)),
-  ...makeRows("ex-d", "Delta", false, inWin(3)),
-  ...makeRows("ex-e", "Echo", false, inWin(1)),
-  // bodyweight with tons of sets — must be excluded entirely
-  ...makeRows("ex-bw", "Pullup", true, inWin(50)),
-  // active before the rank cutoff only — has points but rank 0
-  ...makeRows("ex-old", "Oldie", false, ["2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14", "2026-06-15"]),
-];
-
-check(
-  "spotlights: top-4 by recent set count, desc, name tiebreak, bodyweight excluded",
-  buildE1rmSpotlights(spotlightRows, {
-    rankCutoffKey: CUTOFF,
-    windowStartKey: WINDOW,
-    limit: 4,
-    timeZone: DEFAULT_APP_TIMEZONE,
-  }).map((s) => s.exercise_id),
-  ["ex-a", "ex-b", "ex-c", "ex-d"], // Bravo before Charlie by name at 7=7
-);
-
-// Non-compound (isolation) exercises are excluded from spotlights entirely
-// and must not burn a slot, no matter how many sets they have.
-const isolationRows: AnalyticsSetRow[] = [
-  ...makeRows("ex-a", "Alpha", false, inWin(9)),
-  ...makeRows("ex-b", "Bravo", false, inWin(7)),
-  ...makeRows("ex-c", "Charlie", false, inWin(7)),
-  ...makeRows("ex-d", "Delta", false, inWin(3)),
-  ...makeRows("ex-iso", "Curlzilla", false, inWin(50), false), // isolation
-];
-check(
-  "spotlights: non-compound excluded and don't burn a slot",
-  buildE1rmSpotlights(isolationRows, {
-    rankCutoffKey: CUTOFF,
-    windowStartKey: WINDOW,
-    limit: 4,
-    timeZone: DEFAULT_APP_TIMEZONE,
-  }).map((s) => s.exercise_id),
-  ["ex-a", "ex-b", "ex-c", "ex-d"],
-);
-
-// Zero-chartable-points exercises must not burn a spotlight slot: an
-// exercise whose sets all have reps=0 (no e1RM points) ranks 0 points and is
-// dropped BEFORE the limit, letting the 4th real exercise in.
-const zeroPointRows: AnalyticsSetRow[] = [
-  ...makeRows("ex-a", "Alpha", false, inWin(9)),
-  ...makeRows("ex-b", "Bravo", false, inWin(8)),
-  ...makeRows("ex-c", "Charlie", false, inWin(7)),
-  ...inWin(20).map((day) => ({
-    exercise_id: "ex-junk",
-    weight_kg: 100,
-    reps: 0, // e1RM = 0 -> no points
-    logged_at: `${day}T17:00:00Z`,
-    exercises: { name: "Junk", is_bodyweight: false, is_compound: true, muscle_groups: [] },
-  })),
-  ...makeRows("ex-d", "Delta", false, inWin(2)),
-];
-check(
-  "spotlights: pointless exercises don't burn a slot",
-  buildE1rmSpotlights(zeroPointRows, {
-    rankCutoffKey: CUTOFF,
-    windowStartKey: WINDOW,
-    limit: 4,
-    timeZone: DEFAULT_APP_TIMEZONE,
-  }).map((s) => s.exercise_id),
-  ["ex-a", "ex-b", "ex-c", "ex-d"],
-);
-
-// Window trim: sets before windowStartKey are excluded from series AND rank.
-check(
-  "spotlights: rows before windowStartKey are ignored",
-  buildE1rmSpotlights(
-    makeRows("ex-a", "Alpha", false, ["2026-05-20", "2026-07-02"]),
-    { rankCutoffKey: CUTOFF, windowStartKey: WINDOW, limit: 4, timeZone: DEFAULT_APP_TIMEZONE },
-  )[0].points.map((p) => p.dayKey),
-  ["2026-07-02"],
-);
 
 
 // --- buildWeeklyVolumeByGroup ---
@@ -226,24 +60,24 @@ const volumeRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-27T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
   },
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
   },
   // bodyweight set: counts as a back set, adds zero tonnage
   {
     exercise_id: "pullup", weight_kg: null, reps: 10,
     logged_at: "2026-07-27T17:30:00Z",
-    exercises: { name: "Pullup", is_bodyweight: true, is_compound: false, muscle_groups: ["back"] },
+    exercises: { name: "Pullup", is_bodyweight: true, muscle_groups: ["back"] },
   },
   // 3 weeks ago, chest — creates a gap that must be zero-filled, not bridged
   {
     exercise_id: "bench", weight_kg: 90, reps: 10,
     logged_at: "2026-07-07T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "triceps"] },
+    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "triceps"] },
   },
 ];
 
@@ -273,12 +107,12 @@ const guardRows: AnalyticsSetRow[] = [
   {
     exercise_id: "squat", weight_kg: 120, reps: 5,
     logged_at: "2026-05-15T17:00:00Z", // long before the 8-week window
-    exercises: { name: "Squat", is_bodyweight: false, is_compound: false, muscle_groups: ["quads"] },
+    exercises: { name: "Squat", is_bodyweight: false, muscle_groups: ["quads"] },
   },
   {
     exercise_id: "calf", weight_kg: 60, reps: 12,
     logged_at: "2026-08-05T17:00:00Z", // future beyond current week
-    exercises: { name: "Calf Raise", is_bodyweight: false, is_compound: false, muscle_groups: ["calves"] },
+    exercises: { name: "Calf Raise", is_bodyweight: false, muscle_groups: ["calves"] },
   },
 ];
 check(
@@ -296,7 +130,7 @@ const sundayRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-27T02:00:00Z", // Sun Jul 26, 9pm Chicago
-    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest"] },
+    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest"] },
   },
 ];
 const sunday = buildWeeklyVolumeByGroup(sundayRows, { weeks: 8, timeZone: DEFAULT_APP_TIMEZONE, now: NOW_SUN });
@@ -312,12 +146,12 @@ const orderRows: AnalyticsSetRow[] = [
   {
     exercise_id: "pushdown", weight_kg: 30, reps: 12,
     logged_at: "2026-07-28T18:30:00Z",
-    exercises: { name: "Pushdown", is_bodyweight: false, is_compound: false, muscle_groups: ["triceps"] },
+    exercises: { name: "Pushdown", is_bodyweight: false, muscle_groups: ["triceps"] },
   },
   {
     exercise_id: "curl", weight_kg: 20, reps: 12,
     logged_at: "2026-07-28T18:40:00Z",
-    exercises: { name: "Curl", is_bodyweight: false, is_compound: false, muscle_groups: ["biceps"] },
+    exercises: { name: "Curl", is_bodyweight: false, muscle_groups: ["biceps"] },
   },
 ];
 check(
@@ -331,7 +165,7 @@ const dupRows: AnalyticsSetRow[] = [
   {
     exercise_id: "bench", weight_kg: 100, reps: 5,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Bench", is_bodyweight: false, is_compound: false, muscle_groups: ["chest", "Chest"] },
+    exercises: { name: "Bench", is_bodyweight: false, muscle_groups: ["chest", "Chest"] },
   },
 ];
 const dedup = buildWeeklyVolumeByGroup(dupRows, { weeks: 8, timeZone: DEFAULT_APP_TIMEZONE, now: NOW });
@@ -344,7 +178,7 @@ const otherRows: AnalyticsSetRow[] = [
   {
     exercise_id: "sled", weight_kg: 80, reps: 10,
     logged_at: "2026-07-28T17:00:00Z",
-    exercises: { name: "Sled Push", is_bodyweight: false, is_compound: false, muscle_groups: [] },
+    exercises: { name: "Sled Push", is_bodyweight: false, muscle_groups: [] },
   },
 ];
 check("volume: untagged sets bucket under other",
