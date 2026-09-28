@@ -24,6 +24,14 @@ restart() {
   (pnpm dev -p "$PORT" >/tmp/training-dev.log 2>&1 &)
   for _ in $(seq 1 60); do
     if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/login")" = "200" ]; then
+      # /login answering is NOT "ready". After `rm -rf .next` every route
+      # compiles on first request, and a drive that starts here can have its
+      # own startup time out against a server still building — drive-t3d
+      # aborted in 2.2s exactly that way while passing 10/10 alone. Warm the
+      # routes a drive hits first, then give the compiler a beat.
+      curl -s -o /dev/null "http://localhost:$PORT/today" || true
+      curl -s -o /dev/null "http://localhost:$PORT/admin" || true
+      sleep 3
       return 0
     fi
     sleep 1

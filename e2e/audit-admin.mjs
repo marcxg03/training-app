@@ -296,6 +296,56 @@ try {
     return ok ? "activity picker present" : "NO activity picker";
   });
 
+  await run.check("the WEEK editor can reach cardio and recovery", async () => {
+    // THE GAP THIS AUDIT ORIGINALLY MISSED. The earlier checks drove the DAY
+    // editor by URL, so they proved cardio/recovery work there and never asked
+    // how a human GETS there. Marcus found the answer: from the week editor you
+    // could not. Its "Add workout" offers only the workout_def catalog, and
+    // cardio/recovery sessions have no definition — so the picker showed one
+    // lifting workout and nothing else, on a screen whose own copy said "open
+    // a day to edit its sessions" while offering no way to open one.
+    await visit(`/admin/programs/${planId}`);
+
+    const dayLinks = await page.evaluate(
+      () =>
+      [...document.querySelectorAll("main a")]
+        .map((a) => a.getAttribute("href") ?? "")
+        .filter((h) => /\/admin\/programs\/[0-9a-f-]{36}\/(mon|tue|wed|thu|fri|sat|sun)$/.test(h)), // prettier-ignore
+    );
+
+    if (dayLinks.length === 0) {
+      finding(
+        "BLOCKER",
+        "Week editor",
+        "no way to open a day, so cardio and recovery sessions are unreachable",
+        'the "Add workout" picker offers only catalog workouts, which cardio/recovery never have',
+      );
+      return "NO day links";
+    }
+
+    if (dayLinks.length < 7) {
+      finding("MEDIUM", "Week editor", `only ${dayLinks.length} of 7 days link to their editor`); // prettier-ignore
+    }
+
+    // And the door has to actually land on the editable day.
+    await page.goto(`${base}${dayLinks[0]}`, { waitUntil: "networkidle" });
+    await page
+      .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), {
+        timeout: 20_000,
+      }) // prettier-ignore
+      .catch(() => {});
+    const landed = await page.evaluate(() =>
+      /Add session/i.test(document.querySelector("main")?.innerText ?? ""),
+    );
+    if (!landed) {
+      finding("HIGH", "Week editor", "the day link does not land on an editable day"); // prettier-ignore
+    }
+
+    await visit(`/admin/programs/${planId}`);
+    await shoot(page, "audit-week-editor", { fullPage: false });
+    return `${dayLinks.length}/7 days link to their editor`;
+  });
+
   // ── 3 · the catalog-linked dead end ──────────────────────────────────────
 
   await run.check(

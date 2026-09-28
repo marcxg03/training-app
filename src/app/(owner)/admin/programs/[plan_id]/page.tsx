@@ -84,7 +84,7 @@ export default async function ProgramWeekPage({
       </header>
 
       <div className="max-w-4xl">
-        <PlanEditForm data={data} />
+        <PlanEditForm data={data} planId={planId} />
       </div>
 
       <section className="space-y-3" aria-labelledby="days-heading">

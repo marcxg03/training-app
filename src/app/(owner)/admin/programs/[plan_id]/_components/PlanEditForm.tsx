@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
+
 import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { useDiscardChangesGuard } from "@/components/shared/DiscardChangesDialog";
@@ -15,6 +17,9 @@ import { createClient } from "@/lib/supabase/client";
 
 type PlanEditFormProps = {
   data: PlanEditData;
+  /** Needed to link each day at the day editor — the ONLY surface that can add
+   * a cardio or recovery session. */
+  planId: string;
 };
 
 // T3-C: save and cancel used to `router.push("/plan")` — a MEMBER route —
@@ -46,7 +51,7 @@ const DAY_LABELS: Record<Enums<"day_of_week_enum">, string> = {
   sun: "Sunday",
 };
 
-export function PlanEditForm({ data }: PlanEditFormProps) {
+export function PlanEditForm({ data, planId }: PlanEditFormProps) {
   const router = useRouter();
   const [days, setDays] = useState<DayState[]>(() =>
     data.days.map((day) => ({
@@ -198,8 +203,11 @@ export function PlanEditForm({ data }: PlanEditFormProps) {
               {data.plan_name}
             </div>
             <p className="text-sm text-muted-foreground">
-              Assign workouts from your catalog to each day. Build the workouts
-              themselves in Library → Workouts.
+              Assign lifting workouts from your catalog to each day — build
+              those in Library → Workouts. For a{" "}
+              <span className="font-medium text-foreground">cardio</span> or{" "}
+              <span className="font-medium text-foreground">recovery</span>{" "}
+              session, open the day and add it there.
             </p>
           </div>
 
@@ -215,15 +223,31 @@ export function PlanEditForm({ data }: PlanEditFormProps) {
                     <h2 className="text-[13px] font-semibold text-foreground">
                       {DAY_LABELS[day.day_of_week]}
                     </h2>
-                    <label className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
-                      Rest
-                      <Checkbox
-                        checked={day.is_rest_day}
-                        onCheckedChange={(value) =>
-                          toggleRest(dayIndex, Boolean(value))
-                        }
-                      />
-                    </label>
+                    <div className="flex items-center gap-3">
+                      {/* THE MISSING DOOR. This screen says "open a day to edit
+                       * its sessions" and, until now, offered no way to do it —
+                       * so the day editor, the only surface that can add a
+                       * CARDIO or RECOVERY session, was reachable by typing a
+                       * URL and nothing else. Marcus hit exactly that: "i can
+                       * only add created workouts but no cardio or recovery
+                       * sessions when I edit the plan." */}
+                      <Link
+                        href={`/admin/programs/${planId}/${day.day_of_week}`}
+                        className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-accent underline underline-offset-2 transition-opacity hover:opacity-70"
+                      >
+                        Edit day
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
+                      <label className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-faint">
+                        Rest
+                        <Checkbox
+                          checked={day.is_rest_day}
+                          onCheckedChange={(value) =>
+                            toggleRest(dayIndex, Boolean(value))
+                          }
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   {day.rows.length > 0 ? (
