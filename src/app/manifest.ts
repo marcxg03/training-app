@@ -10,8 +10,13 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#0A0A0B",
-    theme_color: "#0A0A0B",
+    // Match the LIGHT theme the app actually ships (--background #FFFFFF).
+    // These were #0A0A0B, left over from the pre-redesign dark palette, which
+    // gave the installed PWA a black splash screen and a black status bar in
+    // front of a white app — the most visible thing about an install, and the
+    // one part of the app a browser renders before any of our CSS runs.
+    background_color: "#FFFFFF",
+    theme_color: "#FFFFFF",
     icons: [
       {
         src: "/icon.svg",
