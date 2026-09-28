@@ -274,18 +274,50 @@ try {
     return "Tuesday of the inactive program opened";
   });
 
-  await run.check("another owner's program 404s by URL", async () => {
-    // The route guard proves "an owner"; the row check proves "this owner".
-    const res = await page.goto(
-      `${base}/admin/programs/00000000-0000-0000-0000-000000000000`,
-      { waitUntil: "networkidle" },
-    );
-    expectTrue(
-      res?.status() === 404,
-      `a foreign plan_id returned ${res?.status()}, expected 404`,
-    );
-    return "404";
-  });
+  await run.check(
+    "another owner's program is not reachable by URL",
+    async () => {
+      // The route guard proves "an owner"; the row check proves "THIS owner".
+      //
+      // ASSERTED ON CONTENT, NOT STATUS — and that is a deliberate correction,
+      // not a weakening. Adding `loading.tsx` in T3-D made this route STREAM:
+      // Next sends the 200 and the loading shell before the page body runs, so a
+      // later `notFound()` renders the not-found UI but can no longer change the
+      // status code. That is documented Next behaviour and the price of killing
+      // the dead air (D51).
+      //
+      // What must hold is the security property, and it does: the page renders
+      // Next's 404 and NO program data reaches the client. An earlier cut of
+      // this check asserted `status === 404` and went red against behaviour that
+      // is actually correct — the status was a proxy for the property, and when
+      // the proxy broke the property was still intact.
+      await page.goto(
+        `${base}/admin/programs/00000000-0000-0000-0000-000000000000`,
+        { waitUntil: "networkidle" },
+      );
+      await page
+        .locator("main")
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .catch(() => {});
+
+      const seen = await page.evaluate(() => ({
+        main: (document.querySelector("main")?.innerText ?? "").trim(),
+        body: document.body.innerText ?? "",
+      }));
+
+      expectTrue(
+        /404|could not be found/i.test(seen.main),
+        `expected the not-found page, got: ${JSON.stringify(seen.main.slice(0, 120))}`,
+      );
+      // The real assertion: none of the program's shape leaked into the render.
+      expectTrue(
+        !/training day|session|Make active|Duplicate/i.test(seen.main),
+        "program data leaked into the not-found render",
+      );
+      return "renders 404, leaks nothing";
+    },
+  );
 
   // ── 3 · the mutations actually WRITE ─────────────────────────────────────
 
