@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useFieldArray, type Control } from "react-hook-form";
 
@@ -21,6 +23,9 @@ type SessionContentEditorProps = {
   workoutType: DayFormValues["workouts"][number]["workout_type"];
   /** Catalog-linked sessions own their blocks via the workout definition. */
   isCatalogLinked: boolean;
+  /** The linked definition, so the read-only state can LINK to it rather than
+   * telling the user to go and find it. */
+  workoutDefId?: string | null;
   /** Logged sessions keep the block snapshot their history was recorded
    * against — history counts read live workout_blocks. */
   hasHistory: boolean;
@@ -46,6 +51,7 @@ export function SessionContentEditor({
   workoutIndex,
   workoutType,
   isCatalogLinked,
+  workoutDefId,
   hasHistory,
   blockCatalog,
   cardioActivities,
@@ -90,11 +96,38 @@ export function SessionContentEditor({
             ))}
           </ul>
         )}
-        <p className="text-[12px] text-faint">
-          {isCatalogLinked
-            ? "From the workout catalog — edit its blocks in the Library."
-            : "This session has logged history, so its blocks are frozen."}
-        </p>
+        {isCatalogLinked ? (
+          <p className="text-[12px] text-faint">
+            From the workout catalog.{" "}
+            {workoutDefId ? (
+              <Link
+                href={`/library/workouts/${workoutDefId}`}
+                className="font-medium text-accent underline underline-offset-2"
+              >
+                Edit its blocks in the Library →
+              </Link>
+            ) : (
+              "Edit its blocks in the Library."
+            )}
+          </p>
+        ) : (
+          // FROZEN BY HISTORY. Saying only "frozen" left Marcus stuck: he had
+          // 36 logged sets against a session and no idea what he was allowed
+          // to do instead. The constraint is real — /history counts against
+          // LIVE workout_blocks, so editing composition retroactively
+          // rewrites what past completions mean — but the way forward has to
+          // be stated, not left as an exercise.
+          <div className="space-y-1">
+            <p className="text-[12px] text-faint">
+              Frozen: this session has logged history, and changing its blocks
+              would rewrite what those past workouts recorded.
+            </p>
+            <p className="text-[12px] text-faint">
+              To change what you train, add a new session on this day, or build
+              it in a new program and activate that.
+            </p>
+          </div>
+        )}
       </div>
     );
   }

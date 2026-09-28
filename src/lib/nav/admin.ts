@@ -15,7 +15,7 @@ export type AdminSection = {
   /** One line under the label in the sidebar — what the section is FOR. */
   hint: string;
   /** Lucide icon name, resolved by the component (keeps this module pure). */
-  icon: "gauge" | "folder" | "chart" | "users" | "dumbbell";
+  icon: "gauge" | "folder" | "chart" | "users" | "dumbbell" | "nutrition";
   /** Not yet built — rendered muted, with a "soon" chip. */
   soon?: boolean;
 };
@@ -46,6 +46,12 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     label: "Library",
     hint: "Exercises, blocks, workouts",
     icon: "dumbbell",
+  },
+  {
+    href: "/admin/nutrition",
+    label: "Nutrition",
+    hint: "Calorie and macro targets",
+    icon: "nutrition",
   },
   {
     href: "/admin/analytics",

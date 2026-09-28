@@ -149,6 +149,7 @@ check(
     "/admin",
     "/admin/programs",
     "/library",
+    "/admin/nutrition",
     "/admin/analytics",
     "/admin/members",
   ],
@@ -177,6 +178,11 @@ check(
 );
 // Schedule is GONE as a section (D48) — if it comes back, that is a decision
 // being reversed by accident.
+check(
+  "Nutrition is a section and is not marked soon",
+  ADMIN_SECTIONS.find((s) => s.href === "/admin/nutrition")?.soon,
+  undefined,
+);
 check(
   "Analytics is not marked soon (T3-E built it)",
   ADMIN_SECTIONS.find((s) => s.href === "/admin/analytics")?.soon,
