@@ -6,7 +6,7 @@ import { Camera, ImageIcon, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 
-import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
+import { useDiscardChangesGuard } from "@/components/shared/DiscardChangesDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {

@@ -266,7 +266,7 @@ export default async function PlanDayPage({ params }: PlanDayPageProps) {
         </h1>
         {owner ? (
           <Link
-            href={`/plan/${day}/edit`}
+            href={`/admin/schedule/${day}`}
             className="hidden items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-accent transition-colors hover:text-accent/80 md:inline-flex"
           >
             <Pencil className="h-4 w-4" aria-hidden="true" />

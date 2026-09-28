@@ -40,6 +40,15 @@ const taken = [];
  *   the way to hand a reviewer a close-up of one component instead of a
  *   390px-wide page in which the thing under test is nine pixels across.
  */
+/**
+ * NOTE ON `fullPage` (T3-B): the default is `true`, which is right for the
+ * member app's scrolling phone screens. It is WRONG for a layout with a
+ * viewport-height fixed rail (the admin hub's `lg:h-screen` sidebar): Chromium
+ * composites those captures with a blank content area even though the DOM is
+ * correct, the element reports `visible`, and the same page screenshots fine
+ * with `fullPage: false`. That cost an hour of chasing a page bug that did not
+ * exist — pass `{ fullPage: false }` for hub screenshots.
+ */
 export async function shoot(page, name, opts = {}) {
   mkdirSync(SHOT_DIR, { recursive: true });
   const file = path.join(SHOT_DIR, `drive-${name}-${viewportName(page)}.png`);

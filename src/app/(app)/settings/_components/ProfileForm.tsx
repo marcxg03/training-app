@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { GoalModeRecommendationSheet } from "@/app/(app)/settings/_components/GoalModeRecommendationSheet";
-import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
+import { useDiscardChangesGuard } from "@/components/shared/DiscardChangesDialog";
 import { Button } from "@/components/ui/button";
 import {
   Form,

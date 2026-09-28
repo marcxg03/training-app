@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, type Control } from "react-hook-form";
 
-import { useDiscardChangesGuard } from "@/app/(app)/library/_components/DiscardChangesDialog";
+import { useDiscardChangesGuard } from "@/components/shared/DiscardChangesDialog";
 import {
   Form,
   FormControl,

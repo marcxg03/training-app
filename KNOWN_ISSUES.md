@@ -723,3 +723,86 @@ PNG, or WebP photo." rather than a conversion.
 `PROGRESS_PHOTO_LIMIT = 60`. The Body area is a glance surface and
 signing N URLs is one round-trip whose cost grows with N. Paging is
 FUTURE_WORK if Marcus ever fills it.
+
+## Slice T3-B — Admin hub
+
+### 🟡 Medium (harness, not product) — admin-hub screenshots come back blank from inside a drive
+
+`shoot()` captures of `/library/**` rendered in the admin-hub shell return an
+image whose entire content area is white, while:
+
+- the DOM is correct (`main.innerText` = 90 chars: the eyebrow, the heading,
+  the five tabs, the empty state and the Add button),
+- `getBoundingClientRect()` on `main` and its first child are correct
+  (`main` 1200×900 at x=240; content 1120×290 at 280,40),
+- the heading reports `state: "visible"` to Playwright,
+- and **the same screen captures correctly from a standalone script**, both by
+  direct navigation and via the same click path.
+
+Tried and did NOT fix it: `fullPage: false` (the hub has an `lg:h-screen`
+fixed rail, so a fullPage capture was the first suspect), waiting on a visible
+locator, two `requestAnimationFrame`s, an 800 ms settle, and taking the shot on
+a brand-new page in the same context. The capture is freshly written each run
+(verified by mtime), so it is not a stale file.
+
+**Impact: none on the product.** Every behavioural assertion in
+`e2e/drive-t3a.mjs` passes against the real click path — chrome, active nav
+item, content length, and the absence of the member tab bar. What is lost is
+the _visual_ evidence for this one screen; the Overview, not-built and mobile
+captures in the same drive are fine.
+
+**Workaround if you need the image:** navigate to `/library/lifting` directly
+in a standalone Playwright script with `fullPage: false`.
+
+**Next step when someone picks this up:** diff the standalone repro against the
+drive's context setup — the only material differences left are the number of
+prior navigations on the context and the fact that the drive's browser is
+shared with the non-owner session.
+
+### 🟡 Medium (harness, not product) — drives degrade when run back-to-back against one dev server
+
+Running several `e2e/drive-*.mjs` in sequence against a single long-lived
+`next dev` produces failures that look exactly like product regressions:
+`ENOENT .next/server/app/(app)/today/page.js` → a 500 on `/today`, selectors
+that "never became visible", a PR selector that stops swapping. Three separate
+false alarms in one session, one of which was investigated as a real
+regression via `git stash` before being ruled out.
+
+Two compounding causes: each drive spawns its OWN `next dev` on another port
+against the SAME `.next`, and running `scripts/ralph-verify.sh` (which runs
+`next build`) while a dev server is live wipes the directory it is serving.
+
+**Rule: one drive per dev server when a run matters.** Before a verification
+batch: `pkill -f "next dev"; rm -rf .next`, start one server, run the drives,
+and restart between batches. **Never run `ralph-verify` (or any `next build`)
+while a dev server is up.**
+
+Every drive passes individually on a fresh server. If a drive fails in a batch,
+re-run it alone on a clean server before believing it.
+
+### 🟡 Medium — screens still take ~900ms to fill (a dozen sequential Supabase hops)
+
+T3-D removed the DEAD AIR (a tap now paints in ~140ms instead of ~920ms of
+frozen previous screen) but did not make the screens faster. Content still
+arrives at ~900–950ms, and the cause is measured, not guessed:
+
+- a production build is **no faster** than dev (1005ms vs 817ms on `/plan`),
+  so this was never a dev-mode artifact;
+- a single Supabase round-trip from here is **76ms median**;
+- so ~900ms is roughly **a dozen sequential round-trips per screen**.
+
+`/today` and `/plan` each have 11 `await`s with only one `Promise.all` between
+them; `getAppTimezone()` is already `cache()`d and there is only one
+`auth.getUser()` per render, so those are not the cost — it is the data
+queries, run one after another where many are independent.
+
+**The fix is a query-layer pass, not a patch:** batch independent reads into
+`Promise.all`, collapse the per-row follow-up queries in
+`src/lib/history/queries.ts` (27 query call sites) and
+`src/lib/nutrition/queries.ts` (12) into joined selects, and consider a
+PostgREST nested select for the today/plan projections the way
+`getProgramList` already does. Budget: get content under ~400ms.
+
+Not urgent for solo use now that the dead air is gone, and it does not block
+distributing to friends — but it is the single biggest remaining quality gap
+in the member app, and it gets worse on a phone on cellular.

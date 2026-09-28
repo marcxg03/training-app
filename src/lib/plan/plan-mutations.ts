@@ -177,3 +177,211 @@ export async function renamePlan(
 
   return { ok: true, data: undefined };
 }
+
+/**
+ * Copies a program — its week, its sessions, and each session's block
+ * membership — into a new inactive plan (T3-C).
+ *
+ * WHAT IS DELIBERATELY NOT COPIED: logged history. `set_logs`,
+ * `session_completions`, `activity_completions` and `pr_history` stay with the
+ * ORIGINAL plan. A duplicate is a fresh program that happens to start with the
+ * same structure; giving it someone's past sets would corrupt every PR and
+ * adherence number computed from it. This is the same append-only-history
+ * contract the logger depends on.
+ *
+ * The copy is always INACTIVE, whatever the source was. Duplicating a program
+ * should never silently change what you train today — that is a separate,
+ * explicit act (`activatePlan`).
+ *
+ * NOT ATOMIC, and the failure mode is chosen deliberately. There is no
+ * transaction across these inserts from a browser client, so a mid-way failure
+ * leaves a partial copy. On any step after the plan row exists we DELETE the
+ * new plan (cascading its children) and report the error, so the outcome is
+ * "nothing happened" rather than a half-built program sitting in the list
+ * looking real. The same compensating-delete pattern `createPlan` uses.
+ */
+export async function duplicatePlan(
+  supabase: BrowserClient,
+  userId: string,
+  planId: string,
+  name: string,
+): Promise<MutationResult<{ plan_id: string }>> {
+  const { data: source, error: sourceError } = await supabase
+    .from("training_plans")
+    .select("plan_id, daily_schedules(schedule_id, day_of_week, is_rest_day)")
+    .eq("plan_id", planId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (sourceError || !source) {
+    return {
+      ok: false,
+      error: sourceError
+        ? translateMutationError(sourceError)
+        : "That program no longer exists.",
+    };
+  }
+
+  const { data: copy, error: copyError } = await supabase
+    .from("training_plans")
+    .insert({ user_id: userId, name: name.trim(), is_active: false })
+    .select("plan_id")
+    .single();
+
+  if (copyError || !copy) {
+    return { ok: false, error: translateMutationError(copyError) };
+  }
+
+  /** Undo the whole copy — a partial program is worse than none. */
+  const rollback = async (error: PostgrestError | null) => {
+    await supabase.from("training_plans").delete().eq("plan_id", copy.plan_id);
+    return { ok: false as const, error: translateMutationError(error) };
+  };
+
+  const sourceSchedules = source.daily_schedules ?? [];
+
+  const { data: newSchedules, error: scheduleError } = await supabase
+    .from("daily_schedules")
+    .insert(
+      sourceSchedules.map((schedule) => ({
+        plan_id: copy.plan_id,
+        day_of_week: schedule.day_of_week,
+        is_rest_day: schedule.is_rest_day,
+      })),
+    )
+    .select("schedule_id, day_of_week");
+
+  if (scheduleError || !newSchedules) {
+    return rollback(scheduleError);
+  }
+
+  // Map source schedule -> copied schedule BY DAY. The insert above does not
+  // guarantee return order, so pairing by array index would silently shuffle
+  // the week — Monday's sessions landing on Thursday.
+  const newScheduleIdByDay = new Map(
+    newSchedules.map((schedule) => [
+      schedule.day_of_week,
+      schedule.schedule_id,
+    ]),
+  );
+
+  const sourceScheduleIds = sourceSchedules.map((s) => s.schedule_id);
+
+  if (sourceScheduleIds.length === 0) {
+    return { ok: true, data: { plan_id: copy.plan_id } };
+  }
+
+  const { data: sourceWorkouts, error: workoutsError } = await supabase
+    .from("workouts")
+    .select(
+      "workout_id, schedule_id, workout_def_id, workout_name, workout_type, cardio_format, timing, gym, display_order",
+    )
+    .in("schedule_id", sourceScheduleIds)
+    .order("display_order");
+
+  if (workoutsError) {
+    return rollback(workoutsError);
+  }
+
+  const dayByScheduleId = new Map(
+    sourceSchedules.map((s) => [s.schedule_id, s.day_of_week]),
+  );
+
+  const workoutRows = (sourceWorkouts ?? []).flatMap((workout) => {
+    const day = dayByScheduleId.get(workout.schedule_id);
+    const targetScheduleId = day ? newScheduleIdByDay.get(day) : undefined;
+
+    if (!targetScheduleId) {
+      return [];
+    }
+
+    return [
+      {
+        schedule_id: targetScheduleId,
+        workout_def_id: workout.workout_def_id,
+        workout_name: workout.workout_name,
+        workout_type: workout.workout_type,
+        cardio_format: workout.cardio_format,
+        timing: workout.timing,
+        gym: workout.gym,
+        display_order: workout.display_order,
+        // Carried so each copied workout can be paired back to its source
+        // when the block membership is copied below.
+        __source_id: workout.workout_id,
+      },
+    ];
+  });
+
+  if (workoutRows.length === 0) {
+    return { ok: true, data: { plan_id: copy.plan_id } };
+  }
+
+  const { data: newWorkouts, error: insertWorkoutsError } = await supabase
+    .from("workouts")
+    .insert(workoutRows.map(({ __source_id, ...row }) => row))
+    .select("workout_id, schedule_id, display_order");
+
+  if (insertWorkoutsError || !newWorkouts) {
+    return rollback(insertWorkoutsError);
+  }
+
+  // Pair source workout -> copied workout by (schedule, display_order), the
+  // only pair that is unique within a plan. Again: never by array index.
+  const newWorkoutIdByKey = new Map(
+    newWorkouts.map((w) => [
+      `${w.schedule_id}:${w.display_order}`,
+      w.workout_id,
+    ]),
+  );
+
+  const { data: sourceBlocks, error: blocksError } = await supabase
+    .from("workout_blocks")
+    .select("workout_id, block_id, display_order, preset_activity_id")
+    .in(
+      "workout_id",
+      (sourceWorkouts ?? []).map((w) => w.workout_id),
+    );
+
+  if (blocksError) {
+    return rollback(blocksError);
+  }
+
+  const blockRows = (sourceBlocks ?? []).flatMap((block) => {
+    const sourceRow = workoutRows.find(
+      (row) => row.__source_id === block.workout_id,
+    );
+
+    if (!sourceRow) {
+      return [];
+    }
+
+    const targetWorkoutId = newWorkoutIdByKey.get(
+      `${sourceRow.schedule_id}:${sourceRow.display_order}`,
+    );
+
+    if (!targetWorkoutId) {
+      return [];
+    }
+
+    return [
+      {
+        workout_id: targetWorkoutId,
+        block_id: block.block_id,
+        display_order: block.display_order,
+        preset_activity_id: block.preset_activity_id,
+      },
+    ];
+  });
+
+  if (blockRows.length > 0) {
+    const { error: insertBlocksError } = await supabase
+      .from("workout_blocks")
+      .insert(blockRows);
+
+    if (insertBlocksError) {
+      return rollback(insertBlocksError);
+    }
+  }
+
+  return { ok: true, data: { plan_id: copy.plan_id } };
+}

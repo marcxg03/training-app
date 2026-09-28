@@ -23,23 +23,44 @@ const DAY_ORDER: DayOfWeek[] = [
   "sun",
 ];
 
+/**
+ * One day of a plan, ready to edit.
+ *
+ * `planId` is OPTIONAL and defaults to the user's active plan, which is how
+ * this behaved before T3-C. Passing it explicitly is what lets the admin hub
+ * edit a NON-active program: folding Schedule into Programs (D48) means the
+ * day editor has to work for whichever program was opened, not for whatever
+ * happens to be active. Marcus caught the underlying confusion — "shouldn't
+ * editing only happen in the program editing page?" — and the honest answer
+ * was that the editor was hardcoded to one plan, which is the only reason
+ * Schedule existed as a separate surface at all.
+ */
 export async function getDayEditData(
   day: DayOfWeek,
+  planId?: string,
 ): Promise<DayEditData | null> {
   const supabase = await createClient();
 
-  const { data: plan, error: planError } = await supabase
-    .from("training_plans")
-    .select("plan_id")
-    .eq("is_active", true)
-    .maybeSingle();
+  let resolvedPlanId = planId;
 
-  if (planError) {
-    throw new Error(`Failed to load active plan: ${planError.message}`);
+  if (!resolvedPlanId) {
+    const { data: plan, error: planError } = await supabase
+      .from("training_plans")
+      .select("plan_id")
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (planError) {
+      throw new Error(`Failed to load active plan: ${planError.message}`);
+    }
+    if (!plan) {
+      return null;
+    }
+
+    resolvedPlanId = plan.plan_id;
   }
-  if (!plan) {
-    return null;
-  }
+
+  const plan = { plan_id: resolvedPlanId };
 
   const { data: schedule, error: scheduleError } = await supabase
     .from("daily_schedules")
@@ -331,4 +352,72 @@ export async function getWorkoutsWithHistory(
     ids.add(row.workout_id);
   }
   return ids;
+}
+
+/** One row of the admin hub's Programs list (T3-C). */
+export type ProgramListItem = {
+  plan_id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  /** Days that carry at least one session (rest days excluded). */
+  training_days: number;
+  /** Total sessions across the week. */
+  sessions: number;
+};
+
+/**
+ * Every program the owner has, newest first, with enough shape to choose
+ * between them (T3-C).
+ *
+ * WHY `training_plans` AND NOT `plan_templates`: the Programs page used to
+ * list `plan_templates`, which is written ONLY by the seed script — an
+ * immutable snapshot archive, not an editable entity. The real programs, the
+ * ones the app trains against and the mutations in plan-mutations.ts already
+ * operate on, live in `training_plans`. The page was pointed at the wrong
+ * table (D48).
+ *
+ * Counts are derived in ONE round-trip via a nested select rather than N+1
+ * count queries — a handful of programs today, but this is the list that grows
+ * fastest once programs get prescribed to other people.
+ */
+export async function getProgramList(
+  userId: string,
+): Promise<ProgramListItem[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("training_plans")
+    .select(
+      "plan_id, name, is_active, created_at, daily_schedules(is_rest_day, workouts(workout_id))",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load programs: ${error.message}`);
+  }
+
+  return (data ?? []).map((plan) => {
+    const schedules = plan.daily_schedules ?? [];
+    const sessions = schedules.reduce(
+      (total, schedule) => total + (schedule.workouts?.length ?? 0),
+      0,
+    );
+    // A "training day" is a day with work on it. Counting non-rest days would
+    // over-report: a day can be flagged non-rest and still have no sessions.
+    const trainingDays = schedules.filter(
+      (schedule) =>
+        !schedule.is_rest_day && (schedule.workouts?.length ?? 0) > 0,
+    ).length;
+
+    return {
+      plan_id: plan.plan_id,
+      name: plan.name,
+      is_active: plan.is_active,
+      created_at: plan.created_at,
+      training_days: trainingDays,
+      sessions,
+    };
+  });
 }
