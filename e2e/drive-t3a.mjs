@@ -240,13 +240,16 @@ try {
   });
 
   await run.check("unbuilt sections say so honestly", async () => {
-    for (const route of ["/admin/analytics", "/admin/members"]) {
+    // Analytics was on this list until T3-E built it — this check going red
+    // when a section ships is the guard working, not breaking. Members stays
+    // here until a subscriptions table exists.
+    for (const route of ["/admin/members"]) {
       await gotoHub(route);
       await expectText(ownerPage, "Not built yet");
       await expectText(ownerPage, "Unblocked by:");
     }
     await shoot(ownerPage, "t3a-admin-not-built", { fullPage: false });
-    return "analytics + members name their blocker";
+    return "members names its blocker";
   });
 
   await run.check("programs lists the owner's real programs", async () => {

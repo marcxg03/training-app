@@ -255,6 +255,23 @@ export async function startSession(opts = {}) {
       );
     }
 
+    // WAIT OUT THE SKELETON (T3-D). Since `loading.tsx` landed, routes STREAM:
+    // the shell and the loading state arrive first, `networkidle` fires on
+    // THEM, and `goto` resolves while the page still says "Loading programs".
+    // A drive that asserts immediately after `go()` then reads the skeleton
+    // and fails with a baffling "text does not contain …" whose `saw:` dump is
+    // the loading state. This is not cosmetic — it silently broke a real drive
+    // and cost an investigation, so every navigation now settles here.
+    //
+    // Bounded and non-fatal: a page that legitimately has no loading state
+    // resolves instantly, and one that never settles falls through to the
+    // caller's own assertion, which gives a better error than a timeout here.
+    await page
+      .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), {
+        timeout: 20_000,
+      })
+      .catch(() => {});
+
     if (waitFor) {
       await page
         .locator(waitFor)
