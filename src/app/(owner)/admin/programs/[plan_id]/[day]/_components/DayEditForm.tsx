@@ -90,7 +90,16 @@ export function DayEditForm({
         cardio_format: null,
       })),
     },
-    mode: "onBlur",
+    // ERRORS ON SUBMIT, then live on blur.
+    //
+    // This was "onBlur", which meant a brand-new session shouted "Name this
+    // session" in red the instant you clicked its Type button — the name field
+    // blurred, and an empty field you had not reached yet was reported as your
+    // mistake. Validating on submit and only THEN re-validating on blur is the
+    // ordinary contract: tell me what is wrong when I try to save, and keep me
+    // posted once I know.
+    mode: "onSubmit",
+    reValidateMode: "onBlur",
   });
   const { fields, append, remove, move } = useFieldArray({
     control: form.control,
@@ -165,11 +174,17 @@ export function DayEditForm({
   return (
     <>
       <div className="mx-auto max-w-2xl">
-        <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+        {/* MOBILE-ONLY ACTION BAR. On a phone this is the thumb-reachable
+         * Cancel/Save and it earns its place. On the desktop hub the entire
+         * form fits on screen with its own Cancel / Save changes footer, so
+         * this row was a SECOND pair of identical controls — two Saves and two
+         * Cancels on one screen, which makes a user stop and work out whether
+         * they do different things. The heading stays at every width. */}
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-3 lg:justify-start">
           <button
             type="button"
             onClick={() => requestConfirmation(goBack)}
-            className="text-[13px] font-medium text-subtle transition-colors hover:text-foreground"
+            className="text-[13px] font-medium text-subtle transition-colors hover:text-foreground lg:hidden"
           >
             Cancel
           </button>
@@ -180,7 +195,7 @@ export function DayEditForm({
             type="submit"
             form="day-edit-form"
             disabled={form.formState.isSubmitting}
-            className="font-mono text-[13px] font-bold uppercase tracking-[0.03em] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
+            className="font-mono text-[13px] font-bold uppercase tracking-[0.03em] text-accent transition-colors hover:text-accent/80 disabled:opacity-40 lg:hidden"
           >
             Save
           </button>
@@ -435,6 +450,7 @@ export function DayEditForm({
                       workoutIndex={index}
                       workoutType={rowType}
                       isCatalogLinked={row.workout_def_id !== null}
+                      workoutDefId={row.workout_def_id}
                       hasHistory={row.has_history}
                       blockCatalog={data.block_catalog}
                       cardioActivities={data.cardio_activities}

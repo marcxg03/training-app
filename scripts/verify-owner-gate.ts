@@ -134,9 +134,9 @@ check(
   true,
 );
 check(
-  "the hub has the sections T3-A/T3-B/T3-C built",
+  "the hub has the sections T3-A…T3-F built",
   [...hubPages].sort(),
-  ["analytics", "members", "programs", "schedule"],
+  ["analytics", "members", "nutrition", "programs", "schedule"],
 );
 // T3-C: the program editors live UNDER /admin/programs, so they inherit the
 // group guard. Assert the routes exist where the guard covers them.

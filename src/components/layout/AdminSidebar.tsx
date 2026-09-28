@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  UtensilsCrossed,
   Dumbbell,
   FolderCog,
   Gauge,
@@ -35,6 +36,7 @@ const ICONS: Record<string, LucideIcon> = {
   chart: BarChart3,
   users: Users,
   dumbbell: Dumbbell,
+  nutrition: UtensilsCrossed,
 };
 
 export function AdminSidebar() {
