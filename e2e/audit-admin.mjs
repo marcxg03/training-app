@@ -16,6 +16,7 @@
 import { spawn } from "node:child_process";
 
 import {
+  expectTrue,
   createRun,
   printConsoleReport,
   screenshots,
@@ -84,6 +85,17 @@ try {
         display_order: 0,
       });
     }
+
+    // A workout definition up front, so the session picker has all THREE
+    // groups when the week-editor check runs. Creating it later (as the
+    // catalog-linked check does) made the picker legitimately show only
+    // Cardio and Recovery, and the audit reported that as a missing group.
+    const { error: defErr } = await db.from("workout_defs").insert({
+      owner_user_id: userId,
+      name: "Audit Upper",
+      workout_type: "lifting",
+    });
+    if (defErr) throw new Error(`fixture workout_def failed: ${defErr.message}`); // prettier-ignore
 
     const { data: plan } = await db
       .from("training_plans")
@@ -345,6 +357,108 @@ try {
     await shoot(page, "audit-week-editor", { fullPage: false });
     return `${dayLinks.length}/7 days link to their editor`;
   });
+
+  await run.check(
+    "the WEEK editor can ADD a cardio session end to end",
+    async () => {
+      // T3-G — what Marcus asked for: pick cardio from the same picker as a
+      // workout, no day editor. This drives the whole path and then checks the
+      // DATABASE, because a row that renders and never persists is the worst
+      // possible outcome here.
+      await visit(`/admin/programs/${planId}`);
+
+      // Add on Friday.
+      const addButtons = page.getByRole("button", { name: /Add session/i });
+      const count = await addButtons.count();
+      expectTrue(count >= 5, `only ${count} Add session buttons`);
+      await addButtons.nth(4).click();
+
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor({ state: "visible", timeout: 15_000 });
+
+      const groups = await page.evaluate(() =>
+        [...document.querySelectorAll("[cmdk-group-heading]")].map((n) =>
+          (n.textContent ?? "").trim(),
+        ),
+      );
+      for (const expected of ["Workouts", "Cardio", "Recovery"]) {
+        if (!groups.includes(expected)) {
+          finding("BLOCKER", "Week editor", `the session picker has no "${expected}" group`, `saw: ${groups.join(", ")}`); // prettier-ignore
+        }
+      }
+
+      // Capture the picker WHILE it is open — the other shot is taken after
+      // the save redirect and shows the programs list, not the thing under
+      // test.
+      await shoot(page, "audit-session-picker", { fullPage: false });
+
+      await page
+        .locator("[cmdk-item]")
+        .filter({ hasText: "Audit Run" })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+
+      // Friday must stop being a rest day or the session is meaningless.
+      const restBoxes = page.locator('main input[type="checkbox"]');
+      if (
+        await restBoxes
+          .nth(4)
+          .isChecked()
+          .catch(() => false)
+      ) {
+        await restBoxes.nth(4).uncheck({ force: true });
+      }
+
+      await page.getByRole("button", { name: /^Save$/i }).first().click(); // prettier-ignore
+      await page.waitForTimeout(3000);
+
+      const { data: scheds } = await db
+        .from("daily_schedules")
+        .select("schedule_id")
+        .eq("plan_id", planId)
+        .eq("day_of_week", "fri")
+        .single();
+      const { data: saved } = await db
+        .from("workouts")
+        .select("workout_id, workout_name, workout_type, cardio_format")
+        .eq("schedule_id", scheds.schedule_id);
+
+      const cardio = (saved ?? []).find((w) => w.workout_type === "cardio");
+      if (!cardio) {
+        finding(
+          "BLOCKER",
+          "Week editor",
+          "a cardio session picked in the week editor did not persist",
+          `rows on Friday: ${JSON.stringify(saved)}`,
+        );
+        return "NOT persisted";
+      }
+
+      // The DB CHECK is cardio ⇒ cardio_format NOT NULL; if that were missing
+      // the insert would have failed, so its presence proves the format came
+      // through from the activity rather than being invented.
+      if (!cardio.cardio_format) {
+        finding("HIGH", "Week editor", "the saved cardio session has no format"); // prettier-ignore
+      }
+
+      const { data: wb } = await db
+        .from("workout_blocks")
+        .select("preset_activity_id, preset_activity_type")
+        .eq("workout_id", cardio.workout_id);
+      if (!wb?.[0]?.preset_activity_id) {
+        finding(
+          "HIGH",
+          "Week editor",
+          "the cardio session saved without its activity attached",
+          "it would render as an empty session in the logger",
+        );
+      }
+
+      await shoot(page, "audit-week-cardio", { fullPage: false });
+      return `persisted "${cardio.workout_name}" (${cardio.cardio_format}), activity ${wb?.[0]?.preset_activity_id ? "attached" : "MISSING"}`; // prettier-ignore
+    },
+  );
 
   // ── 3 · the catalog-linked dead end ──────────────────────────────────────
 

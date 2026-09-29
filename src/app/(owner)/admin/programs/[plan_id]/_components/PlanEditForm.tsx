@@ -12,13 +12,14 @@ import { WorkoutPicker } from "@/app/(app)/plan/_components/WorkoutPicker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { savePlan } from "@/lib/plan/mutations";
 import type { Enums } from "@/lib/supabase/types";
-import type { PlanEditData } from "@/lib/plan/projections";
+import type { PlanEditData, SessionOption } from "@/lib/plan/projections";
 import { createClient } from "@/lib/supabase/client";
 
 type PlanEditFormProps = {
   data: PlanEditData;
-  /** Needed to link each day at the day editor — the ONLY surface that can add
-   * a cardio or recovery session. */
+  /** Links each day at the day editor, for the things only it can set —
+   * timing, gym, and a lifting session's individual blocks. Adding a session
+   * of any kind now happens here (T3-G). */
   planId: string;
 };
 
@@ -31,6 +32,11 @@ type Row = {
   workout_def_id: string | null;
   name: string;
   has_history: boolean;
+  /** T3-G — a cardio/recovery session carries its activity, not a definition. */
+  kind?: "workout" | "cardio" | "recovery";
+  preset_activity_id?: string | null;
+  cardio_format?: Enums<"cardio_format_enum"> | null;
+  category_block_id?: string | null;
 };
 
 type DayState = {
@@ -94,23 +100,41 @@ export function PlanEditForm({ data, planId }: PlanEditFormProps) {
     );
   };
 
-  const addWorkout = (dayIndex: number, workoutDefId: string) => {
+  /**
+   * Add any session kind to a day (T3-G).
+   *
+   * A workout carries its definition id; a cardio or recovery session carries
+   * the activity plus the category block it hangs on, because those have no
+   * definition — the session IS the activity. `savePlan` branches on `kind`.
+   */
+  const addSession = (dayIndex: number, option: SessionOption) => {
+    const row =
+      option.kind === "workout"
+        ? {
+            workout_id: null,
+            workout_def_id: option.id,
+            name: catalogName.get(option.id) ?? "Workout",
+            has_history: false,
+            kind: "workout" as const,
+          }
+        : {
+            workout_id: null,
+            workout_def_id: null,
+            name: option.name,
+            has_history: false,
+            kind: option.kind,
+            preset_activity_id: option.id,
+            cardio_format:
+              option.kind === "cardio" ? option.cardio_format : null,
+            category_block_id:
+              option.kind === "cardio"
+                ? data.cardioBlockId
+                : data.recoveryBlockId,
+          };
+
     mutate(
       days.map((day, i) =>
-        i === dayIndex
-          ? {
-              ...day,
-              rows: [
-                ...day.rows,
-                {
-                  workout_id: null,
-                  workout_def_id: workoutDefId,
-                  name: catalogName.get(workoutDefId) ?? "Workout",
-                  has_history: false,
-                },
-              ],
-            }
-          : day,
+        i === dayIndex ? { ...day, rows: [...day.rows, row] } : day,
       ),
     );
   };
@@ -161,6 +185,14 @@ export function PlanEditForm({ data, planId }: PlanEditFormProps) {
           workout_id: row.workout_id,
           workout_def_id: row.workout_def_id,
           has_history: row.has_history,
+          // T3-G: carry the cardio/recovery shape through. Dropping these
+          // here would silently turn a newly-picked cardio session into a
+          // row savePlan skips, and the user would watch it vanish on save.
+          kind: row.kind,
+          preset_activity_id: row.preset_activity_id ?? null,
+          cardio_format: row.cardio_format ?? null,
+          category_block_id: row.category_block_id ?? null,
+          name: row.name,
         })),
         removed_workout_ids: day.removed,
       })),
@@ -203,11 +235,8 @@ export function PlanEditForm({ data, planId }: PlanEditFormProps) {
               {data.plan_name}
             </div>
             <p className="text-sm text-muted-foreground">
-              Assign lifting workouts from your catalog to each day — build
-              those in Library → Workouts. For a{" "}
-              <span className="font-medium text-foreground">cardio</span> or{" "}
-              <span className="font-medium text-foreground">recovery</span>{" "}
-              session, open the day and add it there.
+              Add a workout, cardio or recovery session to any day. Build them
+              in Library → Workouts, Cardio and Recovery.
             </p>
           </div>
 
@@ -307,7 +336,7 @@ export function PlanEditForm({ data, planId }: PlanEditFormProps) {
                     className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-[13px] font-semibold text-subtle transition-colors hover:border-faint hover:text-foreground"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    Add workout
+                    Add session
                   </button>
                 </div>
               ))}
@@ -321,22 +350,22 @@ export function PlanEditForm({ data, planId }: PlanEditFormProps) {
           ) : null}
 
           <p className="text-center font-mono text-[11px] uppercase tracking-[0.04em] text-faint">
-            Assign workouts per day in day edit →
+            Open a day to set timing, gym, or a session\u2019s blocks
           </p>
         </div>
       </div>
 
       <WorkoutPicker
-        catalog={data.catalog}
+        options={data.sessionOptions}
         open={pickerDay !== null}
         onOpenChange={(open) => {
           if (!open) {
             setPickerDay(null);
           }
         }}
-        onSelect={(workoutDefId) => {
+        onSelect={(option) => {
           if (pickerDay !== null) {
-            addWorkout(pickerDay, workoutDefId);
+            addSession(pickerDay, option);
           }
           setPickerDay(null);
         }}

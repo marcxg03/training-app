@@ -9,6 +9,7 @@ import type {
   PlanEditData,
   PlanEditDay,
   PlanEditWorkout,
+  SessionOption,
 } from "@/lib/plan/projections";
 
 type DayOfWeek = Enums<"day_of_week_enum">;
@@ -296,11 +297,55 @@ export async function getPlanEditData(
       workouts: bySchedule.get(s.schedule_id) ?? [],
     }));
 
+  // The week editor's picker offers all THREE session kinds (T3-G), so the
+  // cardio and recovery activity catalogs load here too, alongside the single
+  // category block each kind hangs its activity on.
+  const [cardioActs, recoveryActs, categoryBlocks] = await Promise.all([
+    supabase
+      .from("cardio_activities")
+      .select("activity_id, name, cardio_format")
+      .order("name"),
+    supabase.from("recovery_activities").select("activity_id, name").order("name"), // prettier-ignore
+    supabase
+      .from("blocks")
+      .select("block_id, block_category")
+      .in("block_category", ["cardio", "recovery"])
+      .order("display_order"),
+  ]);
+
+  const sessionOptions: SessionOption[] = [
+    ...(defs ?? []).map((def) => ({
+      kind: "workout" as const,
+      id: def.workout_def_id,
+      name: def.name,
+    })),
+    ...(cardioActs.data ?? []).map((activity) => ({
+      kind: "cardio" as const,
+      id: activity.activity_id,
+      name: activity.name,
+      cardio_format: activity.cardio_format,
+    })),
+    ...(recoveryActs.data ?? []).map((activity) => ({
+      kind: "recovery" as const,
+      id: activity.activity_id,
+      name: activity.name,
+    })),
+  ];
+
+  const blocksByCategory = categoryBlocks.data ?? [];
+
   return {
     plan_id: plan.plan_id,
     plan_name: plan.name,
     days,
     catalog: defs ?? [],
+    sessionOptions,
+    cardioBlockId:
+      blocksByCategory.find((b) => b.block_category === "cardio")?.block_id ??
+      null,
+    recoveryBlockId:
+      blocksByCategory.find((b) => b.block_category === "recovery")?.block_id ??
+      null,
   };
 }
 

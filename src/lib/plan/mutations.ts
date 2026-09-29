@@ -99,6 +99,19 @@ type PlanSaveRow = {
   workout_id: string | null;
   workout_def_id: string | null;
   has_history: boolean;
+  /**
+   * A cardio or recovery session assigned straight from the week editor
+   * (T3-G). These have NO workout definition — they are a session carrying a
+   * preset activity — so they are described by the three fields below instead
+   * of by `workout_def_id`.
+   */
+  kind?: "workout" | "cardio" | "recovery";
+  preset_activity_id?: string | null;
+  /** NOT NULL on a cardio workout (DB CHECK); carried from the activity. */
+  cardio_format?: Enums<"cardio_format_enum"> | null;
+  /** The category block the activity hangs on. */
+  category_block_id?: string | null;
+  name?: string;
 };
 
 type PlanSaveDay = {
@@ -251,6 +264,72 @@ export async function savePlan(
       const row = day.rows[index];
 
       if (row.workout_id === null) {
+        // NEW CARDIO / RECOVERY SESSION (T3-G).
+        //
+        // These carry no definition, so they cannot go through the catalog
+        // path: the session IS the activity. It is written as a workout of the
+        // right type, plus exactly ONE workout_block — the single category
+        // block for cardio or recovery — carrying the chosen activity. That is
+        // the same shape saveDay produces, so a session assigned from the week
+        // editor and one composed in the day editor are indistinguishable
+        // afterwards.
+        if (row.kind === "cardio" || row.kind === "recovery") {
+          const isCardio = row.kind === "cardio";
+
+          if (!row.preset_activity_id || !row.category_block_id) {
+            return {
+              ok: false,
+              error: isCardio
+                ? "Add a cardio block to your Library before scheduling cardio."
+                : "Add a recovery block to your Library before scheduling recovery.",
+            };
+          }
+          // The DB CHECK is cardio ⇒ cardio_format NOT NULL. Failing loudly
+          // here beats a constraint violation the user cannot read.
+          if (isCardio && !row.cardio_format) {
+            return {
+              ok: false,
+              error: "That cardio activity has no format set — fix it in the Library.", // prettier-ignore
+            };
+          }
+
+          const { data: insertedActivity, error: activityError } =
+            await supabase // prettier-ignore
+              .from("workouts")
+              .insert({
+                schedule_id: day.schedule_id,
+                workout_def_id: null,
+                workout_name: row.name ?? (isCardio ? "Cardio" : "Recovery"),
+                workout_type: row.kind,
+                cardio_format: isCardio ? (row.cardio_format ?? null) : null,
+                timing: "anytime",
+                gym: null,
+                display_order: index,
+              })
+              .select("workout_id")
+              .single();
+
+          if (activityError || !insertedActivity) {
+            return { ok: false, error: translateMutationError(activityError) };
+          }
+
+          const { error: blockError } = await supabase
+            .from("workout_blocks")
+            .insert({
+              workout_id: insertedActivity.workout_id,
+              block_id: row.category_block_id,
+              display_order: 0,
+              preset_activity_id: row.preset_activity_id,
+              preset_activity_type: row.kind,
+            });
+
+          if (blockError) {
+            return { ok: false, error: translateMutationError(blockError) };
+          }
+
+          continue;
+        }
+
         // New assignment from the catalog.
         if (!row.workout_def_id) {
           continue;

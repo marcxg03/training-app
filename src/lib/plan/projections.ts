@@ -76,9 +76,39 @@ export type WorkoutDefOption = {
   name: string;
 };
 
+/**
+ * ONE option in the week editor's session picker (T3-G).
+ *
+ * The picker used to offer `workout_defs` only, which meant cardio and
+ * recovery could not be assigned from the week editor at all — they have no
+ * definition, they are sessions carrying a preset activity. Marcus asked for
+ * all three to be pickable the same way: "just add workout, recovery, or
+ * cardio as a session that is predefined as a block."
+ *
+ * So the picker takes ONE list of options discriminated by `kind`, and the
+ * row it creates carries whichever id that kind needs. A lifting option
+ * materializes its definition's blocks; a cardio/recovery option attaches the
+ * single category block carrying the chosen activity.
+ */
+export type SessionOption =
+  | { kind: "workout"; id: string; name: string }
+  | {
+      kind: "cardio";
+      id: string;
+      name: string;
+      /** NOT NULL on a cardio workout (DB CHECK) — carried from the activity. */
+      cardio_format: Enums<"cardio_format_enum">;
+    }
+  | { kind: "recovery"; id: string; name: string };
+
 export type PlanEditData = {
   plan_id: string;
   plan_name: string;
   days: PlanEditDay[];
   catalog: WorkoutDefOption[];
+  /** Everything assignable to a day, in one list (T3-G). */
+  sessionOptions: SessionOption[];
+  /** The category block a cardio/recovery session hangs its activity on. */
+  cardioBlockId: string | null;
+  recoveryBlockId: string | null;
 };
